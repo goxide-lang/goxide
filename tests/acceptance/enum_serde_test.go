@@ -95,17 +95,17 @@ func TestDirectionOnly(t *testing.T){v:=encode.Output();out,e:=serdejson.Encode(
 }
 
 func TestEnumSerdeUnsupportedAttributes(t *testing.T) {
-	cases := map[string]string{
-		"container-rename":  "#[derive(serde::derive::Serialize)]\n#[serde(rename=\"Other\")]\nenum E {A,}",
-		"container-unknown": "#[derive(serde::derive::Deserialize)]\n#[serde(deny_unknown_fields)]\nenum E {A,}",
-		"variant-alias":     "#[derive(serde::derive::Serialize)]\nenum E {\n#[serde(alias=\"Other\")]\nA,}",
-		"variant-skip":      "#[derive(serde::derive::Serialize)]\nenum E {\n#[serde(skip)]\nA,}",
+	cases := map[string]struct{ source, want string }{
+		"container-rename":  {"#[derive(serde::derive::Serialize)]\n#[serde(rename=\"Other\")]\nenum E {A,}", "enum_attrs.gox:3:1: macro expansion failed: serde rename is not supported at this position"},
+		"container-unknown": {"#[derive(serde::derive::Deserialize)]\n#[serde(deny_unknown_fields)]\nenum E {A,}", "enum_attrs.gox:3:1: macro expansion failed: serde deny_unknown_fields is not supported at this position"},
+		"variant-alias":     {"#[derive(serde::derive::Serialize)]\nenum E {\n#[serde(alias=\"Other\")]\nA,}", "enum_attrs.gox:4:1: macro expansion failed: serde alias is not supported at this position"},
+		"variant-skip":      {"#[derive(serde::derive::Serialize)]\nenum E {\n#[serde(skip)]\nA,}", "enum_attrs.gox:4:1: macro expansion failed: serde skip is not supported at this position"},
 	}
-	for name, source := range cases {
+	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := testdeps.FormalSource(t, "enum_attrs.gox", []byte("package fixture; use serde;\n"+source))
-			if err == nil || !strings.Contains(err.Error(), "enum_attrs.gox") {
-				t.Fatalf("need explicit located rejection: %v", err)
+			_, err := testdeps.FormalSource(t, "enum_attrs.gox", []byte("package fixture; use serde;\n"+tc.source))
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("want diagnostic %q, got %v", tc.want, err)
 			}
 		})
 	}

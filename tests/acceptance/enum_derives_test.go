@@ -40,31 +40,38 @@ func TestInvalidEnumsAtDeriveBoundary(t *testing.T){for _,value:=range []Command
 `
 
 func TestEnumDerivesExplicitRejections(t *testing.T) {
-	cases := map[string]string{
-		"message-without-error-derive": "enum E{\n#[error(\"oops\")]\nA,\n}",
-		"source-without-error-derive":  "enum E{\n#[source]\nA(int),\n}",
-		"from-without-error-derive":    "enum E{\n#[from]\nA(int),\n}",
-		"clone-pointer":                "#[derive(std::derive::Clone)]\nenum E{Value(*int),}",
-		"clone-no-nested-protocol":     "type Item struct{N int}\n#[derive(std::derive::Clone)]\nenum E{Value(Item),}",
-		"debug-no-nested-protocol":     "type Item struct{N int}\n#[derive(std::derive::Debug)]\nenum E{Value(Item),}",
-		"serde-no-nested-protocol":     "type Item struct{N int}\n#[derive(serde::derive::Serialize)]\nenum E{Value(Item),}",
-		"error-missing-message":        "#[derive(std::derive::Error)]\nenum E{Value(int),}",
-		"source-not-error":             "#[derive(std::derive::Error)]\nenum E{\n#[error(\"bad\")]\n#[source]\nValue(int),\n}",
-		"from-not-error":               "#[derive(std::derive::Error)]\nenum E{\n#[error(\"bad\")]\n#[from]\nValue(int),\n}",
-		"ambiguous-from":               "#[derive(std::derive::Error)]\nenum E{\n#[error(\"a\")]\n#[from]\nA(error),\n#[error(\"b\")]\n#[from]\nB(error),\n}",
-		"duplicate-from-attribute":     "#[derive(std::derive::Error)]\nenum E{\n#[error(\"a\")]\n#[from]\n#[from]\nA(error),\n}",
-		"duplicate-source-attribute":   "#[derive(std::derive::Error)]\nenum E{\n#[error(\"a\")]\n#[source]\n#[source]\nA(error),\n}",
-		"source-unit":                  "#[derive(std::derive::Error)]\nenum E{\n#[error(\"a\")]\n#[source]\nA,\n}",
-		"unknown-placeholder":          "#[derive(std::derive::Error)]\nenum E{\n#[error(\"count {Missing}\")]\nCount(int),\n}",
-		"source-is-not-from":           "#[derive(std::derive::Error)]\nenum E{\n#[error(\"a\")]\n#[source]\nA(error),\n}\nfunc f()Result[int,E]{n:=Result[int,error]::Err(nil)?;return Result[int,E]::Ok(n)}",
+	cases := map[string]struct {
+		source, location string
+		want             []string
+	}{
+		"message-without-error-derive": {"enum E{\n#[error(\"oops\")]\nA,\n}", "3:1:", []string{"unsupported attribute or invalid attribute position: error"}},
+		"source-without-error-derive":  {"enum E{\n#[source]\nA(int),\n}", "3:1:", []string{"unsupported attribute or invalid attribute position: source"}},
+		"from-without-error-derive":    {"enum E{\n#[from]\nA(int),\n}", "3:1:", []string{"unsupported attribute or invalid attribute position: from"}},
+		"clone-pointer":                {"#[derive(std::derive::Clone)]\nenum E{Value(*int),}", "2:1:", []string{"missing trait implementation:", "Clone", "(*int)"}},
+		"clone-no-nested-protocol":     {"type Item struct{N int}\n#[derive(std::derive::Clone)]\nenum E{Value(Item),}", "3:1:", []string{"missing trait implementation:", "Clone", "(fixture::Item)"}},
+		"debug-no-nested-protocol":     {"type Item struct{N int}\n#[derive(std::derive::Debug)]\nenum E{Value(Item),}", "3:1:", []string{"missing trait implementation:", "Debug", "(fixture::Item)"}},
+		"serde-no-nested-protocol":     {"type Item struct{N int}\n#[derive(serde::derive::Serialize)]\nenum E{Value(Item),}", "3:1:", []string{"type does not explicitly implement Serialize:", "(fixture::Item)"}},
+		"error-missing-message":        {"#[derive(std::derive::Error)]\nenum E{Value(int),}", "3:8:", []string{"macro expansion failed: Error variant requires an error message"}},
+		"source-not-error":             {"#[derive(std::derive::Error)]\nenum E{\n#[error(\"bad\")]\n#[source]\nValue(int),\n}", "2:1:", []string{"*int does not satisfy", "*error"}},
+		"from-not-error":               {"#[derive(std::derive::Error)]\nenum E{\n#[error(\"bad\")]\n#[from]\nValue(int),\n}", "2:1:", []string{"*int does not satisfy", "*error"}},
+		"ambiguous-from":               {"#[derive(std::derive::Error)]\nenum E{\n#[error(\"a\")]\n#[from]\nA(error),\n#[error(\"b\")]\n#[from]\nB(error),\n}", "7:1:", []string{"macro expansion failed: Error requires at most one from variant"}},
+		"duplicate-from-attribute":     {"#[derive(std::derive::Error)]\nenum E{\n#[error(\"a\")]\n#[from]\n#[from]\nA(error),\n}", "4:1:", []string{"macro expansion failed: duplicate from attribute"}},
+		"duplicate-source-attribute":   {"#[derive(std::derive::Error)]\nenum E{\n#[error(\"a\")]\n#[source]\n#[source]\nA(error),\n}", "4:1:", []string{"macro expansion failed: duplicate source attribute"}},
+		"source-unit":                  {"#[derive(std::derive::Error)]\nenum E{\n#[error(\"a\")]\n#[source]\nA,\n}", "4:1:", []string{"macro expansion failed: source/from variant requires one error payload"}},
+		"unknown-placeholder":          {"#[derive(std::derive::Error)]\nenum E{\n#[error(\"count {Missing}\")]\nCount(int),\n}", "4:1:", []string{"macro expansion failed: unknown error placeholder \"Missing\""}},
+		"source-is-not-from":           {"#[derive(std::derive::Error)]\nenum E{\n#[error(\"a\")]\n#[source]\nA(error),\n}\nfunc f()Result[int,E]{n:=Result[int,error]::Err(nil)?;return Result[int,E]::Ok(n)}", "8:26:", []string{"cannot propagate error", "requires", "From"}},
 	}
-	for name, body := range cases {
+	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := testdeps.FormalSource(t, "enum_derives_bad.gox", []byte("package fixture; use serde; use std; use std::PartialEq;\n"+body))
-			if err == nil || !strings.Contains(err.Error(), "enum_derives_bad.gox") {
-				t.Fatalf("expected located rejection: %v", err)
+			_, err := testdeps.FormalSource(t, "enum_derives_bad.gox", []byte("package fixture; use serde; use std; use std::PartialEq;\n"+tc.source))
+			if err == nil || !strings.Contains(err.Error(), "enum_derives_bad.gox:"+tc.location) {
+				t.Fatalf("want derive rejection at %s, got %v", tc.location, err)
 			}
-			t.Log(err)
+			for _, want := range tc.want {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("want diagnostic containing %q, got %v", want, err)
+				}
+			}
 		})
 	}
 }

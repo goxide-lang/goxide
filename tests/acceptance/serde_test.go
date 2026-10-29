@@ -19,19 +19,33 @@ func TestSerdeBlackBoxRace(t *testing.T) {
 }
 
 func TestUnsupportedSerdeIsDiagnosed(t *testing.T) {
-	cases := map[string]string{
-		"skip-wire-collision": "package fixture; use serde;\n#[derive(serde::derive::Serialize, serde::derive::Deserialize)]\ntype Collision struct {\n #[serde(skip, rename=\"same\")]\n Secret string\n #[serde(rename=\"same\")]\n Public string\n}",
-		"external":            "package fixture; use serde;\nuse time;\n#[derive(serde::derive::Serialize)]\ntype Event struct { At time::Time }",
-		"interface":           "package fixture; use serde;\n#[derive(serde::derive::Deserialize)]\ntype Dynamic struct { Value any }",
+	cases := map[string]struct {
+		source string
+		want   []string
+	}{
+		"skip-wire-collision": {
+			"package fixture; use serde;\n#[derive(serde::derive::Serialize, serde::derive::Deserialize)]\ntype Collision struct {\n #[serde(skip, rename=\"same\")]\n Secret string\n #[serde(rename=\"same\")]\n Public string\n}",
+			[]string{`unsupported.gox:6:2: macro expansion failed: duplicate serde field name "same"`},
+		},
+		"external": {
+			"package fixture; use serde;\nuse time;\n#[derive(serde::derive::Serialize)]\ntype Event struct { At time::Time }",
+			[]string{"unsupported.gox:3:1: type does not explicitly implement Serialize:", "(time::Time)"},
+		},
+		"interface": {
+			"package fixture; use serde;\n#[derive(serde::derive::Deserialize)]\ntype Dynamic struct { Value any }",
+			[]string{"unsupported.gox:2:1: type does not explicitly implement Deserialize:", "(interface{})"},
+		},
 	}
-	for name, source := range cases {
+	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := testdeps.FormalSource(t, "unsupported.gox", []byte(source), "[dependencies.time]\ngo=\"time\"\n")
+			_, err := testdeps.FormalSource(t, "unsupported.gox", []byte(tc.source), "[dependencies.time]\ngo=\"time\"\n")
 			if err == nil {
 				t.Fatal("unsupported derive accepted")
 			}
-			if !strings.Contains(err.Error(), "unsupported.gox") {
-				t.Fatalf("no source location: %v", err)
+			for _, want := range tc.want {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("want diagnostic %q, got %v", want, err)
+				}
 			}
 		})
 	}

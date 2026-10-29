@@ -64,30 +64,40 @@ func TestDefaults(t *testing.T){
 }
 
 func TestDefaultRejectsUnsupported(t *testing.T) {
-	cases := []string{
-		`#[derive(std::derive::Default)]
-enum E { #[default] A(Result[int,string]), B }`,
-		`#[derive(std::derive::Default)]
-enum E { #[default] #[default] A }`,
-		`enum E { #[default] A }`,
-		`#[derive(std::derive::Default)]
-struct S { Value *int }`,
-		`#[derive(std::derive::Default)]
-struct S { Value []int }`,
-		`#[derive(std::derive::Default)]
-struct S { Value map[string]int }`,
-		`#[derive(std::derive::Default)]
-struct S { Value Result[int,string] }`,
-		`type Child struct{ X int }
+	cases := []struct {
+		name, source, location string
+		want                   []string
+	}{
+		{"selected-payload-missing-default", `#[derive(std::derive::Default)]
+enum E { #[default] A(Result[int,string]), B }`, "2:1:", []string{"missing trait implementation:", "Default", "Result[int,string]"}},
+		{"duplicate-default-attribute", `#[derive(std::derive::Default)]
+enum E { #[default] #[default] A }`, "3:1:", []string{"macro expansion failed: Default requires exactly one default variant"}},
+		{"default-without-derive", `enum E { #[default] A }`, "2:10:", []string{"unsupported attribute or invalid attribute position: default"}},
+		{"pointer", `#[derive(std::derive::Default)]
+struct S { Value *int }`, "2:1:", []string{"missing trait implementation:", "Default", "(*int)"}},
+		{"slice", `#[derive(std::derive::Default)]
+struct S { Value []int }`, "2:1:", []string{"missing trait implementation:", "Default", "([]int)"}},
+		{"map", `#[derive(std::derive::Default)]
+struct S { Value map[string]int }`, "2:1:", []string{"missing trait implementation:", "Default", "(map[string]int)"}},
+		{"result", `#[derive(std::derive::Default)]
+struct S { Value Result[int,string] }`, "2:1:", []string{"missing trait implementation:", "Default", "Result[int,string]"}},
+		{"ordinary-helper", `type Child struct{ X int }
 func DefaultChild() Child{return Child{}}
 #[derive(std::derive::Default)]
-struct S { Value Child }`,
+struct S { Value Child }`, "4:1:", []string{"missing trait implementation:", "Default", "(fixture::Child)"}},
 	}
-	for _, body := range cases {
-		_, e := testutil.FormalSource(t, "invalid-default.gox", []byte("package fixture; use std; use std::PartialEq;\n"+body+"\n"))
-		if e == nil || !strings.Contains(e.Error(), "invalid-default.gox") {
-			t.Errorf("expected source diagnostic for %s; got %v", body, e)
-		}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := testutil.FormalSource(t, "invalid-default.gox", []byte("package fixture; use std; use std::PartialEq;\n"+tc.source+"\n"))
+			if err == nil || !strings.Contains(err.Error(), "invalid-default.gox:"+tc.location) {
+				t.Fatalf("want Default rejection at %s, got %v", tc.location, err)
+			}
+			for _, want := range tc.want {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("want diagnostic containing %q, got %v", want, err)
+				}
+			}
+		})
 	}
 }
 

@@ -108,18 +108,26 @@ func TestSamePackageAliasSingleFileRace(t *testing.T) {
 	enumFormalStdModule(t, source, samePackageAliasAssertions, false, true)
 }
 func TestSamePackageAliasRejections(t *testing.T) {
-	for name, body := range map[string]string{
-		"new-defined":             "#[derive(std::derive::Clone)]\ntype Item struct{N int}\ntype Fresh Item\ntype Local=Fresh\n#[derive(std::derive::Clone)]\ntype Wrap struct{V Local}",
-		"helper-not-registration": "type Item struct{N int}\nfunc CloneItem(v *Item)Item{return *v}\ntype Local=Item\n#[derive(std::derive::Clone)]\ntype Wrap struct{V Local}",
-		"derive-alias":            "#[derive(std::derive::Clone)]\ntype Item struct{N int}\n#[derive(std::derive::Clone)]\ntype Local=Item",
-		"derive-manual-conflict":  "#[derive(std::derive::Default)]\ntype Item struct{N int}\ntype Local=Item\nimpl std::Default for Item{func Default()Item{return Item{}}}",
-		"wrong-direction":         "#[derive(serde::derive::Serialize)]\ntype Item struct{N int}\ntype Local=Item\n#[derive(serde::derive::Deserialize)]\ntype Wrap struct{V Local}",
-		"bad-manual-return":       "type Item struct{N int}\ntype Local=Item\nimpl std::Default for Item{func Default()Item{return 1}}\n#[derive(std::derive::Default)]\ntype Wrap struct{V Local}",
+	for name, tc := range map[string]struct {
+		source, location string
+		want             []string
+	}{
+		"new-defined":             {"#[derive(std::derive::Clone)]\ntype Item struct{N int}\ntype Fresh Item\ntype Local=Fresh\n#[derive(std::derive::Clone)]\ntype Wrap struct{V Local}", "6:1:", []string{"missing trait implementation:", "Clone", "(fixture::Fresh)"}},
+		"helper-not-registration": {"type Item struct{N int}\nfunc CloneItem(v *Item)Item{return *v}\ntype Local=Item\n#[derive(std::derive::Clone)]\ntype Wrap struct{V Local}", "5:1:", []string{"missing trait implementation:", "Clone", "(fixture::Item)"}},
+		"derive-alias":            {"#[derive(std::derive::Clone)]\ntype Item struct{N int}\n#[derive(std::derive::Clone)]\ntype Local=Item", "5:1:", []string{"macro expansion failed: derive requires a defined struct or enum"}},
+		"derive-manual-conflict":  {"#[derive(std::derive::Default)]\ntype Item struct{N int}\ntype Local=Item\nimpl std::Default for Item{func Default()Item{return Item{}}}", "5:1:", []string{"duplicate trait implementation: overlapping applications:"}},
+		"wrong-direction":         {"#[derive(serde::derive::Serialize)]\ntype Item struct{N int}\ntype Local=Item\n#[derive(serde::derive::Deserialize)]\ntype Wrap struct{V Local}", "5:1:", []string{"type does not explicitly implement Deserialize:", "(fixture::Item)"}},
+		"bad-manual-return":       {"type Item struct{N int}\ntype Local=Item\nimpl std::Default for Item{func Default()Item{return 1}}\n#[derive(std::derive::Default)]\ntype Wrap struct{V Local}", "4:54:", []string{"cannot use 1 (untyped int constant) as Item value in return statement"}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := testdeps.FormalSource(t, name+".gox", []byte("package fixture; use std; use std::PartialEq; use serde;\n"+body+"\n"))
-			if err == nil || !strings.Contains(err.Error(), name+".gox") {
-				t.Fatal(err)
+			_, err := testdeps.FormalSource(t, name+".gox", []byte("package fixture; use std; use std::PartialEq; use serde;\n"+tc.source+"\n"))
+			if err == nil || !strings.Contains(err.Error(), name+".gox:"+tc.location) {
+				t.Fatalf("want protocol rejection at %s, got %v", tc.location, err)
+			}
+			for _, want := range tc.want {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("want diagnostic containing %q, got %v", want, err)
+				}
 			}
 		})
 	}

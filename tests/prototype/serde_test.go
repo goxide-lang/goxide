@@ -48,13 +48,16 @@ impl Order {
 }
 
 func TestDeriveRejectsInvalidInput(t *testing.T) {
-	cases := []struct{ name, source string }{
+	cases := []struct {
+		name, source string
+		want         []string
+	}{
 		{"unknown attribute", `package fixture; use serde;
 #[derive(serde::derive::Serialize)]
 type A struct {
  #[serde(unknown)]
  X int
-}`},
+}`, []string{"invalid.gox:4:2: macro expansion failed: serde unknown is not supported at this position"}},
 		{"rename collision", `package fixture; use serde;
 #[derive(serde::derive::Serialize, serde::derive::Deserialize)]
 type A struct {
@@ -62,10 +65,10 @@ type A struct {
  X int
  #[serde(rename="same")]
  Y int
-}`},
+}`, []string{`invalid.gox:6:2: macro expansion failed: duplicate serde field name "same"`}},
 		{"unsupported map key", `package fixture; use serde;
 #[derive(serde::derive::Serialize, serde::derive::Deserialize)]
-type A struct { X map[bool]int }`},
+type A struct { X map[bool]int }`, []string{"invalid.gox:2:1: type does not explicitly implement Serialize:", "(map[bool]int)"}},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
@@ -73,8 +76,10 @@ type A struct { X map[bool]int }`},
 			if err == nil {
 				t.Fatal("invalid input accepted")
 			}
-			if !strings.Contains(err.Error(), "invalid.gox") {
-				t.Fatalf("diagnostic lacks source: %v", err)
+			for _, want := range tt.want {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("want diagnostic %q, got %v", want, err)
+				}
 			}
 		})
 	}

@@ -111,51 +111,56 @@ func TestErrorChainsAndNil(t *testing.T){
 }
 
 func TestMacroAndCloneExplicitRejections(t *testing.T) {
-	cases := map[string]string{
-		"nested repetition": `package fixture
+	cases := map[string]struct {
+		source, location string
+		want             []string
+	}{
+		"nested repetition": {`package fixture
 macro_rules! bad {($($($x:expr),*);*)=>{1};}
 func f(){_=bad!(1)}
-`,
-		"ambiguous fragment boundary": `package fixture
+`, "2:19:", []string{"matcher repetition must consume input"}},
+		"ambiguous fragment boundary": {`package fixture
 macro_rules! bad {($x:expr $y:expr)=>{$x};}
 func f(){_=bad!(1 2)}
-`,
-		"no matching rule": `package fixture
+`, "2:19:", []string{"ambiguous fragment boundary: expr capture requires a separator"}},
+		"no matching rule": {`package fixture
 macro_rules! bad {($x:ident)=>{1};}
 func f(){_=bad!(42)}
-`,
-		"pointer clone": `package fixture; use std;
+`, "2:1:", []string{"expected ident fragment for $x", "called at rejected.gox:3:12"}},
+		"pointer clone": {`package fixture; use std;
 #[derive(std::derive::Clone)]
 type Bad struct { Value *int }
-`,
-		"external clone": `package fixture; use std;
+`, "2:1:", []string{"missing trait implementation:", "Clone", "(*int)"}},
+		"external clone": {`package fixture; use std;
 use sync;
 #[derive(std::derive::Clone)]
 type Bad struct { Mutex sync::Mutex }
-`,
-		"from non-error": `package fixture; use std;
+`, "3:1:", []string{"missing trait implementation:", "Clone", "(sync::Mutex)"}},
+		"from non-error": {`package fixture; use std;
 #[derive(std::derive::Error)]
+#[error("bad")]
 type Bad struct {
  #[from]
  Cause int
 }
-`,
+`, "2:1:", []string{"*int does not satisfy", "*error"}},
 	}
-	for name, source := range cases {
+	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
 			var err error
 			if name == "pointer clone" || name == "external clone" || name == "from non-error" {
-				_, err = testdeps.FormalSource(t, "rejected.gox", []byte(source), "[dependencies.sync]\ngo=\"sync\"\n")
+				_, err = testdeps.FormalSource(t, "rejected.gox", []byte(tc.source), "[dependencies.sync]\ngo=\"sync\"\n")
 			} else {
-				_, err = compileAcceptanceLanguageFixture("rejected.gox", []byte(source))
+				_, err = compileAcceptanceLanguageFixture("rejected.gox", []byte(tc.source))
 			}
-			if err == nil || !strings.Contains(err.Error(), "rejected.gox:") {
-				t.Fatalf("expected located rejection; got %v", err)
+			if err == nil || !strings.Contains(err.Error(), "rejected.gox:"+tc.location) {
+				t.Fatalf("want macro rejection at %s, got %v", tc.location, err)
 			}
-			if name == "no matching rule" && !strings.Contains(err.Error(), "called at rejected.gox:3:12") {
-				t.Fatalf("diagnostic lost invocation location: %v", err)
+			for _, want := range tc.want {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("want diagnostic containing %q, got %v", want, err)
+				}
 			}
-			t.Log(err)
 		})
 	}
 }

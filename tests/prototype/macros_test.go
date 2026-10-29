@@ -82,20 +82,20 @@ func TestApplication(t *testing.T){
 }
 
 func TestIntegratedMacroAndErrorDiagnostics(t *testing.T) {
-	cases := []string{
-		`package fixture; use std; use std::PartialEq;
+	cases := []struct{ name, source, want string }{
+		{"missing-error-message", `package fixture; use std; use std::PartialEq;
 #[derive(std::derive::Error)]
 type Bad struct { Error string }
 
 impl Bad {
  pub func wrap(cause error) Self { return Bad::from::<std::From[error]>(cause) }
 }
-`,
-		`package fixture; use std; use std::PartialEq;
+`, "diagnostic.gox:3:1: macro expansion failed: Error struct requires a message; source/from belong to a field"},
+		{"ambiguous-fragment-boundary", `package fixture; use std; use std::PartialEq;
 macro_rules! bad {($x:expr $y:expr)=>{$x};}
 func f(){bad!(1 2)}
-`,
-		`package fixture; use std; use std::PartialEq;
+`, "diagnostic.gox:2:19: ambiguous fragment boundary: expr capture requires a separator"},
+		{"unknown-error-placeholder", `package fixture; use std; use std::PartialEq;
 #[derive(std::derive::Error)]
 #[error("unknown {Missing}")]
 type Bad struct { Code int }
@@ -103,8 +103,8 @@ type Bad struct { Code int }
 impl Bad {
  pub func wrap(cause error) Self { return Bad::from::<std::From[error]>(cause) }
 }
-`,
-		`package fixture; use std; use std::PartialEq;
+`, `diagnostic.gox:3:1: macro expansion failed: unknown error placeholder "Missing"`},
+		{"from-without-error-message", `package fixture; use std; use std::PartialEq;
 #[derive(std::derive::Error)]
 type Bad struct {
  #[from]
@@ -115,13 +115,15 @@ type Bad struct {
 impl Bad {
  pub func wrap(cause error) Self { return Bad::from::<std::From[error]>(cause) }
 }
-`,
+`, "diagnostic.gox:3:1: macro expansion failed: Error struct requires a message; source/from belong to a field"},
 	}
-	for _, source := range cases {
-		_, err := testutil.FormalSource(t, "diagnostic.gox", []byte(source), "[dependencies.fmt]\ngo=\"fmt\"\n")
-		if err == nil || !strings.Contains(err.Error(), "diagnostic.gox") {
-			t.Fatalf("missing source-aware rejection: %v", err)
-		}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := testutil.FormalSource(t, "diagnostic.gox", []byte(tc.source), "[dependencies.fmt]\ngo=\"fmt\"\n")
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("want diagnostic %q, got %v", tc.want, err)
+			}
+		})
 	}
 }
 

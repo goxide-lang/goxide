@@ -260,16 +260,24 @@ func TestGoHelpers(t *testing.T){v:=a.Holder{V:m.Some([]int{5})};c:=(a.HolderOps
 }
 
 func TestSumProtocolsRejectMissingPayload(t *testing.T) {
-	for name, body := range map[string]string{
-		"result-default":  "#[derive(std::derive::Default)]\ntype S struct{V Result[int,string]}",
-		"option-clone":    "#[derive(std::derive::Clone)]\ntype S struct{V Option[chan int]}",
-		"result-inactive": "#[derive(std::derive::Debug)]\ntype S struct{V Result[int,chan int]}",
-		"new-defined":     "type Fresh Option[int]\n#[derive(std::derive::Clone)]\ntype S struct{V Fresh}",
+	for name, tc := range map[string]struct {
+		source, location string
+		want             []string
+	}{
+		"result-default":  {"#[derive(std::derive::Default)]\ntype S struct{V Result[int,string]}", "2:1:", []string{"missing trait implementation:", "Default", "Result[int,string]"}},
+		"option-clone":    {"#[derive(std::derive::Clone)]\ntype S struct{V Option[chan int]}", "2:1:", []string{"missing trait implementation:", "Clone"}},
+		"result-inactive": {"#[derive(std::derive::Debug)]\ntype S struct{V Result[int,chan int]}", "2:1:", []string{"missing trait implementation:", "Debug"}},
+		"new-defined":     {"type Fresh Option[int]\n#[derive(std::derive::Clone)]\ntype S struct{V Fresh}", "3:1:", []string{"missing trait implementation:", "Clone", "(fixture::Fresh)"}},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := testdeps.FormalSource(t, name+".gox", []byte("package fixture; use std; use std::PartialEq;\n"+body))
-			if err == nil {
-				t.Fatal("unexpected protocol")
+			_, err := testdeps.FormalSource(t, name+".gox", []byte("package fixture; use std; use std::PartialEq;\n"+tc.source))
+			if err == nil || !strings.Contains(err.Error(), name+".gox:"+tc.location) {
+				t.Fatalf("want protocol rejection at %s, got %v", tc.location, err)
+			}
+			for _, want := range tc.want {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("want diagnostic containing %q, got %v", want, err)
+				}
 			}
 		})
 	}

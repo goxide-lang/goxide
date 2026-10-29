@@ -255,7 +255,13 @@ func (c *checker) stmt(stmt ast.Stmt) {
 			if array, ok := c.out.ArrayOf(t); ok {
 				value = array.Elem
 			}
-			switch x := t.Underlying().(type) {
+			switch x := coreType(t, nil).(type) {
+			case *types.Array:
+				value = x.Elem()
+			case *types.Pointer:
+				if array, ok := c.out.ArrayOf(x.Elem()); ok {
+					value = array.Elem
+				}
 			case *types.Slice:
 				value = x.Elem()
 			case *types.Map:
@@ -270,6 +276,17 @@ func (c *checker) stmt(stmt ast.Stmt) {
 				}
 			case *types.Signature:
 				c.checkRangePropagation(n.X, "error propagation in a function iterator source is not supported")
+				key = types.Typ[types.Invalid]
+				if x.Params().Len() == 1 {
+					if yield, ok := x.Params().At(0).Type().Underlying().(*types.Signature); ok {
+						if yield.Params().Len() > 0 {
+							key = yield.Params().At(0).Type()
+						}
+						if yield.Params().Len() > 1 {
+							value = yield.Params().At(1).Type()
+						}
+					}
+				}
 			}
 		}
 		if n.Tok == token.DEFINE {

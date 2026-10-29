@@ -54,7 +54,7 @@ func (c *checker) unsafeCall(call *ast.CallExpr) (types.Type, bool) {
 		if len(call.Args) > 0 {
 			typ := c.out.Types[call.Args[0]]
 			if valid(typ) {
-				core := unsafeCoreType(typ, nil)
+				core := coreType(typ, nil)
 				if pointer, ok := core.(*types.Pointer); ok && name == "Slice" {
 					return types.NewSlice(pointer.Elem()), true
 				}
@@ -68,9 +68,14 @@ func (c *checker) unsafeCall(call *ast.CallExpr) (types.Type, bool) {
 	return types.Typ[types.Invalid], true
 }
 
-// A parameter with a common pointer/slice underlying type keeps its element
-// type in unsafe.Slice/SliceData. Native Go still validates the full type set.
-func unsafeCoreType(t types.Type, visiting map[types.Type]bool) types.Type {
+// A shared underlying type preserves operation results for Go type parameters.
+// Native Go validates the complete type set and operation constraints.
+func coreType(t types.Type, visiting map[types.Type]bool) types.Type {
+	return commonType(t, visiting, nil)
+}
+
+// Indexing can share an element type even when its container types differ.
+func commonType(t types.Type, visiting map[types.Type]bool, project func(types.Type) types.Type) types.Type {
 	if t == nil || visiting[t] {
 		return nil
 	}
@@ -79,31 +84,55 @@ func unsafeCoreType(t types.Type, visiting map[types.Type]bool) types.Type {
 	}
 	visiting[t] = true
 	defer delete(visiting, t)
+	merge := func(first, next types.Type) types.Type {
+		if first == nil || types.Identical(first, next) {
+			return next
+		}
+		if project == nil {
+			a, aok := first.(*types.Chan)
+			b, bok := next.(*types.Chan)
+			if aok && bok && types.Identical(a.Elem(), b.Elem()) {
+				if a.Dir() == types.SendRecv {
+					return b
+				}
+				if b.Dir() == types.SendRecv {
+					return a
+				}
+			}
+		}
+		return nil
+	}
 	switch underlying := t.Underlying().(type) {
 	case *types.Interface:
 		var core types.Type
 		for i := 0; i < underlying.NumEmbeddeds(); i++ {
-			bound := unsafeCoreType(underlying.EmbeddedType(i), visiting)
+			bound := commonType(underlying.EmbeddedType(i), visiting, project)
 			if bound == nil {
 				continue
 			}
-			if core != nil && !types.Identical(core, bound) {
+			core = merge(core, bound)
+			if core == nil {
 				return nil
 			}
-			core = bound
 		}
 		return core
 	case *types.Union:
 		var core types.Type
 		for i := 0; i < underlying.Len(); i++ {
-			term := unsafeCoreType(underlying.Term(i).Type(), visiting)
-			if term == nil || core != nil && !types.Identical(core, term) {
+			term := commonType(underlying.Term(i).Type(), visiting, project)
+			if term == nil {
 				return nil
 			}
-			core = term
+			core = merge(core, term)
+			if core == nil {
+				return nil
+			}
 		}
 		return core
 	default:
+		if project != nil {
+			return project(underlying)
+		}
 		return underlying
 	}
 }

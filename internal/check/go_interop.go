@@ -90,7 +90,7 @@ func (c *checker) lookupGoMember(t types.Type, addressable bool, name string) ty
 		object, _ := c.lookupGoInteropMember(t, addressable, name)
 		return object
 	}
-	object, _, _ := types.LookupFieldOrMethod(t, addressable, c.pkg, name)
+	object, _ := c.lookupSourceMember(t, addressable, name, false)
 	return object
 }
 
@@ -98,18 +98,22 @@ func (c *checker) lookupGoMember(t types.Type, addressable bool, name string) ty
 // concrete source type. Otherwise a forwarded pointer method could disappear
 // from lookup and its receiver permission check would be skipped.
 func (c *checker) lookupGoInteropMember(t types.Type, addressable bool, name string) (types.Object, []int) {
+	native := c.file != nil && c.file.AST.NativeGo
 	if c.goInterop != nil && len(c.goInterop.sugar) != 0 {
-		object, indices, _ := types.LookupFieldOrMethod(c.goInterop.typ(t, true), addressable, c.pkg, name)
+		object, indices := c.lookupSourceMember(c.goInterop.typ(t, true), addressable, name, native)
 		if function, ok := object.(*types.Func); ok {
-			return types.NewFunc(function.Pos(), function.Pkg(), function.Name(), c.goInterop.typ(function.Type(), false).(*types.Signature)), indices
+			copy := types.NewFunc(function.Pos(), function.Pkg(), function.Name(), c.goInterop.typ(function.Type(), false).(*types.Signature))
+			c.out.copyGoMember(copy, function)
+			return copy, indices
 		}
 		if field, ok := object.(*types.Var); ok {
-			return types.NewField(field.Pos(), field.Pkg(), field.Name(), c.goInterop.typ(field.Type(), false), field.Embedded()), indices
+			copy := types.NewField(field.Pos(), field.Pkg(), field.Name(), c.goInterop.typ(field.Type(), false), field.Embedded())
+			c.out.copyGoMember(copy, field)
+			return copy, indices
 		}
 		return object, indices
 	}
-	object, indices, _ := types.LookupFieldOrMethod(t, addressable, c.pkg, name)
-	return object, indices
+	return c.lookupSourceMember(t, addressable, name, native)
 }
 
 func (c *checker) assignableGo(actual, expected types.Type) bool {
@@ -192,7 +196,9 @@ func (r *goInterop) typ(t types.Type, forward bool) types.Type {
 			copy.SetUnderlying(underlying)
 			for i := 0; i < t.NumMethods(); i++ {
 				method := t.Method(i)
-				copy.AddMethod(types.NewFunc(method.Pos(), method.Pkg(), method.Name(), visit(method.Type()).(*types.Signature)))
+				member := types.NewFunc(method.Pos(), method.Pkg(), method.Name(), visit(method.Type()).(*types.Signature))
+				r.info.copyGoMember(member, method)
+				copy.AddMethod(member)
 			}
 			for _, member := range r.sugar[t] {
 				if _, isInterface := underlying.(*types.Interface); !isInterface {
@@ -233,6 +239,7 @@ func (r *goInterop) typ(t types.Type, forward bool) types.Type {
 		for i := range fields {
 			field := t.Field(i)
 			fields[i] = types.NewField(field.Pos(), field.Pkg(), field.Name(), visit(field.Type()), field.Embedded())
+			r.info.copyGoMember(fields[i], field)
 			tags[i] = t.Tag(i)
 		}
 		result = types.NewStruct(fields, tags)
@@ -245,6 +252,7 @@ func (r *goInterop) typ(t types.Type, forward bool) types.Type {
 			// interface. The receiver is implicit in this declaration.
 			copy := types.NewSignatureType(nil, nil, nil, visit(signature.Params()).(*types.Tuple), visit(signature.Results()).(*types.Tuple), signature.Variadic())
 			methods[i] = types.NewFunc(method.Pos(), method.Pkg(), method.Name(), copy)
+			r.info.copyGoMember(methods[i], method)
 		}
 		embedded := make([]types.Type, t.NumEmbeddeds())
 		for i := range embedded {

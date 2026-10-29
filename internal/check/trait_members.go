@@ -252,7 +252,7 @@ func (c *checker) staticMember(n *ast.PathExpr) *MemberSelection {
 			signature := types.NewSignatureType(nil, nil, nil, types.NewTuple(params...), member.Signature.Results(), member.Signature.Variadic())
 			return &MemberSelection{Member: member, Impl: impl, MethodExpr: true, Signature: signature}
 		}
-		if object, _, _ := types.LookupFieldOrMethod(target, false, c.pkg, name); object != nil {
+		if object := c.lookupGoMember(target, false, name); object != nil {
 			if function, ok := object.(*types.Func); ok {
 				signature := function.Type().(*types.Signature)
 				params := []*types.Var{types.NewVar(0, c.pkg, "", target)}
@@ -260,7 +260,7 @@ func (c *checker) staticMember(n *ast.PathExpr) *MemberSelection {
 					params = append(params, types.NewVar(0, c.pkg, "", signature.Params().At(i).Type()))
 				}
 				method := types.NewSignatureType(nil, nil, nil, types.NewTuple(params...), signature.Results(), signature.Variadic())
-				return &MemberSelection{Member: &Member{Name: name, GoName: name, Signature: signature, Native: function}, MethodExpr: true, Signature: method}
+				return &MemberSelection{Member: &Member{Name: name, GoName: c.out.GoMemberName(function), Signature: signature, Native: function}, MethodExpr: true, Signature: method}
 			}
 		}
 		if _, parameter := target.(*types.TypeParam); parameter {
@@ -382,7 +382,7 @@ func (c *checker) instanceMember(node ast.Expr, receiver ast.Expr, target types.
 						}
 					}
 					if nativeMode == mode {
-						return &MemberSelection{Member: &Member{Name: name, GoName: name, Signature: sig, Native: fn}, Receiver: receiver, Signature: sig}
+						return &MemberSelection{Member: &Member{Name: name, GoName: c.out.GoMemberName(fn), Signature: sig, Native: fn}, Receiver: receiver, Signature: sig}
 					}
 				} else {
 					return nil

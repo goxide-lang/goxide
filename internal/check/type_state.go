@@ -6,7 +6,8 @@ import "go/types"
 // zero value is ready to use. Each consumer must use its own state; no method
 // adds array representatives to the supplied Info or its related checked views.
 type TypeState struct {
-	arrays map[*types.TypeParam]*ArrayPattern
+	arrays        map[*types.TypeParam]*ArrayPattern
+	goMemberNames map[types.Object]string
 }
 
 // ArrayOf recognizes both checked arrays and this consumer's substitutions.
@@ -82,4 +83,22 @@ func (s *TypeState) Comparable(info *Info, typ types.Type) bool {
 		return true
 	}
 	return types.Comparable(typ)
+}
+
+// GoMemberName includes members copied into this consumer's substituted types.
+func (s *TypeState) GoMemberName(info *Info, object types.Object) string {
+	if name := s.goMemberNames[memberOrigin(object)]; name != "" {
+		return name
+	}
+	return info.GoMemberName(object)
+}
+
+func (s *TypeState) copyGoMember(info *Info, to, from types.Object) {
+	name := s.GoMemberName(info, from)
+	if name != from.Name() {
+		if s.goMemberNames == nil {
+			s.goMemberNames = map[types.Object]string{}
+		}
+		s.goMemberNames[memberOrigin(to)] = name
+	}
 }

@@ -65,7 +65,6 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 	var emitters []*emitter
 	enumValidHelpers := map[*check.Enum]bool{}
 	enumAssertions := &enumAssertionPlan{}
-	memberSymbols := make(map[*resolve.Symbol]bool)
 	externalTests := make(map[*resolve.Scope]bool)
 	if res != nil {
 		for _, pkg := range res.Packages {
@@ -73,19 +72,10 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 				externalTests[pkg.Scope] = true
 			}
 		}
-		for _, f := range res.Files {
-			for _, scope := range f.Scopes {
-				if scope.Kind == resolve.MemberScope {
-					for _, symbol := range scope.Bindings {
-						memberSymbols[symbol] = true
-					}
-				}
-			}
-		}
 	}
 	for _, name := range names {
 		tree := files[name]
-		e := &emitter{typeState: typeState, symbolNames: hygienicNames, traits: traits, info: info, name: name, tree: tree, result: res, imports: make(map[string]*importUse), reserved: make(map[string]bool), memberSymbols: memberSymbols, memberNames: make(map[*goast.Ident]string)}
+		e := &emitter{typeState: typeState, symbolNames: hygienicNames, traits: traits, info: info, name: name, tree: tree, result: res, imports: make(map[string]*importUse), reserved: make(map[string]bool)}
 		e.enumValidHelpers = enumValidHelpers
 		e.enumAssertions = enumAssertions
 		e.validation = options.validation
@@ -178,8 +168,8 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 	if options.validation != nil && options.validation.provenance {
 		fset = validationPositions(emitters)
 	}
-	bindMembers(fset, emitters)
 	if options.validation != nil {
+		validateGeneratedDefinitions(fset, emitters)
 		return nil, options.validation.err
 	}
 	out := make(map[string][]byte, len(files))
@@ -219,13 +209,12 @@ type goImporter func(string) (*types.Package, error)
 
 func (f goImporter) Import(path string) (*types.Package, error) { return f(path) }
 
-func bindMembers(fset *gotoken.FileSet, emitters []*emitter) {
+func validateGeneratedDefinitions(fset *gotoken.FileSet, emitters []*emitter) {
 	if len(emitters) == 0 {
 		return
 	}
 	groups := map[string][]*emitter{}
 	tests := map[*resolve.Scope][]*emitter{}
-	needed := false
 	for _, e := range emitters {
 		key := filepath.ToSlash(filepath.Dir(e.name))
 		if e.externalTest {
@@ -233,12 +222,8 @@ func bindMembers(fset *gotoken.FileSet, emitters []*emitter) {
 		} else {
 			groups[key] = append(groups[key], e)
 		}
-		needed = needed || len(e.memberNames) > 0
 	}
 	validation := emitters[0].validation
-	if !needed && validation == nil {
-		return
-	}
 	// Go's receiver validation requires a file for both declared type names and
 	// instantiated receiver names. Give generated names temporary source positions.
 	var generatedTypePositions []*gotoken.Pos
@@ -272,11 +257,6 @@ func bindMembers(fset *gotoken.FileSet, emitters []*emitter) {
 			*position = gotoken.NoPos
 		}
 	}()
-	var renamer memberRenamer
-	if validation != nil {
-		renamer.prepare = validation.preparePackage
-		renamer.report = func(err error) { validation.report(err, emitters) }
-	}
 	loaded := map[string]*types.Package{}
 	loadedGroups := map[*emitter]*types.Package{}
 	loading := map[*emitter]bool{}
@@ -284,18 +264,22 @@ func bindMembers(fset *gotoken.FileSet, emitters []*emitter) {
 	if emitters[0].info.GoImporter != nil {
 		standard = emitters[0].info.GoImporter
 	}
-	indexSourcePackages(groups, emitters, standard)
-	var load goImporter
-	rename := func(path string, group []*emitter) *types.Package {
-		var files []*goast.File
-		names := map[*goast.Ident]string{}
-		for _, e := range group {
-			files = append(files, e.goFile)
-			for id, name := range e.memberNames {
-				names[id] = name
-			}
+	for dir, path := range emitters[0].info.PackagePaths {
+		if group := groups[dir]; group != nil && path != "" {
+			groups[path] = group
 		}
-		return renamer.rename(path, fset, files, names, load, group[0].info.GoSizes)
+	}
+	var load goImporter
+	validate := func(path string, group []*emitter) *types.Package {
+		files := make([]*goast.File, len(group))
+		for i, e := range group {
+			files[i] = e.goFile
+		}
+		pkg := types.NewPackage(path, files[0].Name.Name)
+		validation.preparePackage(pkg)
+		config := types.Config{Importer: load, Sizes: group[0].info.GoSizes, Error: func(err error) { validation.report(err, emitters) }}
+		_ = types.NewChecker(&config, fset, pkg, nil).Files(files)
+		return pkg
 	}
 	load = func(path string) (*types.Package, error) {
 		if p := loaded[path]; p != nil {
@@ -313,7 +297,7 @@ func bindMembers(fset *gotoken.FileSet, emitters []*emitter) {
 			return nil, fmt.Errorf("import cycle: %s", path)
 		}
 		loading[identity] = true
-		p := rename(path, group)
+		p := validate(path, group)
 		loaded[path] = p
 		loadedGroups[identity] = p
 		loading[identity] = false
@@ -324,55 +308,10 @@ func bindMembers(fset *gotoken.FileSet, emitters []*emitter) {
 		if e.externalTest {
 			group := tests[e.file.Scope.Parent]
 			if group[0] == e {
-				rename(path, group)
+				validate(path, group)
 			}
 		} else {
 			_, _ = load(path)
-		}
-	}
-}
-
-// 文件名可以是源码路径；同一模块的包目录共享一个导入前缀。
-func indexSourcePackages(groups map[string][]*emitter, emitters []*emitter, standard types.Importer) {
-	root := filepath.Dir(emitters[0].name)
-	for _, e := range emitters[1:] {
-		root = commonDirectory(root, filepath.Dir(e.name))
-	}
-	relative := map[string][]*emitter{}
-	for dir, group := range groups {
-		rel, err := filepath.Rel(root, filepath.FromSlash(dir))
-		if err != nil {
-			return
-		}
-		relative[filepath.ToSlash(rel)] = group
-	}
-	prefixes := map[string]bool{}
-	seen := map[string]bool{}
-	for _, e := range emitters {
-		for imported := range e.imports {
-			if seen[imported] || groups[imported] != nil {
-				continue
-			}
-			seen[imported] = true
-			if _, err := standard.Import(imported); err == nil {
-				continue
-			}
-			for rel := range relative {
-				if rel != "." && (imported == rel || strings.HasSuffix(imported, "/"+rel)) {
-					prefixes[strings.TrimSuffix(strings.TrimSuffix(imported, rel), "/")] = true
-				}
-			}
-		}
-	}
-	if len(prefixes) != 1 {
-		return
-	}
-	for prefix := range prefixes {
-		for rel, group := range relative {
-			alias := filepath.ToSlash(filepath.Join(prefix, rel))
-			if groups[alias] == nil {
-				groups[alias] = group
-			}
 		}
 	}
 }
@@ -424,8 +363,6 @@ type emitter struct {
 	base               gotoken.Pos
 	tokenFile          *gotoken.File
 	goFile             *goast.File
-	memberSymbols      map[*resolve.Symbol]bool
-	memberNames        map[*goast.Ident]string
 	sourceNodes        map[goast.Node]syntax.Node
 	diagnosticNodes    map[gotoken.Pos]syntax.Node
 	name               string
@@ -523,13 +460,22 @@ func (e *emitter) ident(id *syntax.Ident) *goast.Ident {
 	if mapped := e.symbolNames[symbol]; mapped != "" {
 		name = mapped
 	}
+	if symbol != nil && symbol.Kind == resolve.Field {
+		if referenced := e.file.References[id.ID()].Symbol; referenced != nil {
+			for referenced.AliasOf != nil {
+				referenced = referenced.AliasOf
+			}
+			if referenced.Kind == resolve.Type && referenced.GoName != "" {
+				name = referenced.GoName
+			}
+		}
+	}
 	if !gotoken.IsIdentifier(name) {
 		e.fail(id, fmt.Sprintf("名字 %q 无法作为 Go 标识符输出", name))
 	}
 	out := &goast.Ident{NamePos: e.pos(id), Name: name}
-	if sym := e.file.Definitions[id.ID()]; e.memberSymbols[sym] && name != id.Name {
-		out.Name = id.Name
-		e.memberNames[out] = name
+	if mapped := e.info.GoMembers[id]; mapped != "" {
+		out.Name = mapped
 	}
 	e.recordSource(out, id)
 	return out

@@ -85,6 +85,11 @@ func (r *bodyTypes) typ(t types.Type) types.Type {
 		for i := range fields {
 			field := t.Field(i)
 			fields[i] = types.NewField(field.Pos(), field.Pkg(), field.Name(), r.typ(field.Type()), field.Embedded())
+			if r.state == nil {
+				r.info.copyGoMember(fields[i], field)
+			} else {
+				r.state.copyGoMember(r.info, fields[i], field)
+			}
 			tags[i] = t.Tag(i)
 		}
 		result = types.NewStruct(fields, tags)
@@ -95,6 +100,11 @@ func (r *bodyTypes) typ(t types.Type) types.Type {
 			signature := method.Type().(*types.Signature)
 			copy := types.NewSignatureType(nil, nil, nil, r.tuple(signature.Params()), r.tuple(signature.Results()), signature.Variadic())
 			methods[i] = types.NewFunc(method.Pos(), method.Pkg(), method.Name(), copy)
+			if r.state == nil {
+				r.info.copyGoMember(methods[i], method)
+			} else {
+				r.state.copyGoMember(r.info, methods[i], method)
+			}
 		}
 		embedded := make([]types.Type, t.NumEmbeddeds())
 		for i := range embedded {
@@ -329,6 +339,7 @@ func bodyInfoPermissions(source *Info, sub map[*types.TypeParam]types.Type, cons
 			result.TypeOverrides[node] = r.typ(typ)
 		}
 	}
+	result.GoMembers = cloneMap(source.GoMembers)
 	result.Members = cloneMap(source.Members)
 	result.TraitViews = cloneMap(source.TraitViews)
 	result.FunctionInstances = cloneMap(source.FunctionInstances)

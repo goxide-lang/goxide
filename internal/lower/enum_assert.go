@@ -219,7 +219,7 @@ func (e *emitter) enumAssertionBody(typ types.Type, value goast.Expr, seen []typ
 			var body []goast.Stmt
 			for index := 0; index < typ.NumFields(); index++ {
 				field := typ.Field(index)
-				member := &goast.SelectorExpr{X: value, Sel: goast.NewIdent(field.Name())}
+				member := &goast.SelectorExpr{X: value, Sel: goast.NewIdent(e.typeState.GoMemberName(e.info, field))}
 				body = append(body, e.enumAssertionBody(field.Type(), member, seen, node, within, false)...)
 			}
 			return body

@@ -377,7 +377,7 @@ func (e *emitter) selectorPlace(n *syntax.SelectorExpr) goast.Expr {
 			typ = pointer.Elem()
 		}
 		field := typ.Underlying().(*types.Struct).Field(index)
-		base = &goast.SelectorExpr{X: base, Sel: goast.NewIdent(field.Name())}
+		base = &goast.SelectorExpr{X: base, Sel: goast.NewIdent(e.typeState.GoMemberName(e.info, field))}
 		typ = field.Type()
 		if _, pointer := typ.Underlying().(*types.Pointer); pointer {
 			// Snapshot promoted pointer fields before the RHS can replace them.

@@ -128,7 +128,7 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 				}
 			}
 			t = fun
-		} else if sig, ok := fun.(*types.Signature); ok {
+		} else if sig, ok := coreType(fun, nil).(*types.Signature); ok {
 			sub := map[*types.TypeParam]types.Type{}
 			for parameter, actual := range explicit {
 				sub[parameter] = actual
@@ -216,6 +216,26 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 			}
 			if symbol := c.symbol(referenceScrutinee(n.Fun)); symbol != nil && symbol.Kind == resolve.Builtin {
 				switch symbol.Name.Name {
+				case "min", "max":
+					for i, arg := range n.Args {
+						argument := c.out.Types[arg]
+						if !valid(argument) {
+							t = types.Typ[types.Invalid]
+							break
+						}
+						if i == 0 {
+							t = argument
+						} else if untyped(t) && untyped(argument) {
+							if argument.(*types.Basic).Kind() > t.(*types.Basic).Kind() {
+								t = argument
+							}
+						} else if untyped(t) {
+							t = argument
+						} else if !untyped(argument) && !types.Identical(t, argument) {
+							t = types.Typ[types.Invalid]
+							break
+						}
+					}
 				case "append":
 					if len(n.Args) == 0 {
 						c.diag(n, "builtin-call", "not enough arguments in call to append")
@@ -281,6 +301,7 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 			if kv, ok := elt.(*ast.KeyValue); ok {
 				if id, ok := kv.Key.(*ast.Ident); ok {
 					want, _ = c.literalType(t, i, id.Name)
+					c.recordGoMember(id, c.literalField(t, id.Name))
 				}
 				if con := c.out.Constructors[n]; con != nil {
 					if id, ok := kv.Key.(*ast.Ident); ok {
@@ -315,6 +336,7 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 				break
 			}
 			if object := c.lookupGoMember(x, false, n.Sel.Name); object != nil {
+				c.recordGoMember(n.Sel, object)
 				if function, ok := object.(*types.Func); ok {
 					signature := function.Type().(*types.Signature)
 					params := []*types.Var{types.NewVar(0, c.pkg, "", x)}
@@ -339,12 +361,15 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 		if selected := c.instanceMember(n, n.X, x, n.Sel.Name, nil); selected != nil {
 			if selected.Member.Native == nil {
 				c.out.Members[n] = selected
+			} else {
+				c.recordGoMember(n.Sel, selected.Member.Native)
 			}
 			t = selected.Signature
 			break
 		}
 		if valid(x) {
 			if obj := c.lookupGoMember(x, true, n.Sel.Name); obj != nil {
+				c.recordGoMember(n.Sel, obj)
 				t = obj.Type()
 			}
 		}
@@ -379,22 +404,25 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 					t = array.Elem
 					break
 				}
-				switch v := x.Underlying().(type) {
-				case *types.Array:
-					t = v.Elem()
-				case *types.Slice:
-					t = v.Elem()
-				case *types.Map:
-					t = v.Elem()
-				case *types.Pointer:
-					if a, ok := c.out.ArrayOf(v.Elem()); ok {
-						t = a.Elem
+				t = commonType(x, nil, func(typ types.Type) types.Type {
+					switch v := typ.(type) {
+					case *types.Array:
+						return v.Elem()
+					case *types.Slice:
+						return v.Elem()
+					case *types.Map:
+						return v.Elem()
+					case *types.Pointer:
+						if a, ok := c.out.ArrayOf(v.Elem()); ok {
+							return a.Elem
+						}
+					case *types.Basic:
+						if v.Info()&types.IsString != 0 {
+							return types.Typ[types.Byte]
+						}
 					}
-				case *types.Basic:
-					if v.Info()&types.IsString != 0 {
-						t = types.Typ[types.Byte]
-					}
-				}
+					return nil
+				})
 			}
 		}
 	case *ast.SliceExpr:
@@ -408,7 +436,7 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 				t = types.NewSlice(array.Elem)
 				break
 			}
-			switch v := x.Underlying().(type) {
+			switch v := coreType(x, nil).(type) {
 			case *types.Array:
 				t = types.NewSlice(v.Elem())
 			case *types.Pointer:
@@ -423,7 +451,7 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 	case *ast.StarExpr:
 		if c.isTypeExpr(n.X) {
 			t = types.NewPointer(c.exprType(n.X))
-		} else if p, ok := c.expr(n.X, nil).Underlying().(*types.Pointer); ok {
+		} else if p, ok := coreType(c.expr(n.X, nil), nil).(*types.Pointer); ok {
 			t = p.Elem()
 		}
 	case *ast.UnaryExpr:
@@ -433,7 +461,7 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 		case token.AND:
 			t = types.NewPointer(x)
 		case token.ARROW:
-			if ch, ok := x.Underlying().(*types.Chan); ok {
+			if ch, ok := coreType(x, nil).(*types.Chan); ok {
 				t = ch.Elem()
 			}
 		}
@@ -552,7 +580,7 @@ func (c *checker) literalType(t types.Type, index int, name string) (types.Type,
 	if array, ok := c.out.ArrayOf(t); ok {
 		return array.Elem, types.Typ[types.Int]
 	}
-	switch t := t.Underlying().(type) {
+	switch t := coreType(t, nil).(type) {
 	case *types.Array:
 		return t.Elem(), types.Typ[types.Int]
 	case *types.Slice:
@@ -561,10 +589,8 @@ func (c *checker) literalType(t types.Type, index int, name string) (types.Type,
 		return t.Elem(), t.Key()
 	case *types.Struct:
 		if name != "" {
-			for i := 0; i < t.NumFields(); i++ {
-				if t.Field(i).Name() == name {
-					return t.Field(i).Type(), nil
-				}
+			if field := c.literalField(t, name); field != nil {
+				return field.Type(), nil
 			}
 		} else if index < t.NumFields() {
 			return t.Field(index).Type(), nil

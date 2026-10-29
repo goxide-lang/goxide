@@ -103,14 +103,12 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 		elts := make([]goast.Expr, len(n.Elts))
 		for i, elt := range n.Elts {
 			elts[i] = e.expr(elt)
-			if typ := e.info.Types[n]; typ != nil {
-				if _, record := typ.Underlying().(*types.Struct); record {
-					if field, ok := elt.(*syntax.KeyValue); ok {
-						if id, ok := field.Key.(*syntax.Ident); ok {
-							key := &goast.Ident{NamePos: e.pos(id), Name: id.Name}
-							e.recordSource(key, id)
-							elts[i].(*goast.KeyValueExpr).Key = key
-						}
+			if field, ok := elt.(*syntax.KeyValue); ok {
+				if id, ok := field.Key.(*syntax.Ident); ok {
+					if name := e.info.GoMembers[id]; name != "" {
+						key := &goast.Ident{NamePos: e.pos(id), Name: name}
+						e.recordSource(key, id)
+						elts[i].(*goast.KeyValueExpr).Key = key
 					}
 				}
 			}

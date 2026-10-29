@@ -166,6 +166,7 @@ type Info struct {
 	Impls             map[*ast.ImplDecl]*Impl
 	ImplInstances     []*Impl
 	Members           map[ast.Expr]*MemberSelection
+	GoMembers         map[*ast.Ident]string
 	TraitViews        map[ast.Expr]*TraitView
 	TypeOverrides     map[ast.Type]types.Type
 	GenericBounds     map[*ast.FuncDecl][]*TraitBound
@@ -175,6 +176,7 @@ type Info struct {
 	Sugar             []*SugarMember
 	enums             map[*types.Named]*Enum
 	typeNodes         map[ast.Type]types.Type
+	goMemberNames     map[types.Object]string
 }
 
 func (r *Info) EnumOf(t types.Type) *Instance {
@@ -254,6 +256,8 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, options Options
 	r.Traits = make(map[*ast.TraitDecl]*Trait)
 	r.Impls = make(map[*ast.ImplDecl]*Impl)
 	r.Members = make(map[ast.Expr]*MemberSelection)
+	r.GoMembers = make(map[*ast.Ident]string)
+	r.goMemberNames = make(map[types.Object]string)
 	r.TraitViews = make(map[ast.Expr]*TraitView)
 	r.TypeOverrides = make(map[ast.Type]types.Type)
 	r.GenericBounds = make(map[*ast.FuncDecl][]*TraitBound)
@@ -370,6 +374,8 @@ func (r *Info) checkedResult() (*Info, []Diagnostic) {
 }
 
 type checker struct {
+	sourceMembers          map[string][]memberLookup
+	nativeMembers          map[string][]memberLookup
 	pendingDeclarations    []pendingDeclaration
 	pendingImpls           []pendingImpl
 	pendingTraits          []*Trait

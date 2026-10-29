@@ -326,7 +326,9 @@ func (c *checker) signatures(items []ast.Item) {
 				}
 				if named, ok := base.(*types.Named); ok {
 					method := types.NewSignatureType(types.NewVar(0, c.pkg, "", recv), nil, nil, sig.Params(), sig.Results(), sig.Variadic())
-					named.Origin().AddMethod(types.NewFunc(0, c.pkg, n.Name.Name, method))
+					object := types.NewFunc(0, c.pkg, n.Name.Name, method)
+					c.declareGoMember(object, n.Name)
+					named.Origin().AddMethod(object)
 				}
 			}
 			c.activeBounds = oldBounds
@@ -494,16 +496,16 @@ func (c *checker) typ(node ast.Type) (result types.Type) {
 		for _, f := range n.Fields {
 			t := c.typ(f.Type)
 			if len(f.Names) == 0 {
-				base := types.Unalias(t)
-				if pointer, ok := base.(*types.Pointer); ok {
-					base = types.Unalias(pointer.Elem())
-				}
-				if named, ok := base.(*types.Named); ok {
-					fields = append(fields, types.NewField(0, c.pkg, named.Obj().Name(), t, true))
+				if id := embeddedMemberIdent(f.Type); id != nil {
+					field := types.NewField(0, c.pkg, id.Name, t, true)
+					c.declareGoMember(field, id)
+					fields = append(fields, field)
 				}
 			}
 			for _, id := range f.Names {
-				fields = append(fields, types.NewField(0, c.pkg, id.Name, t, false))
+				field := types.NewField(0, c.pkg, id.Name, t, false)
+				c.declareGoMember(field, id)
+				fields = append(fields, field)
 			}
 		}
 		return types.NewStruct(fields, nil)
@@ -512,7 +514,9 @@ func (c *checker) typ(node ast.Type) (result types.Type) {
 		var embeds []types.Type
 		for _, m := range n.Methods {
 			if m.Name != nil {
-				methods = append(methods, types.NewFunc(0, c.pkg, m.Name.Name, types.NewSignatureType(nil, nil, nil, c.tuple(m.Params), c.tuple(m.Results), false)))
+				method := types.NewFunc(0, c.pkg, m.Name.Name, types.NewSignatureType(nil, nil, nil, c.tuple(m.Params), c.tuple(m.Results), false))
+				c.declareGoMember(method, m.Name)
+				methods = append(methods, method)
 			} else if m.Type != nil {
 				embeds = append(embeds, c.typ(m.Type))
 			}

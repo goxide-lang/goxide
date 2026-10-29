@@ -183,9 +183,6 @@ func (e *emitter) typ(n syntax.Type) (out goast.Expr) {
 		fields := make([]*goast.Field, len(n.Fields))
 		for i, f := range n.Fields {
 			field := &goast.Field{Type: e.typ(f.Type)}
-			if len(f.Names) == 0 {
-				e.embeddedType(f.Type, field.Type)
-			}
 			for _, name := range f.Names {
 				field.Names = append(field.Names, e.ident(name))
 			}
@@ -245,42 +242,6 @@ func (e *emitter) typ(n syntax.Type) (out goast.Expr) {
 		e.fail(n, "错误类型无法降低")
 	default:
 		e.fail(n, "类型尚未降低")
-	}
-	return nil
-}
-
-func (e *emitter) embeddedType(source syntax.Type, lowered goast.Expr) {
-	id, out := embeddedSyntaxIdent(source), embeddedIdent(lowered)
-	if id == nil || out == nil {
-		return
-	}
-	name := out.Name
-	if symbol := e.file.References[id.ID()].Symbol; symbol != nil {
-		if symbol.AliasOf != nil {
-			symbol = symbol.AliasOf
-		}
-		if symbol.Kind == resolve.Type && symbol.GoName != "" {
-			name = symbol.GoName
-		}
-	}
-	if name != id.Name {
-		out.Name = id.Name
-		e.memberNames[out] = name
-	}
-}
-
-func embeddedSyntaxIdent(typ syntax.Type) *syntax.Ident {
-	switch typ := typ.(type) {
-	case *syntax.PathType:
-		if len(typ.Path.Segments) != 0 {
-			return typ.Path.Segments[len(typ.Path.Segments)-1].Name
-		}
-	case *syntax.PointerType:
-		return embeddedSyntaxIdent(typ.Elem)
-	case *syntax.ProjectionType:
-		return typ.Item
-	case *syntax.ParenType:
-		return embeddedSyntaxIdent(typ.Type)
 	}
 	return nil
 }

@@ -304,7 +304,7 @@ python3 -B scripts/check_design.py --docs-only
 
 VS Code 提供 Run、项目目标选择、Test Explorer 与独立 `goxide` 调试类型。`goxide dev targets/tests/test/debug` 复用既有项目选择、features/tags 和编译管线；测试及调试生成私有可执行 Go 视图，`//line` 指向原始 `.gox`/`.go`，显式单文件仍排除兄弟源文件并保留资源查找语义。Run 使用既有 `goxide run`；测试结果使用 Go JSON 事件，Debug profile 不把零执行的成功退出当作测试通过。
 
-调试由外部原版 Delve 的 DAP 完成，编译器只准备调试二进制和转发协议；不依赖 Go 扩展，不自动修改系统调试权限。真实 VS Code 验收覆盖 Run/Test、Delve noDebug，以及 Linux 目标的跨包 `.gox` 断点、原始源码调用栈、单步和变量查看；本机 macOS 的 launch 停在 `task_for_pid`，真实断点尚未验收。noDebug 不能替代断点验收。使用配置与相应测试入口见 [VS Code 客户端](../../editors/vscode/README.md)。
+调试由外部原版 Delve 的 DAP 完成，编译器只准备调试二进制和转发协议；不依赖 Go 扩展，不自动修改系统调试权限。真实 VS Code 验收覆盖 Run/Test、Delve noDebug，以及 macOS arm64 和 Linux arm64 的跨包 `.gox` 断点、原始源码调用栈、单步和变量查看；macOS 验收保持现有系统调试权限。noDebug 不能替代断点验收。使用配置与相应测试入口见 [VS Code 客户端](../../editors/vscode/README.md)。
 
 性能演进顺序为文件结果复用、受影响包重算、区分声明变化与函数体变化、按需函数体检查；完整增量 parser 只在实测为瓶颈后推进。任何缓存命中都必须保持绑定、权限、宏来源和完整诊断一致。
 

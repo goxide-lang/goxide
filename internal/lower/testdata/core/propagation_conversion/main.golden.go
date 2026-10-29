@@ -32,55 +32,49 @@ func source() sum.Result[int, error] {
 
 func converted() sum.Result[string, Wrapped] {
 	{
-		var gxTry1 sum.Result[int, error] = source()
-		var gxOk2 int
+		gxTry1 := source()
 		switch sum.TagResult(gxTry1) {
 		case 1:
-			gxOk2 = sum.ValueOk(gxTry1)
 		case 2:
 			return sum.NewErr[string, Wrapped]((GoxideWrappedFromErrorOps_aab95634{}).From(sum.ValueErr(gxTry1)))
 		default:
 			panic("goxide: invalid Result at ?")
 		}
-
-		_ = gxOk2
 	}
+
 	continued = true
 	return sum.NewOk[string, Wrapped]("incorrect")
 }
 
 func assigned() sum.Result[int, error] {
 	{
-		var gxTry3 sum.Result[string, Wrapped] = converted()
-		var gxOk4 string
-		switch sum.TagResult(gxTry3) {
+		gxTry2 := converted()
+		switch sum.TagResult(gxTry2) {
 		case 1:
-			gxOk4 = sum.ValueOk(gxTry3)
 		case 2:
-			return sum.NewErr[int, error](sum.ValueErr(gxTry3))
+			return sum.NewErr[int, error](sum.ValueErr(gxTry2))
 		default:
 			panic("goxide: invalid Result at ?")
 		}
-
-		_ = gxOk4
 	}
+
 	continued = true
 	return sum.NewOk[int, error](0)
 }
 
 func readError(value sum.Result[int, error]) error {
 	{
-		var gxMatch5 error
-		switch gxTag7 := sum.TagResult(value); gxTag7 {
+		var gxMatch3 error
+		switch gxTag5 := sum.TagResult(value); gxTag5 {
 		case 2:
 			err := sum.ValueErr(value)
-			gxMatch5 = err
+			gxMatch3 = err
 		case 1:
-			gxMatch5 = nil
+			gxMatch3 = nil
 		default:
 			panic("goxide: invalid enum Result")
 		}
-		return gxMatch5
+		return gxMatch3
 	}
 }
 

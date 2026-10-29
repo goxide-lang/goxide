@@ -25,16 +25,15 @@ func sequence(ok bool, trace *[]string) sum.Result[string, string] {
 	defer func() { *trace = append(*trace, "cleanup") }()
 	var gxValue1 func(int, int, int) int = callee(trace)
 	var gxValue2 int = mark("first", trace)
-	var gxTry3 sum.Result[int, string] = load(ok, trace)
-	var gxOk4 int
+	gxTry3 := load(ok, trace)
 	switch sum.TagResult(gxTry3) {
 	case 1:
-		gxOk4 = sum.ValueOk(gxTry3)
 	case 2:
 		return sum.NewErr[string, string](sum.ValueErr(gxTry3))
 	default:
 		panic("goxide: invalid Result at ?")
 	}
+	gxOk4 := sum.ValueOk(gxTry3)
 
 	n := gxValue1(gxValue2, gxOk4, mark("last", trace))
 	defer func() { *trace = append(*trace, "late") }()

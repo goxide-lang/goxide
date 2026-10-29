@@ -8,37 +8,29 @@ import (
 	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
-func (e *emitter) tryExpr(n *syntax.TryExpr) goast.Expr {
+func (e *emitter) tryExpr(n *syntax.TryExpr, discard bool) goast.Expr {
 	info := e.info.Tries[n]
 	if info == nil || info.Input == nil || info.Output == nil {
 		e.fail(n, "缺少 ? 检查结果")
 		return goast.NewIdent("nil")
 	}
 	value := e.expr(n.X)
-	input, output := e.fresh("Try"), e.fresh("Ok")
-	private := false
-	for _, typ := range info.Input.Args {
-		private = private || !e.nameableType(typ)
-	}
-	if private {
-		// Type inference keeps a foreign private payload out of this package.
-		// The success payload is read only after failure has returned.
-		e.pending = append(e.pending, &goast.AssignStmt{Lhs: []goast.Expr{input}, Tok: gotoken.DEFINE, Rhs: []goast.Expr{value}})
-		e.pending = append(e.pending, e.tryDispatch(n, input, nil, func(value goast.Expr) goast.Stmt {
-			return &goast.ReturnStmt{Results: []goast.Expr{value}}
-		}))
-		success := "Some"
-		if info.Input.Enum.Name == "Result" {
-			success = "Ok"
-		}
-		read := &goast.CallExpr{Fun: e.sumMember("Value" + success), Args: []goast.Expr{input}}
-		e.pending = append(e.pending, &goast.AssignStmt{Lhs: []goast.Expr{output}, Tok: gotoken.DEFINE, Rhs: []goast.Expr{read}})
-		return output
-	}
-	e.pending = append(e.pending, varStmt(input, e.instanceType(info.Input), value), varStmt(output, e.goType(info.Value), nil))
-	e.pending = append(e.pending, e.tryDispatch(n, input, output, func(value goast.Expr) goast.Stmt {
+	input := e.fresh("Try")
+	e.pending = append(e.pending, &goast.AssignStmt{Lhs: []goast.Expr{input}, Tok: gotoken.DEFINE, Rhs: []goast.Expr{value}})
+	e.pending = append(e.pending, e.tryDispatch(n, input, nil, func(value goast.Expr) goast.Stmt {
 		return &goast.ReturnStmt{Results: []goast.Expr{value}}
 	}))
+	if discard {
+		return nil
+	}
+	// Infer the payload type, including foreign private types, after failure returns.
+	success := "Some"
+	if info.Input.Enum.Name == "Result" {
+		success = "Ok"
+	}
+	output := e.fresh("Ok")
+	read := &goast.CallExpr{Fun: e.sumMember("Value" + success), Args: []goast.Expr{input}}
+	e.pending = append(e.pending, &goast.AssignStmt{Lhs: []goast.Expr{output}, Tok: gotoken.DEFINE, Rhs: []goast.Expr{read}})
 	return output
 }
 

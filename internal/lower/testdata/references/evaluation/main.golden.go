@@ -41,31 +41,29 @@ func tryIndex(fail bool) sum.Result[int, string] {
 }
 func arrayProjection(fail bool) sum.Result[int, string] {
 	values := [1]int{1}
-	var gxTry1 sum.Result[int, string] = tryIndex(fail)
-	var gxOk2 int
+	gxTry1 := tryIndex(fail)
 	switch sum.TagResult(gxTry1) {
 	case 1:
-		gxOk2 = sum.ValueOk(gxTry1)
 	case 2:
 		return sum.NewErr[int, string](sum.ValueErr(gxTry1))
 	default:
 		panic("goxide: invalid Result at ?")
 	}
+	gxOk2 := sum.ValueOk(gxTry1)
 	var gxValue3 int = gxOk2
 
 	element := &values[gxValue3]
 	*element += 4
 	choices := [1]_Counter{&_Count{Value: 2}}
-	var gxTry4 sum.Result[int, string] = tryIndex(false)
-	var gxOk5 int
+	gxTry4 := tryIndex(false)
 	switch sum.TagResult(gxTry4) {
 	case 1:
-		gxOk5 = sum.ValueOk(gxTry4)
 	case 2:
 		return sum.NewErr[int, string](sum.ValueErr(gxTry4))
 	default:
 		panic("goxide: invalid Result at ?")
 	}
+	gxOk5 := sum.ValueOk(gxTry4)
 
 	selected := gxOk5
 	{
@@ -157,16 +155,15 @@ gxBreak11:
 		gxPayloadRef17 := &gxVar16.Value
 		{
 			value := gxPayloadRef17
-			var gxTry18 sum.Result[bool, string] = allowed(fail)
-			var gxOk19 bool
+			gxTry18 := allowed(fail)
 			switch sum.TagResult(gxTry18) {
 			case 1:
-				gxOk19 = sum.ValueOk(gxTry18)
 			case 2:
 				return sum.NewErr[int, string](sum.ValueErr(gxTry18))
 			default:
 				panic("goxide: invalid Result at ?")
 			}
+			gxOk19 := sum.ValueOk(gxTry18)
 			if gxOk19 {
 				gxMatch13 = *value
 			} else {

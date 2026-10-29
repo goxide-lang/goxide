@@ -234,6 +234,22 @@ func (e *emitter) flowStmt(n syntax.Stmt) goast.Stmt {
 }
 
 func (e *emitter) assignment(n *syntax.AssignStmt) goast.Stmt {
+	if len(n.Lhs) == 1 && len(n.Rhs) == 1 && n.Tok == token.ASSIGN {
+		if target, ok := n.Lhs[0].(*syntax.Ident); ok && target.Name == "_" {
+			value := n.Rhs[0]
+			for {
+				paren, ok := value.(*syntax.ParenExpr)
+				if !ok {
+					break
+				}
+				value = paren.X
+			}
+			if question, ok := value.(*syntax.TryExpr); ok {
+				e.tryExpr(question, true)
+				return nil
+			}
+		}
+	}
 	if framed, ok := e.framedAssignment(n); ok {
 		return framed
 	}

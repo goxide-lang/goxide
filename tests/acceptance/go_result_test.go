@@ -1,6 +1,9 @@
 package acceptance_test
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -90,6 +93,41 @@ func Convert(s string)Result[int,Failure]{n:=match go_result!(int,strconv::Atoi(
 	second, err := os.ReadFile(filepath.Join(again, "app.go"))
 	if err != nil || string(first) != string(second) {
 		t.Fatal("nondeterministic adapter expansion", err)
+	}
+	generatedAST, err := parser.ParseFile(token.NewFileSet(), "app.go", first, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapters := map[string]string{}
+	for _, declaration := range generatedAST.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Body == nil || len(function.Body.List) != 1 {
+			continue
+		}
+		returned, ok := function.Body.List[0].(*ast.ReturnStmt)
+		if !ok || len(returned.Results) != 1 {
+			continue
+		}
+		call, ok := returned.Results[0].(*ast.CallExpr)
+		if !ok {
+			continue
+		}
+		if helper, ok := call.Fun.(*ast.Ident); ok {
+			adapters[function.Name.Name] = helper.Name
+		}
+	}
+	seen := map[string]bool{}
+	for _, functions := range [][]string{{"Parse", "Drop", "NativeGeneric"}, {"Read", "Methods"}, {"NativeAlias", "MacroType"}, {"Unit"}, {"KeepUnit"}} {
+		helper := adapters[functions[0]]
+		if helper == "" || seen[helper] {
+			t.Fatalf("different adapter signatures share a helper, or helper missing: %v", adapters)
+		}
+		seen[helper] = true
+		for _, function := range functions[1:] {
+			if adapters[function] != helper {
+				t.Fatalf("identical adapters were emitted more than once: %v", adapters)
+			}
+		}
 	}
 	packagesWrite(t, generated, "adapter_test.go", `package app
 import __borrow_std "github.com/goxide-lang/std/sum"

@@ -399,6 +399,7 @@ type emitter struct {
 	assignmentGuard    *goast.Ident
 	shiftCount         *goast.Ident
 	resultAdapters     []goast.Decl
+	resultAdapterTypes []resultAdapter
 	flowHelpers        []goast.Decl
 	zeroFunctions      map[int]*goast.Ident
 	zeroPointers       map[int]*goast.Ident

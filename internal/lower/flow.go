@@ -294,7 +294,7 @@ func (e *emitter) expr(n syntax.Expr) (out goast.Expr) {
 		e.pending = append(e.pending, e.matchStmts(n, out)...)
 		return out
 	case *syntax.TryExpr:
-		return e.tryExpr(n)
+		return e.tryExpr(n, false)
 	}
 	if hasFlow(n) {
 		return e.flowExpr(n)

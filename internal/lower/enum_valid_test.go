@@ -221,6 +221,9 @@ func main() {
 
 func TestEnumValidPreservesDirectRecover(t *testing.T) {
 	source := t.TempDir()
+	if err := testdeps.WriteFile(filepath.Join(source, "go.mod"), []byte("module enumvalidrecover\n\ngo 1.27\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	const program = `package main
 func option() {
     defer func() { println(enum_valid(recover().(Option[int]))) }()

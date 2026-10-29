@@ -76,12 +76,19 @@ func TestReferenceDerivedProtocolsReadAndCloneSharedStorage(t *testing.T) {
 func runReferenceFixture(t *testing.T, fixture, want string) {
 	t.Helper()
 	directory := filepath.Join("testdata", "references", fixture)
-	generated, err := lower.PrepareModule([]string{directory}, "referencefixture", testConfig(t))
+	source := t.TempDir()
+	if err := os.CopyFS(source, os.DirFS(directory)); err != nil {
+		t.Fatal(err)
+	}
+	if err := testdeps.WriteFile(filepath.Join(source, "go.mod"), []byte("module referencefixture\n\ngo 1.27\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	generated, err := lower.PrepareModule([]string{source}, "referencefixture", testConfig(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(generated) })
-	again, err := lower.PrepareModule([]string{directory}, "referencefixture", testConfig(t))
+	again, err := lower.PrepareModule([]string{source}, "referencefixture", testConfig(t))
 	if err != nil {
 		t.Fatal(err)
 	}

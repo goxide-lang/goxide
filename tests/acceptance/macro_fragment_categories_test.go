@@ -14,11 +14,8 @@ import (
 // RFC0011 FC-01..10: use the real CLI from an unrelated cwd, then execute
 // generated Go independently. A macro-category error must precede Go compilation.
 func TestMacroFragmentCategoriesCLI(t *testing.T) {
-	_, here, _, _ := runtime.Caller(0)
-	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
-	cli := filepath.Join(t.TempDir(), "goxide")
-	deliveryCommand(t, root, tool, true, nil, "run", "./scripts/build.go", "-o", cli)
+	cli := acceptanceCLI(t)
 	outside := t.TempDir()
 
 	t.Run("FC-06-09-caller-expressions-and-definition-bindings", func(t *testing.T) {

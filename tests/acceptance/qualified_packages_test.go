@@ -48,9 +48,7 @@ func compileQualifiedModule(t *testing.T, source string) (string, error) {
 	t.Helper()
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
-	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
-	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "run", "./scripts/build.go", "-o", cli)
+	cli := acceptanceCLI(t)
 	destination := filepath.Join(t.TempDir(), "generated")
 	command := exec.Command(cli, "transpile", "-o", destination, source)
 	command.Dir = root

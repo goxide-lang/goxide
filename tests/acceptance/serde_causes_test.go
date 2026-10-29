@@ -11,9 +11,7 @@ func TestSerdeCausesInstalledBusinessRace(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
-	bin := t.TempDir()
-	deliveryCommand(t, root, tool, true, nil, "run", "./scripts/build.go", "-o", filepath.Join(bin, "goxide"))
-	cli := filepath.Join(bin, "goxide")
+	cli := acceptanceCLI(t)
 	source := t.TempDir()
 	singleExternalCopyTree(t, filepath.Join(root, "examples/serde_causes"), source, "target")
 	outside := t.TempDir()
@@ -24,7 +22,7 @@ func TestSerdeCausesInstalledBusinessRace(t *testing.T) {
 	if got := deliveryCommand(t, outside, cli, true, nil, "run", "--go", tool, source); got != "accepted 1\n" {
 		t.Fatalf("CLI output: %q", got)
 	}
-	executable := filepath.Join(bin, "orders")
+	executable := filepath.Join(t.TempDir(), "orders")
 	deliveryCommand(t, generated, tool, true, nil, "build", "-buildvcs=false", "-o", executable, ".")
 	for _, tc := range []struct{ input, output string }{
 		{`{"Operations":[{"Charge":7}]}`, "accepted 1\n"},

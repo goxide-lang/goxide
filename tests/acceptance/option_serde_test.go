@@ -41,9 +41,7 @@ func TestOptionSerdeInstalledBusinessRace(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
-	bin := t.TempDir()
-	deliveryCommand(t, root, tool, true, nil, "run", "./scripts/build.go", "-o", filepath.Join(bin, "goxide"))
-	cli := filepath.Join(bin, "goxide")
+	cli := acceptanceCLI(t)
 	source := t.TempDir()
 	singleExternalCopyTree(t, filepath.Join(root, "examples/option_serde"), source, "target")
 	outside := t.TempDir()
@@ -98,11 +96,8 @@ func TestOptionSerdeExplicitBoundaries(t *testing.T) {
 // These container payloads used to be rejected before serde lowering. Exercise
 // actual codecs and enum checks at each dispatch through the installed CLI.
 func TestOptionSerdeNestedContainersRace(t *testing.T) {
-	_, here, _, _ := runtime.Caller(0)
-	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
-	bin, outside, source := t.TempDir(), t.TempDir(), t.TempDir()
-	deliveryCommand(t, root, tool, true, nil, "run", "./scripts/build.go", "-o", filepath.Join(bin, "goxide"))
+	outside, source := t.TempDir(), t.TempDir()
 	packagesWrite(t, source, "goxide.toml", testdeps.FormalManifest(t, "nestedoption.example/app", "nested"))
 	packagesWrite(t, source, "nested.gox", `package nested; use serde;
 use serde::json as serdejson;
@@ -132,7 +127,7 @@ func StateMapLength(v Option[map[string]State])int{
 func StateDispatch(value State,seen *int){match value{State::Good=>{*seen+=1},}}
 `)
 	generated := filepath.Join(t.TempDir(), "generated")
-	generated = strings.TrimSpace(deliveryCommand(t, outside, filepath.Join(bin, "goxide"), true, nil, "transpile", "--lib", "-o", generated, source))
+	generated = strings.TrimSpace(deliveryCommand(t, outside, acceptanceCLI(t), true, nil, "transpile", "--lib", "-o", generated, source))
 	packagesWrite(t, generated, "nested_test.go", optionSerdeNestedAssertions)
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", "./...")
 	deliveryCommand(t, generated, tool, true, nil, "vet", "./...")

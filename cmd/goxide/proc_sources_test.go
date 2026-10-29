@@ -213,16 +213,7 @@ func TestNativeProceduralMacroSources(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	binary := filepath.Join(t.TempDir(), "goxide")
-	repo, err := filepath.Abs("../..")
-	if err != nil {
-		t.Fatal(err)
-	}
-	build := exec.Command(tool, "run", "./scripts/build.go", "-o", binary)
-	build.Dir, build.Env = repo, query.Env
-	if output, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build CLI: %v\n%s", err, output)
-	}
+	binary := formalTestCLI(t)
 	base := t.TempDir()
 	write := func(name, source string) { singleFileWrite(t, base, name, source) }
 	write("macros/goxide.toml", fmt.Sprintf(`[go_mod]

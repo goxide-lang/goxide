@@ -14,8 +14,7 @@ func TestGoResultInference(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "run", "./scripts/build.go", "-o", cli)
+	cli := acceptanceCLI(t)
 	source := t.TempDir()
 	packagesWrite(t, source, "go.mod", packagesModule()+stdFixtureGoRequirements(t))
 	writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
@@ -162,8 +161,7 @@ func TestGoResultInferenceModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "run", "./scripts/build.go", "-o", cli)
+	cli := acceptanceCLI(t)
 	producer := t.TempDir()
 	packagesWrite(t, producer, "go.mod", strings.Replace(packagesModule(), "packages.example/app", "inferred.example/producer", 1)+stdFixtureGoRequirements(t))
 	writeMacroFixtureRoots(t, producer, map[string]rootconfig.Mapping{

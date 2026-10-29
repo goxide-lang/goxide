@@ -66,6 +66,10 @@ CLI runner 安装 `Delve v1.27.2`，以绝对路径设置 `GOXIDE_TEST_DLV`，�
 这两个作业还检查原始测试 JSON：CLI 不允许跳过，LSP 仅允许上述三项固定主机观察跳过；
 子用例跳过同样会被检查，父用例通过不能掩盖后端合同未执行。
 
+CLI 与 acceptance 测试在各自测试进程内惰性构建默认 CLI，沿用 `scripts/build.go` 的 SDK 印记。
+构建环境取自测试进程启动时；用例继续使用各自的工作目录、环境和输入，进程结束后清理共享二进制。
+`go test -list` 不触发构建；特殊版本参数与未盖 SDK 印记的构建合同独立执行。
+
 compile 和 acceptance 通过当前 race 构建的 `go test -list '^(Test|Example|Fuzz)'` 取得用例，
 排序后轮转分片。每个顶层用例及其全部子用例只属于一片；校验片非空、互斥且完整，
 不维护容易漏新增用例的手写名单。分片包含 example 与 fuzz 的 seed corpus，未启用持续 fuzz。
@@ -106,7 +110,7 @@ P5 的生成程序 build/run/race/vet 只在普通模式执行；项目准备、
 
 ### 并发边界
 
-- `-p` 调度构建命令和不同包的测试进程；`-parallel` 只影响主动调用 `t.Parallel()` 的用例。
+- `-p` 调度构建命令和不同包的测试进程，默认值等于 `GOMAXPROCS`；`-parallel` 只影响主动调用 `t.Parallel()` 的用例。
   当前重型套件保持包内串行。外层 `-p=1` 不限制用例自行启动的 Go 子进程。
 - formal helper 临时修改 `procmacro.CompilerSDKIdentity`；CLI 多处使用 `t.Setenv`/`t.Chdir`，
   一些子用例还共享宿主、计数器、锁文件或缓存测试夹具，不能直接加 `t.Parallel()`。

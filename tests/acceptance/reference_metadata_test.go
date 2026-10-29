@@ -26,8 +26,7 @@ func TestReferenceMetadataModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "run", "./scripts/build.go", "-o", cli)
+	cli := acceptanceCLI(t)
 	makeSource := func(body, ext string) string {
 		source := filepath.Join(t.TempDir(), "source")
 		packagesWrite(t, source, "go.mod", packagesModule())

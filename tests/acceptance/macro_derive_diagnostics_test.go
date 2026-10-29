@@ -9,11 +9,8 @@ import (
 )
 
 func TestMacroDeriveDiagnosticCLI(t *testing.T) {
-	_, here, _, _ := runtime.Caller(0)
-	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
-	cli := filepath.Join(t.TempDir(), "goxide")
-	deliveryCommand(t, root, tool, true, nil, "run", "./scripts/build.go", "-o", cli)
+	cli := acceptanceCLI(t)
 	outside := t.TempDir()
 	const prefix = `package p; use std; use std::PartialEq;
 macro_rules! noise {()=>{

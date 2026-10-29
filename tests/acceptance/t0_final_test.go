@@ -30,8 +30,7 @@ func TestT0FinalAuditBusinessRace(t *testing.T) {
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	testdeps.RunFormalGo(t, result, "test", "-mod=readonly", "-race", "-count=1", "-v", ".")
 	testdeps.RunFormalGo(t, result, "vet", "-mod=readonly", ".")
-	cli := filepath.Join(t.TempDir(), "goxide")
-	deliveryCommand(t, root, tool, true, nil, "run", "./scripts/build.go", "-o", cli)
+	cli := acceptanceCLI(t)
 	got := deliveryCommand(t, t.TempDir(), cli, true, nil, "run", "--go", tool, authored)
 	if got != "audit webhook done\n" {
 		t.Fatalf("unexpected business output: %q", got)

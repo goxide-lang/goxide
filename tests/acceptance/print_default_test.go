@@ -32,8 +32,7 @@ func TestPrintDefaultBusinessRace(t *testing.T) {
 			t.Fatalf("generated program depends on compiler: %s", graph)
 		}
 	}
-	cli := filepath.Join(t.TempDir(), "goxide")
-	deliveryCommand(t, root, tool, true, nil, "run", "./scripts/build.go", "-o", cli)
+	cli := acceptanceCLI(t)
 	native := t.TempDir()
 	packagesWrite(t, native, "go.mod", "module printdefault.example/native\ngo 1.27\n"+stdFixtureGoRequirements(t))
 	writeStdNativeRoots(t, native)

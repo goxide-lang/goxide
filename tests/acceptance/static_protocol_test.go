@@ -436,8 +436,7 @@ type staticProtocolHarness struct {
 func newStaticProtocolHarness(t *testing.T) staticProtocolHarness {
 	t.Helper()
 	_, here, _, _ := runtime.Caller(0)
-	h := staticProtocolHarness{originals: map[string]string{}, dependencies: map[string]map[string]string{}, root: filepath.Clean(filepath.Join(filepath.Dir(here), "../..")), goTool: filepath.Join(runtime.GOROOT(), "bin/go"), cli: filepath.Join(t.TempDir(), "goxide")}
-	packagesCommand(t, h.root, h.goTool, true, "run", "./scripts/build.go", "-o", h.cli)
+	h := staticProtocolHarness{originals: map[string]string{}, dependencies: map[string]map[string]string{}, root: filepath.Clean(filepath.Join(filepath.Dir(here), "../..")), goTool: filepath.Join(runtime.GOROOT(), "bin/go"), cli: acceptanceCLI(t)}
 	return h
 }
 

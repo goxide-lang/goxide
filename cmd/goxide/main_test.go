@@ -2,13 +2,25 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/goxide-lang/goxide/tests/testutil"
 )
+
+func TestMain(m *testing.M) {
+	code := m.Run()
+	if err := testutil.CleanupCLI(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		code = 1
+	}
+	os.Exit(code)
+}
 
 func canonicalTempDir(t *testing.T) string {
 	t.Helper()
@@ -56,13 +68,7 @@ func TestOutputProtection(t *testing.T) {
 }
 func formalTestCLI(t *testing.T) string {
 	t.Helper()
-	binary := filepath.Join(t.TempDir(), "goxide")
-	command := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "run", "./scripts/build.go", "-o", binary)
-	command.Dir, command.Env = "../..", localEnv()
-	if output, err := command.CombinedOutput(); err != nil {
-		t.Fatalf("build stamped CLI: %v\n%s", err, output)
-	}
-	return binary
+	return testutil.CLI(t)
 }
 
 func TestTranspileArtifacts(t *testing.T) {

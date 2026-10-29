@@ -27,12 +27,7 @@ func TestCLIProceduralMacroUsesRestrictedHost(t *testing.T) {
 		t.Fatal(err)
 	}
 	root := t.TempDir()
-	binary := filepath.Join(root, "goxide")
-	build := exec.Command(tool, "run", "./scripts/build.go", "-o", binary)
-	build.Dir, build.Env = repo, env
-	if output, err := build.CombinedOutput(); err != nil {
-		t.Fatalf("build stamped CLI: %v\n%s", err, output)
-	}
+	binary := formalTestCLI(t)
 	t.Run("interrupt_before_macro_execution", func(t *testing.T) {
 		testCLIInterruptDuringPreparation(t, binary, tool, env)
 	})

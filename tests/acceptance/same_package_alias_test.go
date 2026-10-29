@@ -89,8 +89,7 @@ func TestSamePackageAliasModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "run", "./scripts/build.go", "-o", cli)
+	cli := acceptanceCLI(t)
 	src := t.TempDir()
 	writeStdFormalManifest(t, src, "local.example/fixture", "fixture", nil)
 

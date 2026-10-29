@@ -16,8 +16,7 @@ func TestEnumPayloadBorrowModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "run", "./scripts/build.go", "-o", cli)
+	cli := acceptanceCLI(t)
 	const header = `package app
 pub enum E { A(int), B(int), }
 func Value(e E)int{return match e{E::A(n)=>n,E::B(n)=>n}}

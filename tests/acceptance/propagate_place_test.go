@@ -96,9 +96,7 @@ func TestPropagationAssignmentInstalledBusinessRace(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
-	bin := t.TempDir()
-	cli := filepath.Join(bin, "goxide")
-	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "run", "./scripts/build.go", "-o", cli)
+	cli := acceptanceCLI(t)
 	outside := t.TempDir()
 	source := t.TempDir()
 	if err := os.CopyFS(source, os.DirFS(filepath.Join(root, "examples/propagate_places"))); err != nil {

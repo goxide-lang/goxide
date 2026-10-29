@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"go/types"
+	"strings"
 	"testing"
 
+	"github.com/goxide-lang/goxide/internal/config"
 	"github.com/goxide-lang/goxide/internal/paths"
 	"github.com/goxide-lang/goxide/internal/resolve"
 )
@@ -52,6 +54,42 @@ func TestAnalysisPreservesSelectedGoPackageError(t *testing.T) {
 				t.Fatalf("analysis replaced the selected import failure: result=%v, error=%v", result, err)
 			}
 		})
+	}
+}
+
+func TestAnalysisCanonicalizesNativeNamespaceImports(t *testing.T) {
+	pkg := types.NewPackage("dependency", "dependency")
+	pkg.Scope().Insert(types.NewTypeName(0, pkg, "Type", types.Typ[types.Int]))
+	for name, source := range map[string]string{
+		"alias": "package library\nimport dep \"dependency\"\nvar Value dep.Type\n",
+		"blank": "package library\nimport _ \"dependency\"\n",
+	} {
+		for _, importErr := range []error{nil, errors.New("corrupt routed dependency export data")} {
+			t.Run(name+"/"+fmt.Sprint(importErr), func(t *testing.T) {
+				result, err := Analyze(context.Background(), Input{
+					PackagePath: "fixture",
+					Sources:     map[string][]byte{"main.gox": []byte("package fixture\n")},
+					GoImporter:  lookupImporter{pkg: pkg, err: importErr},
+					Options: Options{SourcePackages: []SourcePackage{{
+						PackagePath: "library", ModulePath: "library", Target: config.HostTarget(),
+						Sources: map[string][]byte{
+							"lib.gox":   []byte("package library\n"),
+							"native.go": []byte(source),
+						},
+						Roots: paths.Roots{"dependency": {Source: "module", ModulePath: pkg.Path(), GoPrefix: pkg.Path()}},
+					}}},
+				})
+				if !errors.Is(err, importErr) || result == nil || !errors.Is(result.Err, importErr) {
+					t.Fatalf("native namespace import lost its canonical package: result=%v, error=%v", result, err)
+				}
+				if err == nil {
+					uses := result.Resolved.Files["library/native.go"].Uses
+					if len(uses) != 1 || strings.Join(uses[0].Target, "/") != pkg.Path() {
+						t.Fatalf("native import target was not canonicalized: %v", uses)
+					}
+				}
+			})
+		}
 	}
 }
 

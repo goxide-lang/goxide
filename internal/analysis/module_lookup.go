@@ -494,10 +494,24 @@ func (i *moduleImporter) finishUses(resolved *resolve.Result, strict map[string]
 			fail := func(message string) error {
 				return &Diagnostic{File: name, Span: decl.Span(), Message: message, Origin: resolved.Origins[use.Decl]}
 			}
-			if file.AST.NativeGo && use.Name.Namespace == resolve.OrdinaryNamespace && !i.SourcePackage(use.Target) {
-				packagePath := strings.Join(use.Target, "/")
-				if _, err := i.goPackage(packagePath); err != nil {
-					return fmt.Errorf("%s: native Go import %s: %w", name, packagePath, err)
+			if file.AST.NativeGo && use.Name.Namespace == resolve.OrdinaryNamespace {
+				// Source snapshots also route native imports through declared roots.
+				// Retain that route for visibility checks, but import its real package.
+				target := use.Target
+				if requirement, ok := i.namespace(target); ok {
+					if requirement.namespace.PackagePath == "" {
+						return fail("native Go import requires a concrete package, not a namespace group")
+					}
+					target = strings.Split(requirement.namespace.PackagePath, "/")
+				}
+				if i.err != nil {
+					return i.err
+				}
+				if !i.SourcePackage(target) {
+					packagePath := strings.Join(target, "/")
+					if _, err := i.goPackage(packagePath); err != nil {
+						return fmt.Errorf("%s: native Go import %s: %w", name, packagePath, err)
+					}
 				}
 			}
 			for split := len(use.Target); split > 0; split-- {

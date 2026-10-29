@@ -444,7 +444,7 @@ func (c *checker) bindPatternReference(p ast.Pat, t types.Type, mode RefMode) {
 			c.diag(p, IncomparablePayload, "constant payload pattern requires a comparable type; use a binding with a guard")
 		}
 	case *ast.TuplePat:
-		if enum := c.out.EnumOf(t); enum != nil {
+		if enum := c.enumOf(t); enum != nil {
 			if v := enum.Variant(c.patternName(p)); v != nil {
 				fields := enum.Fields(v)
 				for i, elt := range p.Elts {
@@ -455,7 +455,7 @@ func (c *checker) bindPatternReference(p ast.Pat, t types.Type, mode RefMode) {
 			}
 		}
 	case *ast.StructPat:
-		if enum := c.out.EnumOf(t); enum != nil {
+		if enum := c.enumOf(t); enum != nil {
 			if v := enum.Variant(c.patternName(p)); v != nil {
 				fields := enum.Fields(v)
 				for _, f := range p.Fields {

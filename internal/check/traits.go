@@ -416,7 +416,7 @@ func receiverParams(fn *ast.FuncDecl) (RefMode, bool, []*ast.Param) {
 
 func (c *checker) makeMember(fn *ast.FuncDecl, impl *Impl, trait *Trait) *Member {
 	mode, static, params := receiverParams(fn)
-	if impl != nil && impl.Trait == nil && mode == WriteRef && c.out.EnumOf(impl.Target) != nil {
+	if impl != nil && impl.Trait == nil && mode == WriteRef && c.enumOf(impl.Target) != nil {
 		c.diag(fn.Params[0], TraitInvalid, "enum inherent methods cannot use self &mut Self; return a new enum value")
 	}
 	if fn.Generics != nil || fn.Where != nil || len(fn.Recv) != 0 || fn.Path != nil {

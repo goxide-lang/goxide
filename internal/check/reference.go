@@ -589,7 +589,7 @@ func (p *permissionChecker) enumField(q *permission, variant *Variant, index int
 		}
 		return field
 	}
-	instance := p.c.out.EnumOf(q.typ)
+	instance := p.c.enumOf(q.typ)
 	if instance == nil {
 		return p.fromGo(variant.Fields[index].Type)
 	}
@@ -678,7 +678,7 @@ func (p *permissionChecker) readValueSeen(q *permission, seen map[types.Type]boo
 		return q
 	}
 	r := *q
-	if e := p.c.out.EnumOf(q.typ); e != nil {
+	if e := p.c.enumOf(q.typ); e != nil {
 		if !e.Enum.Builtin {
 			r.shared = true
 			return &r
@@ -875,7 +875,7 @@ func (p *permissionChecker) compatible(got, want *permission, seen map[[2]types.
 			}
 			return true
 		}
-		if _, ok := want.typ.Underlying().(*types.Interface); ok && !p.c.out.isArray(want.typ) && p.c.out.EnumOf(want.typ) == nil {
+		if _, ok := want.typ.Underlying().(*types.Interface); ok && !p.c.out.isArray(want.typ) && p.c.enumOf(want.typ) == nil {
 			return !p.restricted(got, map[types.Type]bool{})
 		}
 	}
@@ -906,7 +906,7 @@ func (p *permissionChecker) compatible(got, want *permission, seen map[[2]types.
 	}
 	seen[pair] = true
 	defer delete(seen, pair)
-	if e := p.c.out.EnumOf(got.typ); e != nil {
+	if e := p.c.enumOf(got.typ); e != nil {
 		for _, v := range e.Enum.Variants {
 			for i := range v.Fields {
 				if !p.compatible(p.enumField(got, v, i), p.enumField(want, v, i), seen) {
@@ -931,7 +931,7 @@ func (p *permissionChecker) indirect(q *permission) bool {
 	if q == nil || q.typ == nil {
 		return false
 	}
-	if e := p.c.out.EnumOf(q.typ); e != nil {
+	if e := p.c.enumOf(q.typ); e != nil {
 		return !e.Enum.Builtin
 	}
 	if p.c.out.isArray(q.typ) {
@@ -979,7 +979,7 @@ func (p *permissionChecker) restricted(q *permission, seen map[types.Type]bool) 
 			return true
 		}
 	}
-	if e := p.c.out.EnumOf(q.typ); e != nil {
+	if e := p.c.enumOf(q.typ); e != nil {
 		for _, v := range e.Enum.Variants {
 			for i := range v.Fields {
 				if p.restricted(p.enumField(q, v, i), seen) {

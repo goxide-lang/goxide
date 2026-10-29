@@ -21,7 +21,7 @@ func (c *checker) enumAssert(call *ast.CallExpr) (types.Type, bool) {
 		return types.Typ[types.Invalid], true
 	}
 	typ := c.out.Types[call.Args[0]]
-	if c.out.EnumOf(typ) == nil {
+	if c.enumOf(typ) == nil {
 		c.diag(call.Args[0], "enum-assert-type", "enum_assert requires a known enum value")
 		return types.Typ[types.Invalid], true
 	}

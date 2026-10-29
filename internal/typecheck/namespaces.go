@@ -103,6 +103,9 @@ func (i *NamespaceImporter) Lookup(parts []string, name resolve.Key) []resolve.E
 	}
 	pkg, err := i.goImports.Import(strings.Join(canonical, "/"))
 	if err != nil {
+		if namespace, rest, mapped := i.namespace(parts); mapped && len(rest) == 0 && namespace.PackagePath != "" && i.err == nil {
+			i.err = err
+		}
 		return nil
 	}
 	object := pkg.Scope().Lookup(name.Name)
@@ -236,5 +239,5 @@ func NewNamespaceImporter(importer types.Importer, roots paths.Roots) *Namespace
 	return &NamespaceImporter{goImports: importer, roots: roots, goNames: paths.NewGoNamespaces(importer)}
 }
 
-// Err reports namespace ownership failures observed while resolving members.
+// Err reports namespace ownership and package import failures observed during lookup.
 func (i *NamespaceImporter) Err() error { return i.err }

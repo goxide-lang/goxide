@@ -603,6 +603,7 @@ func (c *checker) importedConstantObject(node ast.Expr) *types.Const {
 		}
 		name = symbol.GoName
 	}
-	object, _ := c.importedObject(parts, name).(*types.Const)
+	required := !reference.Deferred && reference.Symbol != nil && reference.Symbol.Kind == resolve.Constant && len(reference.Symbol.Target) >= 2
+	object, _ := c.importedObject(parts, name, required).(*types.Const)
 	return object
 }

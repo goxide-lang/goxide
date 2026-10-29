@@ -558,7 +558,7 @@ func (p *permissionChecker) literalField(q *permission, index int, name string) 
 
 func (p *permissionChecker) constructorType(node ast.Expr, con *Constructor, want *permission) *permission {
 	q := p.fromGo(instanceType(con.Enum))
-	if want != nil && p.c.out.EnumOf(want.typ) != nil {
+	if want != nil && p.c.enumOf(want.typ) != nil {
 		q = want
 	}
 	var path *ast.Path

@@ -40,27 +40,40 @@ func (c *checker) enumNames() {
 	}
 }
 
-func (c *checker) builtinEnums() {
-	p, err := c.importer.Import("github.com/goxide-lang/std/sum")
-	if err != nil {
-		p = types.NewPackage("github.com/goxide-lang/std/sum", "sum")
+func (c *checker) builtinEnums(standalone bool) {
+	const path = "github.com/goxide-lang/std/sum"
+	var p *types.Package
+	var importErr error
+	if standalone {
+		// Check without an importer is the isolated, in-memory checking mode.
+		p = types.NewPackage(path, "sum")
+	} else {
+		p, importErr = c.importer.Import(path)
 	}
+	c.builtinErrors = make(map[string]error)
 	for _, name := range []string{"Option", "Result"} {
-		var n *types.Named
-		if object := p.Scope().Lookup(name); object != nil {
-			n, _ = types.Unalias(object.Type()).(*types.Named)
+		if importErr != nil {
+			c.builtinErrors[name] = fmt.Errorf("import %q: %w", path, importErr)
+			continue
 		}
 		count := 1
 		if name == "Result" {
 			count = 2
 		}
-		if n == nil || n.TypeParams().Len() != count {
+		var n *types.Named
+		if standalone {
 			n = types.NewNamed(types.NewTypeName(0, p, name, nil), types.NewStruct(nil, nil), nil)
 			params := []*types.TypeParam{types.NewTypeParam(types.NewTypeName(0, p, "T", nil), anyType)}
 			if count == 2 {
 				params = append(params, types.NewTypeParam(types.NewTypeName(0, p, "E", nil), anyType))
 			}
 			n.SetTypeParams(params)
+		} else if object, ok := p.Scope().Lookup(name).(*types.TypeName); ok {
+			n, _ = types.Unalias(object.Type()).(*types.Named)
+		}
+		if n == nil || n.TypeParams().Len() != count {
+			c.builtinErrors[name] = fmt.Errorf("%s.%s must be a named type with %d type parameters", path, name, count)
+			continue
 		}
 		params := n.TypeParams()
 		e := &Enum{info: c.out, Name: name, GoName: name, Type: n, Builtin: true}
@@ -71,6 +84,29 @@ func (c *checker) builtinEnums() {
 		}
 		c.builtins[name], c.out.enums[n] = e, e
 	}
+}
+
+func (c *checker) builtinEnum(name string) *Enum {
+	if name != "Option" && name != "Result" {
+		return nil
+	}
+	if c.builtinErrors == nil {
+		c.builtinEnums(c.standalone)
+	}
+	if err := c.builtinErrors[name]; err != nil {
+		c.diag(c.file.AST, "go-import", err.Error())
+	}
+	return c.builtins[name]
+}
+
+// Native signatures may introduce Option/Result without a source type name.
+func (c *checker) enumOf(t types.Type) *Instance {
+	if t != nil {
+		if named, ok := types.Unalias(t).(*types.Named); ok && named.Obj().Pkg() != nil && named.Obj().Pkg().Path() == "github.com/goxide-lang/std/sum" {
+			c.builtinEnum(named.Obj().Name())
+		}
+	}
+	return c.out.EnumOf(t)
 }
 
 func (c *checker) collect(items []ast.Item) {
@@ -253,7 +289,7 @@ func (c *checker) signatures(items []ast.Item) {
 				}
 				e.Variants = append(e.Variants, variant)
 				if s := c.symbol(v.Name); s != nil {
-					c.variants[s] = &Constructor{Enum: c.out.EnumOf(e.Type), Variant: variant}
+					c.variants[s] = &Constructor{Enum: c.enumOf(e.Type), Variant: variant}
 				}
 			}
 		case *ast.TypeDecl:
@@ -516,15 +552,15 @@ func (c *checker) symbolType(s *resolve.Symbol) types.Type {
 		return t
 	}
 	if s.Decl.File == "" && len(s.Target) == 0 {
-		if e := c.builtins[s.Name.Name]; e != nil {
+		if e := c.builtinEnum(s.Name.Name); e != nil {
 			return e.Type
 		}
 		if obj := types.Universe.Lookup(s.GoName); obj != nil {
 			return obj.Type()
 		}
 	}
-	if len(s.Target) >= 2 {
-		return c.importedType(s.Target, s.GoName)
+	if len(s.Target) >= 2 && s.Kind != resolve.Import && s.Kind != resolve.Module {
+		return c.importedType(s.Target, s.GoName, true)
 	}
 	return types.Typ[types.Invalid]
 }
@@ -630,10 +666,11 @@ func (c *checker) importType(path *ast.Path) types.Type {
 	if res.Symbol != nil && res.Symbol.Kind != resolve.Import && res.Symbol.Kind != resolve.Module {
 		name = res.Symbol.GoName
 	}
-	return c.importedType(parts, name)
+	required := !res.Deferred && res.Symbol != nil && len(res.Symbol.Target) >= 2 && res.Symbol.Kind != resolve.Import && res.Symbol.Kind != resolve.Module
+	return c.importedType(parts, name, required)
 }
 
-func (c *checker) importedType(parts []string, name string) types.Type {
+func (c *checker) importedType(parts []string, name string, required bool) types.Type {
 	if len(parts) < 2 {
 		return types.Typ[types.Invalid]
 	}
@@ -642,17 +679,17 @@ func (c *checker) importedType(parts []string, name string) types.Type {
 	}
 	prefix := strings.Join(parts[:len(parts)-1], "/")
 	if prefix == "std/sum" || prefix == "github.com/goxide-lang/std/sum" {
-		if e := c.builtins[name]; e != nil {
+		if e := c.builtinEnum(name); e != nil {
 			return e.Type
 		}
 	}
-	if obj := c.importedObject(parts, name); obj != nil {
+	if obj := c.importedObject(parts, name, required); obj != nil {
 		return obj.Type()
 	}
 	return types.Typ[types.Invalid]
 }
 
-func (c *checker) importedObject(parts []string, name string) types.Object {
+func (c *checker) importedObject(parts []string, name string, required bool) types.Object {
 	if len(parts) < 2 {
 		return nil
 	}
@@ -665,6 +702,9 @@ func (c *checker) importedObject(parts []string, name string) types.Object {
 		var err error
 		p, err = c.importer.Import(prefix)
 		if err != nil {
+			if required {
+				c.diag(c.file.AST, "go-import", fmt.Sprintf("import %q: %v", prefix, err))
+			}
 			return nil
 		}
 		c.imported[prefix] = p

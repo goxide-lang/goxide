@@ -37,7 +37,7 @@ func (c *checker) checkEqualityComparisons() {
 					if nilComparisonType(left) || nilComparisonType(right) {
 						break
 					}
-					if c.out.EnumOf(left) != nil && c.out.EnumOf(right) != nil {
+					if c.enumOf(left) != nil && c.enumOf(right) != nil {
 						c.diag(n, "enum-comparison", "enum comparison requires an explicit PartialEq implementation and equals call")
 					} else if c.nonComparableEnum(left, nil) || c.nonComparableEnum(right, nil) {
 						c.diag(n, "enum-comparison", "comparison contains an enum with a non-comparable payload")
@@ -148,7 +148,7 @@ func (c *checker) nonComparableEnum(t types.Type, seen map[types.Type]bool) bool
 	if seen == nil {
 		seen = map[types.Type]bool{}
 	}
-	if instance := c.out.EnumOf(t); instance != nil {
+	if instance := c.enumOf(t); instance != nil {
 		// Substitution can create a fresh but identical recursive instance.
 		for previous := range seen {
 			if types.Identical(previous, t) {

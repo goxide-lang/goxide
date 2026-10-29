@@ -209,7 +209,9 @@ func (r *Info) EnumOf(t types.Type) *Instance {
 	return i
 }
 
-// Check leaves the input trees and resolver tables unchanged.
+// Check checks isolated in-memory input, using synthetic Option/Result types.
+// Module compilation supplies its real dependency graph through Options.Importer.
+// The input trees and resolver tables are left unchanged.
 func Check(files map[string]*ast.File, res *resolve.Result) (*Info, []Diagnostic) {
 	return checkFiles(files, res, Options{})
 }
@@ -272,7 +274,7 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, options Options
 	if len(r.Diagnostics) != 0 {
 		return r.checkedResult()
 	}
-	c.builtinEnums()
+	c.standalone = options.Importer == nil
 	r.PackagePaths = sourcePackagePaths(res)
 	c.checkImportedVisibility()
 	c.sourceModules()
@@ -389,6 +391,8 @@ type checker struct {
 	named                  map[*resolve.Symbol]*types.Named
 	variants               map[*resolve.Symbol]*Constructor
 	builtins               map[string]*Enum
+	builtinErrors          map[string]error
+	standalone             bool
 	imported               map[string]*types.Package
 	importer               types.Importer
 	returns                []types.Type

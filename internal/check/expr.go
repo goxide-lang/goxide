@@ -22,7 +22,7 @@ func (c *checker) expr(node ast.Expr, expected types.Type) types.Type {
 		c.recordConstExpression(n)
 		t = c.symbolType(c.symbol(n))
 		if !c.file.AST.NativeGo && n.Name == "nil" && t == types.Typ[types.UntypedNil] {
-			if enum := c.out.EnumOf(expected); enum != nil {
+			if enum := c.enumOf(expected); enum != nil {
 				c.diag(n, EnumNilLiteral, fmt.Sprintf("nil is not a valid value of enum %s", enum.Enum.Name))
 			}
 		}
@@ -586,7 +586,7 @@ func (c *checker) constructor(path *ast.Path, s *resolve.Symbol, expected types.
 				}
 			}
 		}
-		if instance := c.out.EnumOf(target); instance != nil {
+		if instance := c.enumOf(target); instance != nil {
 			if variant := instance.Variant(path.Segments[len(path.Segments)-1].Name.Name); variant != nil {
 				base = &Constructor{Enum: instance, Variant: variant}
 			}
@@ -606,18 +606,21 @@ func (c *checker) constructor(path *ast.Path, s *resolve.Symbol, expected types.
 				sourceType = c.symbolType(resolved.Symbol)
 			}
 		}
-		if instance := c.out.EnumOf(sourceType); base == nil && instance != nil {
+		if instance := c.enumOf(sourceType); base == nil && instance != nil {
 			if variant := instance.Variant(path.Segments[len(path.Segments)-1].Name.Name); variant != nil {
 				base = &Constructor{Enum: instance, Variant: variant}
 			}
 		}
 	}
 	if base == nil && s != nil && s.Kind == resolve.Variant && s.Decl.File == "" && len(s.Target) == 0 {
-		for _, e := range c.builtins {
-			i := c.out.EnumOf(e.Type)
+		name := "Option"
+		if s.Name.Name == "Ok" || s.Name.Name == "Err" {
+			name = "Result"
+		}
+		if e := c.builtinEnum(name); e != nil {
+			i := c.enumOf(e.Type)
 			if v := i.Variant(s.Name.Name); v != nil {
 				base = &Constructor{Enum: i, Variant: v}
-				break
 			}
 		}
 	}
@@ -639,13 +642,13 @@ func (c *checker) constructor(path *ast.Path, s *resolve.Symbol, expected types.
 	case *types.Alias:
 		inferArguments = source.TypeParams().Len() > 0 && source.TypeArgs().Len() == 0
 	}
-	if want := c.out.EnumOf(expected); inferArguments && want != nil && want.Enum == instance.Enum {
+	if want := c.enumOf(expected); inferArguments && want != nil && want.Enum == instance.Enum {
 		instance = want
 	}
 	if path != nil {
 		for _, seg := range path.Segments {
 			if seg.Args != nil {
-				instance = c.out.EnumOf(c.instantiate(sourceType, seg.Args))
+				instance = c.enumOf(c.instantiate(sourceType, seg.Args))
 				break
 			}
 		}

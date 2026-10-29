@@ -83,7 +83,11 @@ func (c *checker) goResult(call *ast.CallExpr, keep bool) types.Type {
 			types.NewField(0, nil, "Err", failure, false),
 		}, nil)
 	}
-	result := instanceType(&Instance{Enum: c.builtins["Result"], Args: []types.Type{value, payload}})
+	resultEnum := c.builtinEnum("Result")
+	if resultEnum == nil {
+		return types.Typ[types.Invalid]
+	}
+	result := instanceType(&Instance{Enum: resultEnum, Args: []types.Type{value, payload}})
 	c.out.GoResults[call] = &GoResult{Call: native, Value: value, Error: failure, Payload: payload, Result: result, Unit: len(results) == 1, Keep: keep}
 	return result
 }

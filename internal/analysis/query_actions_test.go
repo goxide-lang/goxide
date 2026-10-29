@@ -2,6 +2,7 @@ package analysis_test
 
 import (
 	"context"
+	"os"
 	"sort"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 	"github.com/goxide-lang/goxide/internal/lower"
 	"github.com/goxide-lang/goxide/internal/paths"
 	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/typecheck"
 )
 
 func editorActions(t *testing.T, input analysis.Input, needle string) (*analysis.Result, []analysis.CodeAction) {
@@ -213,11 +215,16 @@ func TestMatchActionsKeepTrailingArmCommentsAndSeparators(t *testing.T) {
 }
 
 func TestMatchActionsForBuiltinOptionAndResult(t *testing.T) {
+	environment, err := config.Prepare("", "", "", false, os.Environ())
+	if err != nil {
+		t.Fatal(err)
+	}
+	imports := typecheck.NewImporter("fixture.gox", typecheck.ImporterOptions{Config: config.Config{Environment: environment, Reads: &config.Reads{}}})
 	for _, text := range []string{
 		"package fixture\nfunc f(value Option[int]) int {return match value {Some(n)=>n}}\n",
 		"package fixture\nfunc f(value Result[int,string]) int {return match value {Ok(n)=>n}}\n",
 	} {
-		input := analysis.Input{Sources: map[string][]byte{"main.gox": []byte(text)}, PackagePath: "fixture"}
+		input := analysis.Input{Sources: map[string][]byte{"main.gox": []byte(text)}, PackagePath: "fixture", GoImporter: imports}
 		result, actions := editorActions(t, input, "match value")
 		if len(actions) != 1 {
 			t.Fatalf("actions=%#v diagnostics=%v", actions, result.Diagnostics)

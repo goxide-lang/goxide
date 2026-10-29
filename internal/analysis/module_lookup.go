@@ -16,7 +16,7 @@ import (
 type moduleImporter struct {
 	local          map[string]*resolve.Scope
 	external       types.Importer
-	cache          map[string]*types.Package
+	cache          map[string]goImportResult
 	namespaces     map[string]rootRequirement
 	owners         map[string]string
 	publicRoots    map[string]string
@@ -29,6 +29,11 @@ type moduleImporter struct {
 	resolveSymbol  func(*resolve.Symbol) bool
 	resolveUse     func(*resolve.UseBinding) bool
 	err            error
+}
+
+type goImportResult struct {
+	pkg *types.Package
+	err error
 }
 
 func (i *moduleImporter) DeferredImports() bool { return i.deferred }
@@ -148,7 +153,13 @@ func (i *moduleImporter) lookup(parts []string, name resolve.Key, visiting map[s
 				}
 			}
 		}
-		members := i.packageMembers(strings.Split(requirement.namespace.PackagePath, "/"), name, visiting)
+		members, err := i.packageMembers(strings.Split(requirement.namespace.PackagePath, "/"), name, visiting)
+		if err != nil {
+			if !requirement.implicit && i.err == nil {
+				i.err = err
+			}
+			return nil
+		}
 		if len(members) != 0 && requirement.implicit && !i.requireRoot(requirement) {
 			return nil
 		}
@@ -202,7 +213,8 @@ source:
 		}
 		return i.scopeMembers(scope, target, name, visiting)
 	}
-	return i.packageMembers(parts, name, visiting)
+	members, _ := i.packageMembers(parts, name, visiting)
+	return members
 }
 
 // Canonical item routes can share their spelling with physical packages.
@@ -243,21 +255,21 @@ func (i *moduleImporter) sourceItemMembers(parts []string, name resolve.Key, vis
 	return nil, false
 }
 
-func (i *moduleImporter) packageMembers(parts []string, name resolve.Key, visiting map[string]bool) []moduleMember {
+func (i *moduleImporter) packageMembers(parts []string, name resolve.Key, visiting map[string]bool) ([]moduleMember, error) {
 	packagePath := strings.Join(parts, "/")
 	if scope := i.local[packagePath]; scope != nil {
-		return i.scopeMembers(scope, parts, name, visiting)
+		return i.scopeMembers(scope, parts, name, visiting), nil
 	}
-	if name.Namespace == resolve.MacroNamespace || i.deferred {
-		return nil
+	if name.Namespace == resolve.MacroNamespace || name.Ctx != 0 || i.deferred {
+		return nil, nil
 	}
-	pkg := i.goPackage(packagePath)
-	if pkg == nil || name.Ctx != 0 {
-		return nil
+	pkg, err := i.goPackage(packagePath)
+	if err != nil || pkg == nil {
+		return nil, err
 	}
 	object := pkg.Scope().Lookup(name.Name)
 	if object == nil || !object.Exported() {
-		return nil
+		return nil, nil
 	}
 	var kind resolve.Kind
 	switch object.(type) {
@@ -272,10 +284,10 @@ func (i *moduleImporter) packageMembers(parts []string, name resolve.Key, visiti
 	case *types.TypeName:
 		kind = resolve.Type
 	default:
-		return nil
+		return nil, nil
 	}
 	target := append(append([]string(nil), parts...), object.Name())
-	return []moduleMember{{External: resolve.External{Name: name, Kind: kind, GoName: object.Name(), Visibility: resolve.Public, Target: target}}}
+	return []moduleMember{{External: resolve.External{Name: name, Kind: kind, GoName: object.Name(), Visibility: resolve.Public, Target: target}}}, nil
 }
 
 func (i *moduleImporter) scopeMembers(scope *resolve.Scope, target []string, name resolve.Key, visiting map[string]bool) []moduleMember {
@@ -330,8 +342,15 @@ func (i *moduleImporter) symbolMembers(symbol *resolve.Symbol, owner []string, n
 				return found
 			}
 		}
-		if name.Namespace == resolve.OrdinaryNamespace && (i.SourcePackage(target) || i.goPackage(strings.Join(target, "/")) != nil) {
-			return []moduleMember{{External: resolve.External{Name: name, Kind: resolve.Module, Visibility: resolve.Public, Target: target}, symbol: symbol}}
+		if name.Namespace == resolve.OrdinaryNamespace {
+			found := i.SourcePackage(target)
+			if !found {
+				pkg, _ := i.goPackage(strings.Join(target, "/"))
+				found = pkg != nil
+			}
+			if found {
+				return []moduleMember{{External: resolve.External{Name: name, Kind: resolve.Module, Visibility: resolve.Public, Target: target}, symbol: symbol}}
+			}
 		}
 		return nil
 	}
@@ -365,16 +384,19 @@ func (i *moduleImporter) symbolOwner(symbol *resolve.Symbol) []string {
 	return owner
 }
 
-func (i *moduleImporter) goPackage(path string) *types.Package {
+func (i *moduleImporter) goPackage(path string) (*types.Package, error) {
 	if i.deferred || i.procPackage(path) {
-		return nil
+		return nil, nil
 	}
-	pkg, loaded := i.cache[path]
+	result, loaded := i.cache[path]
 	if !loaded {
-		pkg, _ = i.external.Import(path)
-		i.cache[path] = pkg
+		result.pkg, result.err = i.external.Import(path)
+		i.cache[path] = result
 	}
-	return pkg
+	if result.err != nil {
+		return nil, result.err
+	}
+	return result.pkg, nil
 }
 
 func (i *moduleImporter) requireRoot(requirement rootRequirement) bool {
@@ -471,6 +493,12 @@ func (i *moduleImporter) finishUses(resolved *resolve.Result, strict map[string]
 			}
 			fail := func(message string) error {
 				return &Diagnostic{File: name, Span: decl.Span(), Message: message, Origin: resolved.Origins[use.Decl]}
+			}
+			if file.AST.NativeGo && use.Name.Namespace == resolve.OrdinaryNamespace && !i.SourcePackage(use.Target) {
+				packagePath := strings.Join(use.Target, "/")
+				if _, err := i.goPackage(packagePath); err != nil {
+					return fmt.Errorf("%s: native Go import %s: %w", name, packagePath, err)
+				}
 			}
 			for split := len(use.Target); split > 0; split-- {
 				requirement, ok := i.namespace(use.Target[:split])
@@ -580,8 +608,12 @@ func (i *moduleImporter) finishUseTarget(use *resolve.UseBinding) bool {
 			return true
 		}
 	}
-	if use.Name.Namespace == resolve.OrdinaryNamespace && (i.SourcePackage(use.Target) || i.goPackage(strings.Join(use.Target, "/")) != nil) {
-		return true
+	if use.Name.Namespace == resolve.OrdinaryNamespace {
+		if i.SourcePackage(use.Target) {
+			return true
+		}
+		pkg, _ := i.goPackage(strings.Join(use.Target, "/"))
+		return pkg != nil
 	}
 	return false
 }

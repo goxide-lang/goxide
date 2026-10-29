@@ -46,7 +46,7 @@ func (i *moduleImporter) canonicalPaths(parts []string, visiting map[string]bool
 			return i.canonicalScopePaths(scope, parts[:split], parts[split:], visiting)
 		}
 	}
-	if i.goPackage(strings.Join(parts[:len(parts)-1], "/")) != nil {
+	if pkg, _ := i.goPackage(strings.Join(parts[:len(parts)-1], "/")); pkg != nil {
 		return [][]string{append([]string(nil), parts...)}
 	}
 	return nil

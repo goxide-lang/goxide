@@ -63,6 +63,14 @@ func TestNativeSourceDependenciesSelectedVersion(t *testing.T) {
 	if after := singleFileSnapshot(t, root); !reflect.DeepEqual(before, after) {
 		t.Fatal("module query changed authored files")
 	}
+	t.Run("native_only_root", func(t *testing.T) {
+		dependencies, err := nativeSourceDependencies(root, owner.modFile, paths.Roots{
+			"bridge": {ModulePath: "example.org/native-bridge", Source: "module"},
+		}, cfg, false)
+		if err != nil || len(dependencies.Manifest.Dependencies) != 0 {
+			t.Fatalf("native Go root must allow source-less compilation: %+v, %v", dependencies, err)
+		}
+	})
 	t.Run("authored_replacement_and_selected_published_root", func(t *testing.T) {
 		mixed := t.TempDir()
 		projectWrite(t, mixed, map[string]string{
@@ -144,6 +152,54 @@ func TestNativeExplicitFileDiscovery(t *testing.T) {
 			}
 			if after := singleFileSnapshot(t, base); !reflect.DeepEqual(before, after) {
 				t.Fatal("explicit source compilation changed authored files")
+			}
+		})
+	}
+}
+
+func TestNativeExplicitDependencyFailures(t *testing.T) {
+	proxy, _ := versionProxy(t)
+	const module = "example.org/explicit-failure"
+	publishVersion(t, proxy, module, "v1.0.0", map[string]string{
+		"go.mod":      "module " + module + "\ngo 1.27\n",
+		"goxide.toml": "[go_mod]\n[lib]\nname='dependency'\npath='.'\n",
+		"lib.gox":     "package dependency\npub func Value() int { return 42 }\n",
+	})
+	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
+	prime := t.TempDir()
+	singleFileWrite(t, prime, "go.mod", "module example.org/prime\ngo 1.27\nrequire "+module+" v1.0.0\n")
+	command := exec.Command(tool, "list", "-mod=mod", "-m", "all")
+	command.Dir, command.Env = prime, append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off")
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("prime module metadata: %v\n%s", err, output)
+	}
+	for _, tc := range []struct {
+		name, mod, sum, diagnostic string
+	}{
+		{name: "missing_root", diagnostic: "is not in the selected Go module graph"},
+		{name: "missing_replacement", mod: "require " + module + " v1.0.0\nreplace " + module + " => ../missing\n", diagnostic: "no such file or directory"},
+		{name: "uncached_version", mod: "require " + module + " v1.1.0\n", diagnostic: "module lookup disabled by GOPROXY=off"},
+		{name: "uncached_source", mod: "require " + module + " v1.0.0\n", diagnostic: "module lookup disabled by GOPROXY=off"},
+		{name: "checksum", mod: "require " + module + " v1.0.0\n", sum: module + " v1.0.0/go.mod h1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=\n", diagnostic: "checksum mismatch"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			projectWrite(t, root, map[string]string{
+				"go.mod":            "module example.org/consumer\ngo 1.27\n" + tc.mod,
+				"main.gox":          "package main\nfunc main() {}\n",
+				"goxide.roots.toml": "[roots.dependency]\nmodule='" + module + "'\n",
+			})
+			if tc.sum != "" {
+				singleFileWrite(t, root, "go.sum", tc.sum)
+			}
+			before := singleFileSnapshot(t, root)
+			var stdout, stderr bytes.Buffer
+			err := executeCompile(CompileRequest{Mode: "expand", Input: filepath.Join(root, "main.gox"), GoTool: tool}, &stdout, &stderr)
+			if err == nil || !strings.Contains(err.Error(), module) || !strings.Contains(err.Error(), tc.diagnostic) || stdout.Len() != 0 {
+				t.Fatalf("dependency failure fell back to single-file compilation: %v\n%s\n%s", err, &stdout, &stderr)
+			}
+			if !reflect.DeepEqual(before, singleFileSnapshot(t, root)) {
+				t.Fatal("failed dependency selection changed authored files")
 			}
 		})
 	}

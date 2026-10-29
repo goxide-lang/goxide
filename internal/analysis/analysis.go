@@ -185,7 +185,7 @@ func loadPackage(input Input, sourceFiles *sourceSet) (g *graph, err error) {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	imports := &moduleImporter{external: goImports, cache: map[string]*types.Package{}, namespaces: map[string]rootRequirement{}, owners: map[string]string{packagePath: packagePath}}
+	imports := &moduleImporter{external: goImports, cache: map[string]goImportResult{}, namespaces: map[string]rootRequirement{}, owners: map[string]string{packagePath: packagePath}}
 	strict := map[string]string{}
 	g.files, g.configs, g.roots, g.display, g.imports, g.strict = files, configs, rootConfigs, displayNames, imports, strict
 	g.external, g.producer, g.libraries, g.options = goImports, options.Producer, options.ProcLibraries, options
@@ -310,7 +310,7 @@ func loadModules(ctx context.Context, input Input, extra map[string][]crateModul
 	if nativePackage != nil && nativePackage.Importer != nil {
 		g.external = nativePackage.Importer
 	}
-	g.imports = &moduleImporter{local: map[string]*resolve.Scope{}, external: g.external, cache: map[string]*types.Package{}, namespaces: map[string]rootRequirement{}, owners: owners, publicRoots: map[string]string{}, sourcePackages: map[string]bool{}, crates: crates}
+	g.imports = &moduleImporter{local: map[string]*resolve.Scope{}, external: g.external, cache: map[string]goImportResult{}, namespaces: map[string]rootRequirement{}, owners: owners, publicRoots: map[string]string{}, sourcePackages: map[string]bool{}, crates: crates}
 	for _, module := range modules {
 		g.imports.publicRoots[module.Path] = module.RootPackage
 	}

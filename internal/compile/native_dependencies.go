@@ -120,10 +120,13 @@ func (plan *NativeDependencies) GenerationRoots(root string, cfg config.Config, 
 // Native generation may acquire the selected module graph, but every command
 // receives the consumer's private modfile. Go's captured proxy, private-module
 // and checksum policy remains authoritative; execution/import helpers stay offline.
-func nativeDependencyCommand(ctx context.Context, root string, cfg config.Config, args ...string) ([]byte, error) {
+func nativeDependencyCommand(ctx context.Context, root string, cfg config.Config, online bool, args ...string) ([]byte, error) {
 	command := exec.CommandContext(ctx, cfg.Environment.GoTool, args...)
 	command.WaitDelay = time.Second
 	command.Dir, command.Env = root, cfg.Environment.ExecEnv()
+	if !online {
+		command.Env = NativeEnvironment(command.Env)
+	}
 	var stderr bytes.Buffer
 	command.Stderr = &stderr
 	output, err := command.Output()
@@ -201,30 +204,20 @@ func NativeSourceDependencies(ctx context.Context, root, modFile string, roots p
 		return nil, err
 	}
 	if selections == nil {
-		query := nativeModuleCommand
-		arguments := []string{"list"}
-		if automatic {
-			query = nativeDependencyCommand
-		} else {
-			arguments = append(arguments, "-e")
-		}
-		arguments = append(arguments, "-mod=mod", "-modfile="+modFile, "-m", "-json", "all")
-		selected, queryErr := query(ctx, root, cfg, arguments...)
-		if queryErr != nil && automatic {
-			return nil, queryErr
+		selected, err := nativeDependencyCommand(ctx, root, cfg, automatic, "list", "-mod=mod", "-modfile="+modFile, "-m", "-json", "all")
+		if err != nil {
+			return nil, err
 		}
 		selections = map[string]nativeModuleSelection{}
-		if queryErr == nil {
-			decoder := json.NewDecoder(bytes.NewReader(selected))
-			for {
-				var selection nativeModuleSelection
-				if err := decoder.Decode(&selection); err == io.EOF {
-					break
-				} else if err != nil {
-					return nil, err
-				}
-				selections[selection.Path] = selection
+		decoder := json.NewDecoder(bytes.NewReader(selected))
+		for {
+			var selection nativeModuleSelection
+			if err := decoder.Decode(&selection); err == io.EOF {
+				break
+			} else if err != nil {
+				return nil, err
 			}
+			selections[selection.Path] = selection
 		}
 	}
 	sources := map[string]*NativeSourceDependency{}
@@ -233,6 +226,15 @@ func NativeSourceDependencies(ctx context.Context, root, modFile string, roots p
 		directory, version := selection.Dir, selection.Version
 		if version == "" {
 			version = plan.Required[module]
+		}
+		if selection.Error != nil {
+			return nil, fmt.Errorf("native source module %s: %s", module, selection.Error.Err)
+		}
+		if selection.Path == "" || version == "" {
+			if automatic && plan.Required[module] == "" {
+				continue // Unused explicit namespaces need not belong to this module's graph.
+			}
+			return nil, fmt.Errorf("native source module %s is not in the selected Go module graph", module)
 		}
 		if selection.Replace != nil && selection.Replace.Dir != "" {
 			directory = selection.Replace.Dir
@@ -250,40 +252,27 @@ func NativeSourceDependencies(ctx context.Context, root, modFile string, roots p
 		}
 		if local != "" {
 			directory = local
-		} else if automatic {
-			if selection.Error != nil {
-				return nil, fmt.Errorf("native source module %s: %s", module, selection.Error.Err)
-			}
-			if selection.Path == "" || version == "" {
-				if plan.Required[module] == "" {
-					continue // Unused explicit namespaces need not belong to this module's graph.
-				}
-				return nil, fmt.Errorf("native source module %s is not in the selected Go module graph", module)
-			}
-			if directory == "" {
-				actual, actualVersion := module, version
-				if selection.Replace != nil {
-					actual, actualVersion = selection.Replace.Path, selection.Replace.Version
-				}
-				download, err := nativeDependencyCommand(ctx, root, cfg, "mod", "download", "-json", "-modfile="+modFile, actual+"@"+actualVersion)
-				if err != nil {
-					return nil, err
-				}
-				var acquired struct{ Path, Version, Dir, Error string }
-				if err := json.Unmarshal(download, &acquired); err != nil {
-					return nil, err
-				}
-				if acquired.Error != "" {
-					return nil, fmt.Errorf("native source module %s: %s", module, acquired.Error)
-				}
-				if acquired.Path != actual || acquired.Version != actualVersion || acquired.Dir == "" {
-					return nil, fmt.Errorf("native source module %s: download did not provide selected source %s@%s", module, actual, actualVersion)
-				}
-				directory = acquired.Dir
-			}
 		}
 		if directory == "" {
-			continue
+			actual, actualVersion := module, version
+			if selection.Replace != nil {
+				actual, actualVersion = selection.Replace.Path, selection.Replace.Version
+			}
+			download, err := nativeDependencyCommand(ctx, root, cfg, automatic, "mod", "download", "-json", "-modfile="+modFile, actual+"@"+actualVersion)
+			if err != nil {
+				return nil, fmt.Errorf("%s@%s: %w", actual, actualVersion, err)
+			}
+			var acquired struct{ Path, Version, Dir, Error string }
+			if err := json.Unmarshal(download, &acquired); err != nil {
+				return nil, err
+			}
+			if acquired.Error != "" {
+				return nil, fmt.Errorf("native source module %s: %s", module, acquired.Error)
+			}
+			if acquired.Path != actual || acquired.Version != actualVersion || acquired.Dir == "" {
+				return nil, fmt.Errorf("native source module %s: download did not provide selected source %s@%s", module, actual, actualVersion)
+			}
+			directory = acquired.Dir
 		}
 		source, err := readNativeSourceDependency(directory, module, version)
 		if err != nil {
@@ -326,9 +315,6 @@ func NativeSourceDependencies(ctx context.Context, root, modFile string, roots p
 // selection. Reuse the project planner so their TOML dependencies participate
 // in MVS, without compiling sources or changing the authored module graph.
 func nativeSourceOnlySelections(ctx context.Context, plan *NativeDependencies, modFile string, cfg config.Config, automatic bool) (map[string]nativeModuleSelection, error) {
-	if !automatic {
-		return nil, nil
-	}
 	manifest := plan.Manifest
 	manifest.Dependencies = map[string]project.Dependency{}
 	projection := false
@@ -386,7 +372,7 @@ func nativeSourceOnlySelections(ctx context.Context, plan *NativeDependencies, m
 			return nil, err
 		}
 	}
-	plans, err := project.LoadBuildPlansContext(ctx, root, cfg.Environment.GoTool, nil, true, false, false, filepath.Join(root, "target"), cfg.Environment.Target.OS+"/"+cfg.Environment.Target.Arch, false, true, cfg.Environment.ExecEnv())
+	plans, err := project.LoadBuildPlansContext(ctx, root, cfg.Environment.GoTool, nil, true, !automatic, false, filepath.Join(root, "target"), cfg.Environment.Target.OS+"/"+cfg.Environment.Target.Arch, false, true, cfg.Environment.ExecEnv())
 	if err != nil {
 		return nil, err
 	}

@@ -21,7 +21,7 @@ func (c *checker) match(n *ast.MatchExpr, expected types.Type, statement bool) t
 		}
 		t = c.out.Types[ref.X]
 	}
-	instance := c.out.EnumOf(t)
+	instance := c.enumOf(t)
 	if instance != nil && mode == WriteRef {
 		c.diag(n.X, ReferencePermission, "enum payload slots are immutable; use a value pattern")
 	}
@@ -134,7 +134,7 @@ func (c *checker) match(n *ast.MatchExpr, expected types.Type, statement bool) t
 	} else if valid(expected) && (c.assignableGo(result, expected) || untyped(result) && types.Identical(defaultType(result), expected)) {
 		result = expected
 	}
-	if c.out.EnumOf(result) != nil {
+	if c.enumOf(result) != nil {
 		for _, arm := range n.Arms {
 			if c.nilLiteral(arm.Body) {
 				c.expr(arm.Body, result)
@@ -239,7 +239,7 @@ func (c *checker) patternMatches(p ast.Pat, t types.Type) bool {
 	if symbol != nil && symbol.Kind == resolve.Constant {
 		return true
 	}
-	instance := c.out.EnumOf(t)
+	instance := c.enumOf(t)
 	con := c.constructor(path, symbol, t)
 	if instance != nil && con != nil && sameEnumInstance(con.Enum, instance) {
 		return true
@@ -249,7 +249,7 @@ func (c *checker) patternMatches(p ast.Pat, t types.Type) bool {
 }
 
 func (c *checker) patternFields(p ast.Pat, t types.Type) []Field {
-	if enum := c.out.EnumOf(t); enum != nil {
+	if enum := c.enumOf(t); enum != nil {
 		if variant := enum.Variant(c.patternName(p)); variant != nil {
 			return enum.Fields(variant)
 		}
@@ -302,7 +302,7 @@ func (c *checker) payloadIrrefutable(p ast.Pat, t types.Type) bool {
 		if !c.patternMatches(p, t) {
 			return false
 		}
-		if enum := c.out.EnumOf(t); enum != nil && len(enum.Enum.Variants) != 1 {
+		if enum := c.enumOf(t); enum != nil && len(enum.Enum.Variants) != 1 {
 			return false
 		}
 	}
@@ -344,7 +344,7 @@ func (c *checker) patternsCoverFields(rows [][]ast.Pat, fields []Field) bool {
 	if len(unrestricted) == len(rows) {
 		return c.patternsCoverFields(unrestricted, fields[1:])
 	}
-	enum := c.out.EnumOf(fields[0].Type)
+	enum := c.enumOf(fields[0].Type)
 	if enum == nil {
 		return c.patternsCoverFields(unrestricted, fields[1:])
 	}
@@ -492,7 +492,7 @@ func mergeArmType(a, b types.Type) types.Type {
 }
 
 func (c *checker) try(n *ast.TryExpr) types.Type {
-	input := c.out.EnumOf(c.expr(n.X, nil))
+	input := c.enumOf(c.expr(n.X, nil))
 	info := &Try{Input: input}
 	c.out.Tries[n] = info
 	if input == nil || !input.Enum.Builtin {
@@ -503,7 +503,7 @@ func (c *checker) try(n *ast.TryExpr) types.Type {
 		info.Value = input.Args[0]
 	}
 	if len(c.returns) == 1 {
-		info.Output = c.out.EnumOf(c.returns[0])
+		info.Output = c.enumOf(c.returns[0])
 	}
 	if info.Output == nil || !info.Output.Enum.Builtin || input.Enum.Name != info.Output.Enum.Name {
 		c.diag(n, TryReturnType, "? requires the nearest function to return the same Option or Result family")

@@ -23,7 +23,7 @@ func (c *checker) enumValid(call *ast.CallExpr) (types.Type, bool) {
 		c.diag(call, "enum-valid-call", "enum_valid requires exactly one enum value without ...")
 		return types.Typ[types.Invalid], true
 	}
-	instance := c.out.EnumOf(c.out.Types[call.Args[0]])
+	instance := c.enumOf(c.out.Types[call.Args[0]])
 	if instance == nil {
 		c.diag(call.Args[0], "enum-valid-type", "enum_valid requires a known enum value")
 		return types.Typ[types.Invalid], true

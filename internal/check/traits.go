@@ -850,17 +850,17 @@ func (c *checker) implSignature(m *Member, impl *Impl) *types.Signature {
 	}
 	return substituteSignature(m.Signature, sub, c.out)
 }
-func substituteSignature(sig *types.Signature, sub map[*types.TypeParam]types.Type, infos ...*Info) *types.Signature {
-	return types.NewSignatureType(nil, nil, nil, substituteTuple(sig.Params(), sub, infos...), substituteTuple(sig.Results(), sub, infos...), sig.Variadic())
+func substituteSignature(sig *types.Signature, sub map[*types.TypeParam]types.Type, info *Info) *types.Signature {
+	return types.NewSignatureType(nil, nil, nil, substituteTuple(sig.Params(), sub, info), substituteTuple(sig.Results(), sub, info), sig.Variadic())
 }
-func substituteTuple(tuple *types.Tuple, sub map[*types.TypeParam]types.Type, infos ...*Info) *types.Tuple {
+func substituteTuple(tuple *types.Tuple, sub map[*types.TypeParam]types.Type, info *Info) *types.Tuple {
 	if tuple == nil {
 		return nil
 	}
 	vars := make([]*types.Var, tuple.Len())
 	for i := range vars {
 		v := tuple.At(i)
-		vars[i] = types.NewVar(0, v.Pkg(), v.Name(), substitute(v.Type(), sub, infos...))
+		vars[i] = types.NewVar(0, v.Pkg(), v.Name(), substitute(v.Type(), sub, info))
 	}
 	return types.NewTuple(vars...)
 }

@@ -144,33 +144,6 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 		root.AddCommand(c)
 	}
 	root.AddCommand(envCommand(out), lspCommand(out, stderr), devCommand(out, stderr))
-	scripts := scriptsCommand("", out, stderr)
-	for _, action := range scriptActions {
-		scripts.AddCommand(scriptsCommand(action, out, stderr))
-	}
-	req := ImportRequest{}
-	imp := cliCommand("import-go [flags] ROOT", "Plan or migrate a Go module into a new project")
-	f := imp.Flags()
-	f.BoolVar(&req.Workspace, "workspace", false, "import explicit ROOT/go.work in native mode")
-	f.StringArrayVar(&req.MemberBins, "member-bin", nil, "workspace member MODULE::NAME=PATH binary")
-	f.StringArrayVar(&req.MemberLibs, "member-lib", nil, "workspace member MODULE=PATH library")
-	f.BoolVar(&req.Plan, "plan", false, "show migration plan (default without --out)")
-	f.StringVar(&req.Out, "out", "", "new migrated project directory (never overwritten)")
-	f.StringVar(&req.GoTool, "go", "go", "Go compiler executable")
-	f.BoolVar(&req.Offline, "offline", false, "disable remote probing/downloads; use local files and cached modules only")
-	f.StringVar(&req.Lib, "lib", "", "explicit library directory/file")
-	f.StringArrayVar(&req.Sources, "source", nil, "supplied MODULE=local|remote; repeatable, disables automatic selection")
-	f.StringArrayVar(&req.AcceptSourceDiff, "accept-source-diff", nil, "confirm differences for an explicitly remote MODULE")
-	f.StringArrayVar(&req.Bins, "bin", nil, "explicit name=path binary; repeatable, commas preserved")
-	imp.RunE = func(c *cobra.Command, args []string) error {
-		if len(args) != 1 {
-			return usageError(c, fmt.Errorf("exactly one ROOT is required; put flags before the input"))
-		}
-		req.Root = args[0]
-		req.Input = os.Stdin
-		req.Interactive = term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stderr.Fd()))
-		return executeImportGo(req, out, stderr)
-	}
 	help := cliCommand("help [COMMAND ...]", "Show command help")
 	help.RunE = func(_ *cobra.Command, args []string) error {
 		c := root
@@ -210,39 +183,6 @@ func newCLI(out, stderr io.Writer) *cobra.Command {
 	return root
 }
 
-var scriptActions = []string{"plan", "trust-project", "allow", "revoke", "forget-project", "clean"}
-
-func scriptsCommand(action string, out, stderr io.Writer) *cobra.Command {
-	use := action + " [flags] PROJECT"
-	if action == "" {
-		use = "scripts [flags] PROJECT"
-	}
-	c := cliCommand(use, "Inspect or manage explicit build-script authorization")
-	req := ScriptsRequest{Action: "plan"}
-	if action != "" {
-		req.Action = action
-	}
-	f := c.Flags()
-	f.StringVar(&req.Action, "action", req.Action, "legacy action: plan|trust-project|allow|revoke|forget-project|clean")
-	f.StringVar(&req.Subject, "subject", "", "exact SHA-256 host execution subject from plan")
-	f.StringVar(&req.TargetDir, "target-dir", "", "managed project artifacts (default target or GOXIDE_TARGET_DIR)")
-	f.StringVar(&req.GoTool, "go", "go", "Go 1.27+ compiler")
-	f.StringVar(&req.Features, "features", "", "project features")
-	f.BoolVar(&req.NoDefaultFeatures, "no-default-features", false, "disable root default features")
-	f.BoolVar(&req.Offline, "offline", false, "use cached dependencies; does not sandbox scripts")
-	f.BoolVar(&req.Locked, "locked", false, "require unchanged dependency lock")
-	c.RunE = func(c *cobra.Command, args []string) error {
-		if len(args) != 1 {
-			return usageError(c, fmt.Errorf("exactly one PROJECT is required; put flags before the input"))
-		}
-		if action != "" && req.Action != action {
-			return usageError(c, fmt.Errorf("--action %s conflicts with scripts %s", req.Action, action))
-		}
-		req.Root = args[0]
-		return executeScripts(req, out, stderr)
-	}
-	return c
-}
 func inputError() error {
 	return fmt.Errorf("exactly one .gox file or directory is required; put flags before the input; run program arguments require INPUT -- ARGS")
 }

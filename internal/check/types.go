@@ -2,7 +2,6 @@ package check
 
 import (
 	"fmt"
-	"go/token"
 	"go/types"
 	"strings"
 
@@ -712,56 +711,6 @@ func (c *checker) importedObject(parts []string, name string, required bool) typ
 	return p.Scope().Lookup(name)
 }
 
-func substitute(t types.Type, sub map[*types.TypeParam]types.Type, infos ...*Info) types.Type {
-	if len(infos) != 0 && infos[0] != nil {
-		return infos[0].Substitute(t, sub, nil)
-	}
-	switch t := t.(type) {
-	case *types.Alias:
-		return substitute(types.Unalias(t), sub)
-	case *types.TypeParam:
-		if a := sub[t]; a != nil {
-			return a
-		}
-		return t
-	case *types.Pointer:
-		return types.NewPointer(substitute(t.Elem(), sub))
-	case *types.Slice:
-		return types.NewSlice(substitute(t.Elem(), sub))
-	case *types.Array:
-		return types.NewArray(substitute(t.Elem(), sub), t.Len())
-	case *types.Map:
-		return types.NewMap(substitute(t.Key(), sub), substitute(t.Elem(), sub))
-	case *types.Chan:
-		return types.NewChan(t.Dir(), substitute(t.Elem(), sub))
-	case *types.Signature:
-		return substituteSignature(t, sub)
-	case *types.Tuple:
-		return substituteTuple(t, sub)
-	case *types.Named:
-		if t.TypeArgs().Len() == 0 {
-			return t
-		}
-		args := make([]types.Type, t.TypeArgs().Len())
-		for i := range args {
-			args[i] = substitute(t.TypeArgs().At(i), sub)
-		}
-		v, err := types.Instantiate(nil, t.Origin(), args, false)
-		if err == nil {
-			return v
-		}
-		return t
-	case *types.Struct:
-		var fields []*types.Var
-		var tags []string
-		for i := 0; i < t.NumFields(); i++ {
-			f := t.Field(i)
-			fields = append(fields, types.NewField(token.NoPos, f.Pkg(), f.Name(), substitute(f.Type(), sub), f.Embedded()))
-			tags = append(tags, t.Tag(i))
-		}
-		return types.NewStruct(fields, tags)
-	case *types.Interface, *types.Union:
-		return newBodyTypes(nil, sub, nil).typ(t)
-	}
-	return t
+func substitute(t types.Type, sub map[*types.TypeParam]types.Type, info *Info) types.Type {
+	return info.Substitute(t, sub, nil)
 }

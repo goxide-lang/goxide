@@ -324,6 +324,11 @@ func gitContext(ctx context.Context, dir string, args ...string) (string, error)
 		if ctx.Err() != nil {
 			e = ctx.Err()
 		}
+		if exit, ok := e.(*exec.ExitError); ok {
+			if detail := strings.TrimSpace(string(exit.Stderr)); detail != "" {
+				return "", fmt.Errorf("git operation failed: %w: %s", e, detail)
+			}
+		}
 		return "", fmt.Errorf("git operation failed: %w", e)
 	}
 	return strings.TrimSpace(string(b)), nil

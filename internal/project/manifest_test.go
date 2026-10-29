@@ -1,7 +1,9 @@
 package project
 
 import (
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -240,5 +242,17 @@ func TestManifestDetection(t *testing.T) {
 	}
 	if _, e := Detect(root); e == nil || !strings.Contains(e.Error(), "regular file") {
 		t.Fatal(e)
+	}
+}
+
+func TestGitFailureRetainsDiagnostic(t *testing.T) {
+	_, err := git(t.TempDir(), "rev-parse", "HEAD")
+	var exit *exec.ExitError
+	if !errors.As(err, &exit) {
+		t.Fatalf("git failure lost exit error: %v", err)
+	}
+	detail := strings.TrimSpace(string(exit.Stderr))
+	if detail == "" || !strings.Contains(err.Error(), detail) {
+		t.Fatalf("git failure hid stderr %q: %v", detail, err)
 	}
 }

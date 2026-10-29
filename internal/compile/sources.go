@@ -139,9 +139,10 @@ func libraryPackage(node *project.Node) (string, error) {
 }
 
 type sourceSelection struct {
-	files    map[string]string
-	excluded map[string]bool
-	entry    string
+	files     map[string]string
+	excluded  map[string]bool
+	entry     string
+	inventory []string
 }
 
 func selectSourcePaths(node *project.Node, selected project.Target, kind string) (*sourceSelection, error) {
@@ -214,17 +215,17 @@ func selectSourcePaths(node *project.Node, selected project.Target, kind string)
 	return &sourceSelection{files: files, excluded: excluded, entry: entry}, nil
 }
 
-func stageSources(node *project.Node, selected project.Target, kind, output string, managed bool, originals map[string]string) (string, error) {
+func stageSources(node *project.Node, selected project.Target, kind, output string, managed bool, originals map[string]string) (string, []string, error) {
 	selection, err := selectSourcePaths(node, selected, kind)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	return selection.stage(node, output, managed, originals)
 }
 
-func (selection *sourceSelection) stage(node *project.Node, output string, managed bool, originals map[string]string) (string, error) {
+func (selection *sourceSelection) stage(node *project.Node, output string, managed bool, originals map[string]string) (string, []string, error) {
 	if err := os.MkdirAll(output, 0o755); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	type pendingOutput struct {
 		name, relative string
@@ -232,6 +233,7 @@ func (selection *sourceSelection) stage(node *project.Node, output string, manag
 		mode           os.FileMode
 	}
 	var published []pendingOutput
+	var staged []string
 	writeSource := func(name, relative string, data []byte, mode os.FileMode) error {
 		destination := filepath.Join(output, relative)
 		if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
@@ -249,9 +251,12 @@ func (selection *sourceSelection) stage(node *project.Node, output string, manag
 		if originals != nil && (filepath.Ext(name) == ".gox" || filepath.Ext(name) == ".go") {
 			originals[destination] = name
 		}
+		if closeErr == nil {
+			staged = append(staged, relative)
+		}
 		return closeErr
 	}
-	err := filepath.WalkDir(node.Root, func(name string, item fs.DirEntry, err error) error {
+	visit := func(name string, item fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -325,21 +330,40 @@ func (selection *sourceSelection) stage(node *project.Node, output string, manag
 			managed = true
 		}
 		return writeSource(name, relative, data, info.Mode())
-	})
+	}
+	var err error
+	if selection.inventory == nil {
+		err = filepath.WalkDir(node.Root, visit)
+	} else {
+		for _, relative := range selection.inventory {
+			if _, selected := selection.destination(relative); !selected {
+				continue
+			}
+			name := filepath.Join(node.Root, relative)
+			info, statErr := os.Lstat(name)
+			if statErr != nil {
+				err = statErr
+				break
+			}
+			if err = visit(name, fs.FileInfoToDirEntry(info), nil); err != nil {
+				break
+			}
+		}
+	}
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if !managed {
 		for _, file := range published {
 			if err := writeSource(file.name, file.relative, file.data, file.mode); err != nil {
-				return "", err
+				return "", nil, err
 			}
 		}
 	}
 	if err := os.WriteFile(filepath.Join(output, "go.mod"), node.ModBytes, 0o644); err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return selection.entry, nil
+	return selection.entry, staged, nil
 }
 
 // sourceRelativeSelected is the source-name rule shared with the ordinary

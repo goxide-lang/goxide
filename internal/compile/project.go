@@ -30,10 +30,13 @@ type Options struct {
 	GoSugar           *bool            // Overrides only the selected entry module.
 	NativeFeatures    *config.Features // Native directory inputs keep an open root feature set.
 	NativeGeneration  bool             // Native gen keeps Go replacement import identities.
-	Roots             paths.Roots      // Optional root-module namespace context for native directory inputs.
-	Config            config.Config
-	Tags              []string
-	Race              bool
+	// NativeFiles is the fixed relative file inventory of an already copied
+	// private native root. Dependency modules retain ordinary source discovery.
+	NativeFiles []string
+	Roots       paths.Roots // Optional root-module namespace context for native directory inputs.
+	Config      config.Config
+	Tags        []string
+	Race        bool
 	// Editor prepares private views without CLI writer leases or target output.
 	// A successful macro may refresh an existing independently leased editor lane.
 	// An unfinished selected producer is analyzed without compiling its own WASM;

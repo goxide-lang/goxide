@@ -220,8 +220,11 @@ func stageRole(graph *project.Graph, target project.Target, kind string, configu
 				selection.excluded[relative] = true
 			}
 		}
+		if node == graph.Root && graph.Role != "proc-macro" {
+			selection.inventory = options.NativeFiles
+		}
 		stage.selections[node.Module] = selection
-		packagePath, err := selection.stage(node, output, node == graph.Root || node.HasManifest, stage.originals)
+		packagePath, _, err := selection.stage(node, output, node == graph.Root || node.HasManifest, stage.originals)
 		if err != nil {
 			return nil, err
 		}

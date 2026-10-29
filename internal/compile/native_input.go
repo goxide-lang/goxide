@@ -56,6 +56,7 @@ type NativeProject struct {
 	project            *Project
 	directory          string
 	originals          map[string]string
+	sourceFiles        map[string]bool
 	modBytes, sumBytes []byte
 	hadSum             bool
 	close              sync.Once
@@ -211,6 +212,7 @@ func PrepareNative(ctx context.Context, input string, options NativeOptions) (_ 
 		return nil, err
 	}
 	prepared.originals = map[string]string{}
+	prepared.sourceFiles = map[string]bool{}
 	if len(prepared.plan.Manifest.Dependencies) != 0 || !prepared.authoredModule || options.Sources != nil || options.Private {
 		if err = prepared.stageInput(); err != nil {
 			return nil, err
@@ -235,6 +237,7 @@ func (p *NativeProject) writeSource(name string, data []byte) error {
 	}
 	target := filepath.Join(p.directory, relative)
 	if data == nil {
+		delete(p.sourceFiles, relative)
 		delete(p.originals, target)
 		if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
 			return err
@@ -248,6 +251,7 @@ func (p *NativeProject) writeSource(name string, data []byte) error {
 		return err
 	}
 	p.originals[target] = name
+	p.sourceFiles[relative] = true
 	return nil
 }
 
@@ -279,6 +283,7 @@ func (p *NativeProject) prepare(ctx context.Context) error {
 	if err := os.WriteFile(filepath.Join(helper, "main.go"), []byte("package main\nfunc main() {}\n"), 0600); err != nil {
 		return err
 	}
+	p.sourceFiles[filepath.Join(filepath.Base(helper), "main.go")] = true
 	manifest.Bins = []project.Target{{Name: "native", Path: filepath.Base(helper)}}
 	data, err := project.Marshal(manifest)
 	if err != nil {
@@ -294,6 +299,7 @@ func (p *NativeProject) prepare(ctx context.Context) error {
 	options.TargetDir = filepath.Join(filepath.Dir(p.directory), "target")
 	options.NativeFeatures = &p.owner.Config.Features
 	options.NativeGeneration = p.options.Automatic
+	options.NativeFiles = project.Keys(p.sourceFiles)
 	options.Offline = !p.options.Automatic
 	options.SourceOverlays = maps.Clone(p.options.Options.SourceOverlays)
 	// Target sources were already overlaid in the authored-to-private copy;
@@ -607,8 +613,12 @@ func (p *NativeProject) displayNames() map[string]string {
 func (p *NativeProject) stageInput() error {
 	if p.options.Sources == nil {
 		node := &project.Node{Root: p.owner.Root, Module: p.plan.Manifest.Module, ModBytes: p.modBytes}
-		if _, err := stageSources(node, project.Target{Name: "native", Path: "."}, "lib", p.directory, true, p.originals); err != nil {
+		_, files, err := stageSources(node, project.Target{Name: "native", Path: "."}, "lib", p.directory, true, p.originals)
+		if err != nil {
 			return err
+		}
+		for _, name := range files {
+			p.sourceFiles[name] = true
 		}
 	} else {
 		for name, data := range p.options.Sources {
@@ -618,6 +628,7 @@ func (p *NativeProject) stageInput() error {
 		}
 	}
 	for _, name := range []string{"go.mod", "go.sum", rootconfig.Filename} {
+		delete(p.sourceFiles, name)
 		if err := os.Remove(filepath.Join(p.directory, name)); err != nil && !os.IsNotExist(err) {
 			return err
 		}

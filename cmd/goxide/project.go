@@ -343,7 +343,8 @@ func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []stri
 	if err := os.Mkdir(stage, 0700); err != nil {
 		return err
 	}
-	if err := copyDirectorySources(root, input, stage, manifest.Module, roots, tags, mode == "test", cfg); err != nil {
+	sourceFiles, err := copyDirectorySources(root, input, stage, manifest.Module, roots, tags, mode == "test", cfg)
+	if err != nil {
 		return err
 	}
 	automatic := mode == "transpile"
@@ -362,20 +363,20 @@ func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []stri
 			return err
 		}
 	}
+	helper, err := os.MkdirTemp(stage, "goxide_cli_entry_")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(helper, "main.go"), []byte("package main\nfunc main() {}\n"), 0600); err != nil {
+		return err
+	}
+	sourceFiles = append(sourceFiles, filepath.Join(filepath.Base(helper), "main.go"))
 	var prepared *compile.Result
-	var helper string
 	for {
 		for _, name := range []string{"go.mod", "go.sum", rootconfig.Filename} {
 			if err := os.Remove(filepath.Join(stage, name)); err != nil && !os.IsNotExist(err) {
 				return err
 			}
-		}
-		helper, err = os.MkdirTemp(stage, "goxide_cli_entry_")
-		if err != nil {
-			return err
-		}
-		if err := os.WriteFile(filepath.Join(helper, "main.go"), []byte("package main\nfunc main() {}\n"), 0600); err != nil {
-			return err
 		}
 		manifest.Bins = []project.Target{{Name: "directory", Path: filepath.Base(helper)}}
 		data, err := project.Marshal(manifest)
@@ -385,7 +386,7 @@ func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []stri
 		if err := os.WriteFile(filepath.Join(stage, project.ManifestName), data, 0600); err != nil {
 			return err
 		}
-		options := compile.Options{GoTool: goTool, TargetDir: filepath.Join(temporary, "target"), Offline: !automatic, Roots: roots, NativeFeatures: &cfg.Features, NativeGeneration: automatic, Config: cfg, Tags: tags, Race: mode == "test"}
+		options := compile.Options{GoTool: goTool, TargetDir: filepath.Join(temporary, "target"), Offline: !automatic, Roots: roots, NativeFeatures: &cfg.Features, NativeGeneration: automatic, NativeFiles: sourceFiles, Config: cfg, Tags: tags, Race: mode == "test"}
 		if automatic {
 			options.PrepareNativePackage = func(modules []analysis.Module) error {
 				modules[0].NativePackage = &analysis.NativePackage{RequireRoot: requireRoot, StableGo: true}
@@ -406,15 +407,6 @@ func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []stri
 		}
 		candidate := sourceDependencies.Automatic[demand.Alias][0]
 		sourceDependencies.Manifest.Dependencies[demand.Alias] = candidate.Dependency
-		if err := os.RemoveAll(stage); err != nil {
-			return err
-		}
-		if err := os.Mkdir(stage, 0700); err != nil {
-			return err
-		}
-		if err := copyDirectorySources(root, input, stage, manifest.Module, roots, tags, false, cfg); err != nil {
-			return err
-		}
 	}
 	bundle := filepath.Dir(prepared.Root)
 	if err := os.RemoveAll(filepath.Join(prepared.Root, filepath.Base(helper))); err != nil {
@@ -482,7 +474,7 @@ func runDirectoryArgs(mode, input, dest, goTool string, tags, programArgs []stri
 	return runPreparedProject(req, prepared, root, out, stderr)
 }
 
-func copyDirectorySources(root, input, stage, module string, roots paths.Roots, tags []string, race bool, cfg config.Config) error {
+func copyDirectorySources(root, input, stage, module string, roots paths.Roots, tags []string, race bool, cfg config.Config) ([]string, error) {
 	context := cfg.Environment.Context(tags, race)
 	selected := []string{input}
 	for _, namespace := range roots {
@@ -490,7 +482,8 @@ func copyDirectorySources(root, input, stage, module string, roots paths.Roots, 
 			selected = append(selected, filepath.Join(root, filepath.FromSlash(strings.TrimPrefix(strings.TrimPrefix(namespace.PackagePath, module), "/"))))
 		}
 	}
-	return filepath.WalkDir(root, func(name string, item fs.DirEntry, err error) error {
+	var files []string
+	err := filepath.WalkDir(root, func(name string, item fs.DirEntry, err error) error {
 		if err != nil || name == root {
 			return err
 		}
@@ -570,8 +563,15 @@ func copyDirectorySources(root, input, stage, module string, roots paths.Roots, 
 			}
 
 		}
-		return os.WriteFile(filepath.Join(stage, relative), data, info.Mode().Perm())
+		if err := os.WriteFile(filepath.Join(stage, relative), data, info.Mode().Perm()); err != nil {
+			return err
+		}
+		if relative != "go.mod" && relative != "go.sum" && relative != rootconfig.Filename {
+			files = append(files, relative)
+		}
+		return nil
 	})
+	return files, err
 }
 
 func exportDirectoryModule(tool, source, bundle, destination string, base []string) error {

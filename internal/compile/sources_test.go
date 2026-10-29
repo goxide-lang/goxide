@@ -28,7 +28,7 @@ func TestStageSourcesRebuildsPublishedFileEntry(t *testing.T) {
 	library := project.Target{Name: "example", Path: "src/lib.gox"}
 	node := &project.Node{Root: root, Module: "example.org/library", Manifest: project.Manifest{Lib: &library}, ModBytes: []byte("module example.org/library\ngo 1.27\n")}
 	output := filepath.Join(t.TempDir(), "module")
-	if _, err := stageSources(node, library, "lib", output, true, nil); err != nil {
+	if _, _, err := stageSources(node, library, "lib", output, true, nil); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"lib_gox.go", "orphan_gox.go", "directory_gox.go"} {
@@ -52,7 +52,7 @@ func TestStageSourcesRetainsPublishedGoOnlyDependency(t *testing.T) {
 	}
 	node := &project.Node{Root: root, Module: "example.org/library", ModBytes: []byte("module example.org/library\ngo 1.27\n")}
 	output := filepath.Join(t.TempDir(), "module")
-	if _, err := stageSources(node, project.Target{Name: "library", Path: "."}, "lib", output, false, nil); err != nil {
+	if _, _, err := stageSources(node, project.Target{Name: "library", Path: "."}, "lib", output, false, nil); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(filepath.Join(output, "lib_gox.go"))

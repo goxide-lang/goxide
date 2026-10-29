@@ -16,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -51,8 +52,8 @@ func NewImporter(filename string, options ImporterOptions) types.Importer {
 	if parent == nil {
 		parent = context.Background()
 	}
-	if imp := platformImporter(); imp != nil {
-		return imp
+	if runtime.GOOS == "js" && runtime.GOARCH == "wasm" {
+		return platformImporter()
 	}
 	environment := importerEnvironment(options.Config.Environment.ExecEnv())
 	tool := options.Config.Environment.GoTool

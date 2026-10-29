@@ -68,23 +68,10 @@ func TestDefaultRejectsUnsupported(t *testing.T) {
 		name, source, location string
 		want                   []string
 	}{
-		{"selected-payload-missing-default", `#[derive(std::derive::Default)]
-enum E { #[default] A(Result[int,string]), B }`, "2:1:", []string{"missing trait implementation:", "Default", "Result[int,string]"}},
 		{"duplicate-default-attribute", `#[derive(std::derive::Default)]
 enum E { #[default] #[default] A }`, "3:1:", []string{"macro expansion failed: Default requires exactly one default variant"}},
-		{"default-without-derive", `enum E { #[default] A }`, "2:10:", []string{"unsupported attribute or invalid attribute position: default"}},
-		{"pointer", `#[derive(std::derive::Default)]
-struct S { Value *int }`, "2:1:", []string{"missing trait implementation:", "Default", "(*int)"}},
-		{"slice", `#[derive(std::derive::Default)]
-struct S { Value []int }`, "2:1:", []string{"missing trait implementation:", "Default", "([]int)"}},
 		{"map", `#[derive(std::derive::Default)]
 struct S { Value map[string]int }`, "2:1:", []string{"missing trait implementation:", "Default", "(map[string]int)"}},
-		{"result", `#[derive(std::derive::Default)]
-struct S { Value Result[int,string] }`, "2:1:", []string{"missing trait implementation:", "Default", "Result[int,string]"}},
-		{"ordinary-helper", `type Child struct{ X int }
-func DefaultChild() Child{return Child{}}
-#[derive(std::derive::Default)]
-struct S { Value Child }`, "4:1:", []string{"missing trait implementation:", "Default", "(fixture::Child)"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

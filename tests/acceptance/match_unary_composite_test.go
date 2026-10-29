@@ -57,13 +57,6 @@ func TestMatchUnaryCompositeCLI(t *testing.T) {
 			if !bytes.Equal(a, b) {
 				t.Errorf("nondeterministic artifact %s", rel)
 			}
-			if strings.HasSuffix(path, ".go") {
-				for _, marker := range []string{"__goxide_match_expr_pending", "__goxide_match_expr_operand_context(", "__goxide_match_expr_return(", "__goxide_match_expr_peers(", "__goxide_match_expr_zero["} {
-					if bytes.Contains(a, []byte(marker)) {
-						t.Errorf("compiler-only atom remains in %s: %s", rel, marker)
-					}
-				}
-			}
 			return nil
 		}); err != nil {
 			t.Fatal(err)

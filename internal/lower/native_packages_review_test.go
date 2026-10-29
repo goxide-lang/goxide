@@ -42,8 +42,11 @@ func main(){fmt::Println(native::Value().Value)}
 		if err != nil {
 			t.Fatal(err)
 		}
-		if attempt > 0 && !bytes.Equal(previous, generated) {
-			t.Fatal("native blank import changed generated Go")
+		if attempt > 0 {
+			if !bytes.Equal(previous, generated) {
+				t.Fatal("native blank import changed generated Go")
+			}
+			continue
 		}
 		previous = generated
 		runGo(t, root, "build", "./...")

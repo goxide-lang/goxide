@@ -46,31 +46,34 @@ func macroPackageSource(t *testing.T) string {
 	return source
 }
 
-func compileMacroPackage(t *testing.T, source, destination string) error {
+func macroPackageCompiler(t *testing.T) func(source, destination string) error {
 	t.Helper()
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	cli := filepath.Join(t.TempDir(), "goxide")
 	packagesCommand(t, root, tool, true, "run", "./scripts/build.go", "-o", cli)
-	command := exec.Command(cli, "transpile", "-o", destination, source)
-	command.Dir = root
-	command.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=local", "GOPROXY=off")
-	output, err := command.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("macro package CLI: %w\n%s", err, output)
+	return func(source, destination string) error {
+		command := exec.Command(cli, "transpile", "-o", destination, source)
+		command.Dir = root
+		command.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=local", "GOPROXY=off")
+		output, err := command.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("macro package CLI: %w\n%s", err, output)
+		}
+		return nil
 	}
-	return nil
 }
 
 func TestMacroPackagesApplicationRace(t *testing.T) {
+	compile := macroPackageCompiler(t)
 	source := macroPackageSource(t)
 	generated := filepath.Join(t.TempDir(), "generated")
-	if err := compileMacroPackage(t, source, generated); err != nil {
+	if err := compile(source, generated); err != nil {
 		t.Fatal(err)
 	}
 	again := filepath.Join(t.TempDir(), "generated")
-	if err := compileMacroPackage(t, source, again); err != nil {
+	if err := compile(source, again); err != nil {
 		t.Fatal(err)
 	}
 	singleExternalSameTree(t, generated, again)
@@ -94,6 +97,7 @@ func TestMacroPackagesApplicationRace(t *testing.T) {
 }
 
 func TestMacroPackagesPrivateAndBudgets(t *testing.T) {
+	compile := macroPackageCompiler(t)
 	cases := []struct{ name, definition, main, want string }{
 		{"private-runtime", `package logkit
 func hidden() int{return 7}
@@ -128,7 +132,7 @@ func main(){_=m::forever!()}
 			})
 			packagesWrite(t, source, "logkit/macros.gox", tc.definition)
 			packagesWrite(t, source, "main.gox", tc.main)
-			err := compileMacroPackage(t, source, filepath.Join(t.TempDir(), "generated"))
+			err := compile(source, filepath.Join(t.TempDir(), "generated"))
 			if err == nil || !strings.Contains(strings.ToLower(err.Error()), tc.want) {
 				t.Fatalf("expected %s rejection: %v", tc.want, err)
 			}
@@ -140,6 +144,7 @@ func main(){_=m::forever!()}
 }
 
 func TestMacroPackagesDependencyCycle(t *testing.T) {
+	compile := macroPackageCompiler(t)
 	source := t.TempDir()
 	packagesWrite(t, source, "go.mod", "module macros.example/app\ngo 1.27\n"+stdFixtureGoRequirements(t))
 	writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
@@ -152,13 +157,14 @@ func TestMacroPackagesDependencyCycle(t *testing.T) {
 	packagesWrite(t, source, "a/a.gox", "package a\nuse b;\npub macro_rules! value {()=>{b::value!()};}\n")
 	packagesWrite(t, source, "b/b.gox", "package b\nuse a;\npub macro_rules! value {()=>{a::value!()};}\n")
 	packagesWrite(t, source, "main.gox", "package main\nuse a;\nfunc main(){_=a::value!()}\n")
-	err := compileMacroPackage(t, source, filepath.Join(t.TempDir(), "generated"))
+	err := compile(source, filepath.Join(t.TempDir(), "generated"))
 	if err == nil || !strings.Contains(err.Error(), "cycle") {
 		t.Fatalf("dependency cycle accepted: %v", err)
 	}
 }
 
 func TestMacroPackagesDefinitionTypeError(t *testing.T) {
+	compile := macroPackageCompiler(t)
 	source := t.TempDir()
 	packagesWrite(t, source, "go.mod", "module macros.example/app\ngo 1.27\n"+stdFixtureGoRequirements(t))
 	writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
@@ -176,7 +182,7 @@ pub macro_rules! broken { () => { Emit(71) }; }
 use logkit as m;
 func main(){m::broken!()}
 `)
-	err := compileMacroPackage(t, source, filepath.Join(t.TempDir(), "generated"))
+	err := compile(source, filepath.Join(t.TempDir(), "generated"))
 	if err == nil || !strings.Contains(err.Error(), "cannot use") {
 		t.Fatalf("accepted invalid argument from macro definition: %v", err)
 	}
@@ -219,6 +225,7 @@ func TestImportedMacroQuestionAndErrorChain(t *testing.T) {
 `
 
 func TestMacroPackagesWholeBuildBudget(t *testing.T) {
+	compile := macroPackageCompiler(t)
 	source := t.TempDir()
 	packagesWrite(t, source, "go.mod", "module macros.example/app\ngo 1.27\n"+stdFixtureGoRequirements(t))
 	writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
@@ -232,13 +239,14 @@ func TestMacroPackagesWholeBuildBudget(t *testing.T) {
 	for _, name := range []string{"a", "b"} {
 		packagesWrite(t, source, name+"/macros.gox", "package "+name+"\nmacro_rules! one {()=>{1};}\nfunc Run(){"+strings.Repeat("_=one!();", 2200)+"}\n")
 	}
-	err := compileMacroPackage(t, source, filepath.Join(t.TempDir(), "generated"))
+	err := compile(source, filepath.Join(t.TempDir(), "generated"))
 	if err == nil || !strings.Contains(err.Error(), "expansion count budget") {
 		t.Fatalf("module budget: %v", err)
 	}
 }
 
 func TestMacroPackagesPreparedDefinitionTypeError(t *testing.T) {
+	compile := macroPackageCompiler(t)
 	for _, sameFile := range []bool{false, true} {
 		t.Run(fmt.Sprintf("same-file-%t", sameFile), func(t *testing.T) {
 			source := t.TempDir()
@@ -267,7 +275,7 @@ func main(){m::broken!()}
 				packagesWrite(t, source, "logkit/macros.gox", definition)
 				packagesWrite(t, source, "main.gox", caller)
 			}
-			err := compileMacroPackage(t, source, filepath.Join(t.TempDir(), "generated"))
+			err := compile(source, filepath.Join(t.TempDir(), "generated"))
 			if err == nil || !strings.Contains(err.Error(), "cannot use") {
 				t.Fatalf("accepted invalid argument after macro preparation: %v", err)
 			}
@@ -276,6 +284,7 @@ func main(){m::broken!()}
 }
 
 func TestMacroPackagesSameFileAliases(t *testing.T) {
+	compile := macroPackageCompiler(t)
 	source := t.TempDir()
 	packagesWrite(t, source, "go.mod", "module macros.example/app\ngo 1.27\n"+stdFixtureGoRequirements(t))
 	writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
@@ -294,7 +303,7 @@ use dep as a;
 use dep as b;
 func main(){_=a::value!();_=b::value!()}
 `)
-	if err := compileMacroPackage(t, source, filepath.Join(t.TempDir(), "generated")); err != nil {
+	if err := compile(source, filepath.Join(t.TempDir(), "generated")); err != nil {
 		t.Fatal(err)
 	}
 }

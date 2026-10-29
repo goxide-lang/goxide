@@ -16,7 +16,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/goxide-lang/goxide/internal/check"
 	"github.com/goxide-lang/goxide/internal/compile"
@@ -24,23 +23,23 @@ import (
 	"github.com/goxide-lang/goxide/internal/project"
 )
 
-var p5WASIBudgetMultiplier time.Duration = 1
-
 func TestP5ProjectBuildRunTestAndStableLock(t *testing.T) {
 	options := p5Options(t)
-	cacheRoot, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	moduleCache := filepath.Join(cacheRoot, "modules")
-	t.Setenv("GOMODCACHE", moduleCache)
-	t.Cleanup(func() {
-		command := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "clean", "-modcache")
-		command.Env = append(project.GoEnv(true), "GOMODCACHE="+moduleCache)
-		if output, err := command.CombinedOutput(); err != nil {
-			t.Errorf("clean isolated module cache: %v\n%s", err, output)
+	if !p5Race {
+		cacheRoot, err := filepath.EvalSymlinks(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
 		}
-	})
+		moduleCache := filepath.Join(cacheRoot, "modules")
+		t.Setenv("GOMODCACHE", moduleCache)
+		t.Cleanup(func() {
+			command := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "clean", "-modcache")
+			command.Env = append(project.GoEnv(true), "GOMODCACHE="+moduleCache)
+			if output, err := command.CombinedOutput(); err != nil {
+				t.Errorf("clean isolated module cache: %v\n%s", err, output)
+			}
+		})
+	}
 	root := p5Project(t)
 	app := filepath.Join(root, "app")
 	before := p5Snapshot(t, root)
@@ -48,12 +47,15 @@ func TestP5ProjectBuildRunTestAndStableLock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p5Go(t, first.Root, "build", "./...")
-	if got := p5Go(t, first.Root, "run", first.Entry); got != "initialized\n18 42 5 true\n{\"Value\":7} shared\n" {
-		t.Fatalf("project run = %q", got)
+	if !p5Race {
+		// Generated programs have their own race instrumentation, independent of this test process.
+		p5Go(t, first.Root, "build", "./...")
+		if got := p5Go(t, first.Root, "run", first.Entry); got != "initialized\n18 42 5 true\n{\"Value\":7} shared\n" {
+			t.Fatalf("project run = %q", got)
+		}
+		p5Go(t, first.Root, "test", "-count=1", "-race", "./...", "example.org/p5/kit/...")
+		p5Go(t, first.Root, "vet", "./...", "example.org/p5/kit/...")
 	}
-	p5Go(t, first.Root, "test", "-count=1", "-race", "./...", "example.org/p5/kit/...")
-	p5Go(t, first.Root, "vet", "./...", "example.org/p5/kit/...")
 	p5CheckImports(t, first.Root)
 
 	generated := p5Snapshot(t, filepath.Dir(first.Root))
@@ -84,8 +86,10 @@ func TestP5ProjectBuildRunTestAndStableLock(t *testing.T) {
 	if err != nil || !afterInfo.ModTime().Equal(lockInfo.ModTime()) {
 		t.Fatalf("unchanged lock was rewritten: %v", err)
 	}
-	if got := p5Go(t, second.Root, "run", second.Entry); got != "initialized\n18 42 5 true\n{\"Value\":7} shared\n" {
-		t.Fatalf("offline locked run = %q", got)
+	if !p5Race {
+		if got := p5Go(t, second.Root, "run", second.Entry); got != "initialized\n18 42 5 true\n{\"Value\":7} shared\n" {
+			t.Fatalf("offline locked run = %q", got)
+		}
 	}
 	for name, want := range before {
 		if got := p5Read(t, filepath.Join(root, filepath.FromSlash(name))); !bytes.Equal(got, want) {

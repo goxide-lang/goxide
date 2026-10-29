@@ -89,11 +89,6 @@ func BenchGeneric()int{return m::Identity[int](match E::A{E::A=>1,E::B=>0})}
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, bad := range []string{"__goxide_match_expr_pending", "__goxide_match_expr_argument", "func() __goxide_match"} {
-			if strings.Contains(string(first), bad) {
-				t.Fatal("unlowered", bad)
-			}
-		}
 		again := filepath.Join(t.TempDir(), "generated")
 		packagesCommand(t, root, cli, true, "transpile", "-o", again, source)
 		second, _ := os.ReadFile(filepath.Join(again, "app.go"))

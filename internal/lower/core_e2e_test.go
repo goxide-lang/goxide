@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -221,6 +223,23 @@ func runCoreFixture(t *testing.T, fixture, wantOutput string, wantTypeSwitches, 
 	}
 	if !bytes.Equal(output[name], golden) {
 		t.Fatalf("generated code differs from %s/main.golden.go:\n%s", directory, output[name])
+	}
+	locations := regexp.MustCompile(`\bat ([^"\s]+):([0-9]+)\b`).FindAllStringSubmatch(string(output[name]), -1)
+	if fixture == "nil_match" && len(locations) == 0 {
+		t.Fatal("nil match lost its panic source location")
+	}
+	lines := bytes.Count(source, []byte{'\n'})
+	if len(source) > 0 && source[len(source)-1] != '\n' {
+		lines++
+	}
+	for _, location := range locations {
+		if location[1] != name {
+			t.Errorf("panic source = %s, want %s", location[1], name)
+		}
+		line, err := strconv.Atoi(location[2])
+		if err != nil || line < 1 || line > lines {
+			t.Errorf("panic location %s:%s is outside source lines 1..%d", location[1], location[2], lines)
+		}
 	}
 	generatedAST, err := parser.ParseFile(token.NewFileSet(), "generated.go", output[name], 0)
 	if err != nil {

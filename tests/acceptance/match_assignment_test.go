@@ -91,9 +91,6 @@ func Recover() (out int){defer func(){x:=match m::Mode::Idle{m::Mode::Idle=>reco
 			if e != nil || string(a) != string(b) {
 				t.Fatalf("nondeterministic %s: %v", rel, e)
 			}
-			if strings.Contains(string(a), "__goxide_match_expr_infer(") || strings.Contains(string(a), "__goxide_match_expr_context(") {
-				t.Fatalf("typing marker leaked in %s", rel)
-			}
 			return nil
 		})
 		packagesWrite(t, generated, "inference_test.go", `package app

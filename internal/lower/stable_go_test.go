@@ -80,8 +80,11 @@ func runStableGoLibraryFixture(t *testing.T, library, prefix string, cases []sta
 				if err != nil {
 					t.Fatal(err)
 				}
-				if attempt > 0 && !bytes.Equal(previous, consumerGo) {
-					t.Fatal("same consumer changed generated Go")
+				if attempt > 0 {
+					if !bytes.Equal(previous, consumerGo) {
+						t.Fatal("same consumer changed generated Go")
+					}
+					continue
 				}
 				previous = consumerGo
 				// Keep exactly the library built before either consumer existed.

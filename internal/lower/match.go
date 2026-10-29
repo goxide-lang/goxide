@@ -29,8 +29,8 @@ func (e *emitter) matchStmts(n *syntax.MatchExpr, target *goast.Ident) (output [
 	e.matchDepth++
 	defer func() { e.matchDepth-- }()
 	info := e.info.Matches[n]
-	if info == nil || info.Enum == nil {
-		e.fail(n, "match 需要已知 enum 类型")
+	if info == nil {
+		e.fail(n, "缺少 match 检查结果")
 		return nil
 	}
 	var owner goast.Expr

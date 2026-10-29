@@ -28,33 +28,14 @@ func (c *checker) match(n *ast.MatchExpr, expected types.Type, statement bool) t
 	if instance != nil && !c.enumAccessible(instance) {
 		c.diag(n, VariantMismatch, "internal-origin alias cannot expose enum variants outside its internal package boundary")
 	}
+	if instance == nil {
+		if valid(t) {
+			c.diag(n.X, VariantMismatch, "match requires a Goxide enum value with source declarations")
+		}
+		return types.Typ[types.Invalid]
+	}
 	info := &Match{Enum: instance, Statement: statement, Reference: mode}
 	c.out.Matches[n] = info
-	if instance == nil {
-		for _, arm := range n.Arms {
-			var variant ast.Pat
-			ast.Walk(arm.Pat, func(node ast.Node) bool {
-				switch pattern := node.(type) {
-				case *ast.TuplePat, *ast.StructPat:
-					variant = node.(ast.Pat)
-				case *ast.PathPat:
-					if symbol := c.symbol(pattern.Path); symbol == nil || symbol.Kind != resolve.Constant {
-						variant = pattern
-					}
-				case *ast.BindPat:
-					if symbol := c.symbol(pattern.Name); symbol != nil && symbol.Kind == resolve.Variant {
-						variant = pattern
-					}
-				}
-				return variant == nil
-			})
-			if variant != nil {
-				c.diag(variant, VariantMismatch, "enum variant pattern requires a Goxide enum value with source declarations")
-				delete(c.out.Matches, n)
-				return types.Typ[types.Invalid]
-			}
-		}
-	}
 	covered := map[string]bool{}
 	patterns := map[string][]ast.Pat{}
 	wild := false

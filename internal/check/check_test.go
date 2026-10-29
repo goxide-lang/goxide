@@ -27,6 +27,12 @@ func parse(t *testing.T, source string) (map[string]*ast.File, *resolve.Result) 
 
 func TestDiagnostics(t *testing.T) {
 	cases := []struct{ name, code, good, bad, span string }{
+		{"non-enum-wildcard", check.VariantMismatch,
+			`enum E{A};func f(value E)int{return match value{_=>1}}`,
+			`func f(value int)int{return match (value){_=>1}}`, `(value)`},
+		{"non-enum-binding", check.VariantMismatch,
+			`enum E{A};func f(value E)int{return match value{whole=>1}}`,
+			`func f(value any)int{return match (value){whole=>1}}`, `(value)`},
 		{"exhaustiveness", check.NonExhaustive,
 			`enum E { A, B };func f(e E)int{return match e {E::A=>1,E::B=>2}}`,
 			`enum E { A, B };func f(e E)int{return match e {E::A=>1}}`, `match e {E::A=>1}`},
@@ -97,8 +103,8 @@ func TestDiagnostics(t *testing.T) {
 			`enum E{A};func pick[T any](a T,rest ...T)T{return a};func f(){_=pick(E::A,E::A,E::A)}`,
 			`enum E{A};func pick[T any](a T,rest ...T)T{return a};func f(){_=pick(E::A,E::A,nil)}`, `nil`},
 		{"enum-nil-inferred-match", check.EnumNilLiteral,
-			`enum E{A};func f(b bool){_=match b{true=>E::A,_=>E::A}}`,
-			`enum E{A};func f(b bool){_=match b{true=>nil,_=>E::A}}`, `nil`},
+			`enum E{A,B};func f(b E){_=match b{E::A=>E::A,_=>E::A}}`,
+			`enum E{A,B};func f(b E){_=match b{E::A=>nil,_=>E::A}}`, `nil`},
 		{"enum-nil-append", check.EnumNilLiteral,
 			`enum E{A};func f(es []E){_=append(es,E::A)}`,
 			`enum E{A};func f(es []E){_=append(es,nil)}`, `nil`},

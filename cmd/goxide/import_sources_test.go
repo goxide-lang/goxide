@@ -23,7 +23,7 @@ func sourceFixture(t *testing.T, fork, modified bool) (string, string, string) {
 		remote = "example.org/fork"
 	}
 	publishVersion(t, proxy, remote, "v1.2.0", map[string]string{"go.mod": "module " + remote + "\ngo 1.27\n", "d.go": "package d\nconst Value=\"remote\"\n", "LICENSE": "license\n"})
-	root := filepath.Join(t.TempDir(), "old")
+	root := filepath.Join(canonicalTempDir(t), "old")
 	mod := "module example.org/app\ngo 1.27\nrequire example.org/d v1.2.0\n"
 	if fork {
 		mod += "replace example.org/d => " + remote + " v1.2.0\n"
@@ -56,7 +56,7 @@ func TestImportSourcesRemote(t *testing.T) {
 		t.Run(map[bool]string{false: "module", true: "fork"}[fork], func(t *testing.T) {
 			root, _, _ := sourceFixture(t, fork, true)
 			before := sourceHash(t, root)
-			out := filepath.Join(t.TempDir(), "new")
+			out := filepath.Join(canonicalTempDir(t), "new")
 			req := sourceRequest(root, out)
 			req.Sources = []string{"example.org/d=remote"}
 			var log bytes.Buffer
@@ -110,17 +110,17 @@ func TestImportSourcesVerifiedAndOffline(t *testing.T) {
 		}
 		return executeImportGo(req, &bytes.Buffer{}, &bytes.Buffer{})
 	}
-	if e := run(filepath.Join(t.TempDir(), "warm"), true, false); e != nil {
+	if e := run(filepath.Join(canonicalTempDir(t), "warm"), true, false); e != nil {
 		t.Fatal(e)
 	}
-	t.Setenv("GOMODCACHE", t.TempDir())
+	t.Setenv("GOMODCACHE", canonicalTempDir(t))
 	if e := run("", true, true); e != nil {
 		t.Fatal(e)
 	}
-	if e := run(filepath.Join(t.TempDir(), "local"), false, false); e != nil {
+	if e := run(filepath.Join(canonicalTempDir(t), "local"), false, false); e != nil {
 		t.Fatal(e)
 	}
-	out := filepath.Join(t.TempDir(), "missing")
+	out := filepath.Join(canonicalTempDir(t), "missing")
 	if e := run(out, true, false); e == nil || !strings.Contains(e.Error(), "offline=true") {
 		t.Fatalf("missing cache %v", e)
 	}
@@ -128,14 +128,14 @@ func TestImportSourcesVerifiedAndOffline(t *testing.T) {
 		t.Fatal("published failed import")
 	}
 
-	req := sourceRequest(root, filepath.Join(t.TempDir(), "tty-cold"))
+	req := sourceRequest(root, filepath.Join(canonicalTempDir(t), "tty-cold"))
 	req.Offline = true
 	req.Interactive = true
 	req.Input = strings.NewReader("example.org/d=remote\n")
 	if e := executeImportGo(req, &bytes.Buffer{}, &bytes.Buffer{}); e == nil || !strings.Contains(e.Error(), "offline=true") {
 		t.Fatalf("TTY offline missing cache: %v", e)
 	}
-	req.Out = filepath.Join(t.TempDir(), "tty-cancel")
+	req.Out = filepath.Join(canonicalTempDir(t), "tty-cancel")
 	req.Input = strings.NewReader("cancel\n")
 	if e := executeImportGo(req, &bytes.Buffer{}, &bytes.Buffer{}); e == nil || !strings.Contains(e.Error(), "cancelled") {
 		t.Fatalf("TTY cancel: %v", e)
@@ -217,7 +217,7 @@ func TestImportSourceCacheIntegrity(t *testing.T) {
 					t.Fatal(e)
 				}
 			}
-			out := filepath.Join(t.TempDir(), "new")
+			out := filepath.Join(canonicalTempDir(t), "new")
 			req := sourceRequest(root, out)
 			req.Sources = []string{"example.org/d=remote"}
 			req.Offline = true
@@ -240,12 +240,12 @@ func TestImportSourcesMixed(t *testing.T) {
 	proxy, _ := versionProxy(t)
 	publishVersion(t, proxy, "example.org/e", "v1.0.0", map[string]string{"go.mod": "module example.org/e\ngo 1.27\n", "e.go": "package e\nconst Value=\"remote-e\"\n"})
 	publishVersion(t, proxy, "example.org/d", "v1.2.0", map[string]string{"go.mod": "module example.org/d\ngo 1.27\nrequire example.org/e v1.0.0\n", "d.go": "package d\nimport \"example.org/e\"\nconst Value=\"remote-d \"+e.Value\n"})
-	root := filepath.Join(t.TempDir(), "old")
+	root := filepath.Join(canonicalTempDir(t), "old")
 	projectWrite(t, root, map[string]string{"go.mod": "module example.org/app\ngo 1.27\nrequire example.org/d v1.2.0\n", "main.go": "package main\nimport (\"fmt\";\"example.org/d\")\nfunc main(){fmt.Println(d.Value)}\n"})
 	vendorGo(t, root, "mod", "tidy")
 	vendorGo(t, root, "mod", "vendor")
 	projectWrite(t, root, map[string]string{"vendor/example.org/e/e.go": "package e\nconst Value=\"local-e\"\n"})
-	out := filepath.Join(t.TempDir(), "new")
+	out := filepath.Join(canonicalTempDir(t), "new")
 	req := sourceRequest(root, out)
 	req.Sources = []string{"example.org/d=remote", "example.org/e=local"}
 	req.Offline = true

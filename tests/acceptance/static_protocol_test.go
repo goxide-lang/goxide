@@ -232,7 +232,7 @@ func Value() User { return User::Abc() }
 	}
 
 	t.Run("wrong_typeinfo_shape", func(t *testing.T) {
-		wrong := t.TempDir()
+		wrong := formalDependencyDir(t)
 		selected := strings.TrimSpace(packagesCommand(t, h.root, h.goTool, true, "list", "-m", "-f", "{{.Dir}}", "github.com/goxide-lang/std"))
 		// Keep every other package from the actual selected std module. A
 		// missing sum/runtime package must not make this negative pass.

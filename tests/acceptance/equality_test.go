@@ -16,7 +16,7 @@ func TestExplicitEqualityModules(t *testing.T) {
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
 	cli := filepath.Join(t.TempDir(), "goxide")
 	packagesCommand(t, root, tool, true, "run", "./scripts/build.go", "-o", cli)
-	libsrc := t.TempDir()
+	libsrc := formalDependencyDir(t)
 	writeStdFormalManifest(t, libsrc, "equal.example/lib", "library", nil)
 	packagesWrite(t, libsrc, "lib.gox", "package library; pub mod model; pub mod relay;\n")
 	packagesWrite(t, libsrc, "model/model.gox", `package model; use std; use std::PartialEq;

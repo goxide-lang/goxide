@@ -75,7 +75,7 @@ func TestLayoutOwnershipAndPublishing(t *testing.T) {
 	}
 }
 func TestLayoutUnknownAndSymlinkBoundaries(t *testing.T) {
-	root := t.TempDir()
+	root := sourceTempDir(t)
 	existing := filepath.Join(root, "target")
 	os.Mkdir(existing, 0755)
 	if _, e := OpenLayout(root, "example.org/app", ""); e == nil {

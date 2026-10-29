@@ -10,6 +10,15 @@ import (
 	"testing"
 )
 
+func canonicalTempDir(t *testing.T) string {
+	t.Helper()
+	path, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
 func TestOutputProtection(t *testing.T) {
 	d := t.TempDir()
 	src := filepath.Join(d, "input.gox")

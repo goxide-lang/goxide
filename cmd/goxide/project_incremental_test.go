@@ -22,7 +22,7 @@ func TestProjectDefaultDiscoveryAndStaleOutputs(t *testing.T) {
 	transpile := func(wantError string) string {
 		t.Helper()
 		var output, diagnostic bytes.Buffer
-		destination := filepath.Join(t.TempDir(), "export")
+		destination := filepath.Join(canonicalTempDir(t), "export")
 		err := run([]string{"transpile", "-o", destination, "--go", filepath.Join(runtime.GOROOT(), "bin", "go"), "--offline"}, &output, &diagnostic)
 		if wantError != "" {
 			if err == nil || !strings.Contains(err.Error(), wantError) {

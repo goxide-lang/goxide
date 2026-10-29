@@ -15,7 +15,7 @@ func TestCrossModuleBuiltinArtifacts(t *testing.T) {
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
 	cli := filepath.Join(t.TempDir(), "goxide")
 	packagesCommand(t, root, tool, true, "run", "./scripts/build.go", "-o", cli)
-	src := t.TempDir()
+	src := formalDependencyDir(t)
 	writeStdFormalManifest(t, src, "sums.example/lib", "library", nil)
 	packagesWrite(t, src, "lib.gox", "package library; use std; use std::PartialEq;\npub mod model;\npub mod relay;\npub mod fake;\n")
 	packagesWrite(t, src, "model/model.gox", `package model; use std; use std::PartialEq; use serde;

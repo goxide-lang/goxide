@@ -16,7 +16,7 @@ func TestExternalCloneDebugModules(t *testing.T) {
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
 	cli := filepath.Join(t.TempDir(), "goxide")
 	packagesCommand(t, root, tool, true, "run", "./scripts/build.go", "-o", cli)
-	src := t.TempDir()
+	src := formalDependencyDir(t)
 	writeStdFormalManifest(t, src, "fields.example/lib", "library", nil)
 
 	packagesWrite(t, src, "lib.gox", "package library; use std; use std::PartialEq;\npub mod model;\npub mod other;\npub mod relay;\npub mod fake;\n")

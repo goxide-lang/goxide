@@ -205,7 +205,10 @@ func TestProjectUsesCapturedEnvironmentForEveryGoCommand(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Go command observation uses a POSIX shell wrapper")
 	}
-	root := smallProject(t)
+	root, err := filepath.EvalSymlinks(smallProject(t))
+	if err != nil {
+		t.Fatal(err)
+	}
 	writeProjectFile(t, root, "app.gox", "package main\nuse fmt;\nfunc main(){fmt::Println(cfg!(env(\"GOXIDE_TEST_FROZEN_MARKER\", \"frozen\")))}\n")
 	work := t.TempDir()
 	tool, log := filepath.Join(work, "go"), filepath.Join(work, "commands.log")

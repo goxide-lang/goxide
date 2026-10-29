@@ -16,7 +16,7 @@ func TestCrossModuleEnumArtifacts(t *testing.T) {
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
 	cli := filepath.Join(t.TempDir(), "goxide")
 	packagesCommand(t, root, tool, true, "run", "./scripts/build.go", "-o", cli)
-	src := t.TempDir()
+	src := formalDependencyDir(t)
 	writeStdFormalManifest(t, src, "enum.example/library", "library", nil)
 
 	packagesWrite(t, src, "lib.gox", "package library; use std; use std::PartialEq;\npub mod model;\npub mod relay;\npub mod other;\npub mod api;\npub mod internal;\n")

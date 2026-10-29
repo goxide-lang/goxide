@@ -66,7 +66,7 @@ func CellView(p &Cell)&Cell{return a::CellView(p)}
 		return dir
 	}
 	source := makeLibrary(true, false)
-	library := filepath.Join(t.TempDir(), "library")
+	library := filepath.Join(formalDependencyDir(t), "library")
 	packagesCommand(t, root, cli, true, "transpile", "-o", library, source)
 	compare := func(a, b string) {
 		t.Helper()

@@ -14,7 +14,7 @@ import (
 
 func TestExternalSerdeModules(t *testing.T) {
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
-	src := t.TempDir()
+	src := formalDependencyDir(t)
 	packagesWrite(t, src, "goxide.toml", testdeps.FormalManifest(t, "wire.example/lib", "library"))
 	packagesWrite(t, src, "lib.gox", "package library; pub mod model; pub mod other; pub mod relay; pub mod fake;\n")
 	packagesWrite(t, src, "model/item.gox", `package model; use serde;

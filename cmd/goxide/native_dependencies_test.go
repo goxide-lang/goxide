@@ -142,7 +142,7 @@ func TestNativeAutomaticSourceOnlyReplacementSelection(t *testing.T) {
 			publishVersion(t, proxy, "example.org/bridge", "v1.0.0", map[string]string{
 				"go.mod": "module example.org/bridge\ngo 1.27\nrequire example.org/library v1.1.0\n", "api.go": "package bridge\n",
 			})
-			base := t.TempDir()
+			base := canonicalTempDir(t)
 			singleFileWrite(t, base, "library/goxide.toml", "[go_mod]\nmodule='example.org/library'\ngo='1.27'\n[lib]\nname='library'\npath='.'\n[dependencies]\nselected={go='example.org/selected',version='v1.2.0'}\n")
 			singleFileWrite(t, base, "library/lib.gox", "unused source must not compile\n")
 			replacement := "example.org/library"
@@ -199,7 +199,7 @@ func TestNativeAutomaticTransitiveSourceOnlyReplacement(t *testing.T) {
 	publishVersion(t, proxy, "example.org/bridge", "v1.0.0", map[string]string{
 		"go.mod": "module example.org/bridge\ngo 1.27\nrequire example.org/library v1.0.0\n", "api.go": "package bridge\n",
 	})
-	base := t.TempDir()
+	base := canonicalTempDir(t)
 	singleFileWrite(t, base, "library/goxide.toml", "[go_mod]\nmodule='example.org/library'\ngo='1.27'\n[lib]\nname='library'\npath='.'\n")
 	singleFileWrite(t, base, "library/lib.gox", "unused transitive source must not compile\n")
 	singleFileWrite(t, base, "app/go.mod", "module example.org/app\ngo 1.27\nrequire example.org/bridge v1.0.0\nreplace example.org/library => ../library\n")

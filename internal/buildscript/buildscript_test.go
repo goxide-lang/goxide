@@ -17,9 +17,18 @@ const generator = `package main
 import("encoding/json";"os";"path/filepath")
 func main(){var r struct{SourceDir string ` + "`json:\"source_dir\"`" + `;OutDir string ` + "`json:\"out_dir\"`" + `;Env map[string]string ` + "`json:\"env\"`" + `};b,e:=os.ReadFile(os.Args[1]);if e!=nil{panic(e)};if e=json.Unmarshal(b,&r);e!=nil{panic(e)};b,e=os.ReadFile(filepath.Join(r.SourceDir,"schema"));if e!=nil{panic(e)};if e=os.WriteFile(filepath.Join(r.OutDir,"generated.go"),append(b,[]byte(r.Env["SCHEMA_SUFFIX"])...),0600);e!=nil{panic(e)}}`
 
+func fixtureTempDir(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
 func fixture(t *testing.T) Options {
 	t.Helper()
-	root := t.TempDir()
+	root := fixtureTempDir(t)
 	put(t, root, "scripts/build.go", generator)
 	put(t, root, "schema", "package main\nconst Generated=42\n")
 	return Options{ProjectRoot: root, PackageRoot: root, Module: "example.test/app", GoTool: filepath.Join(runtime.GOROOT(), "bin", "go"), CompilerID: "test", Root: true, Config: Config{Entry: "scripts/build.go", Inputs: []string{"schema"}, Outputs: []string{"generated.go"}, Env: []string{"SCHEMA_SUFFIX"}}}
@@ -100,7 +109,7 @@ func TestLocalHelperGoAndGoxide(t *testing.T) {
 			put(t, o.PackageRoot, o.Config.Entry, strings.Replace(generator, "func main(){", "func main(){_ = helper.Value;", 1))
 			b, _ := os.ReadFile(filepath.Join(o.PackageRoot, o.Config.Entry))
 			put(t, o.PackageRoot, o.Config.Entry, strings.Replace(string(b), "import(", "import(\"example.test/helper\";", 1))
-			helper := t.TempDir()
+			helper := fixtureTempDir(t)
 			put(t, helper, "go.mod", "module example.test/helper\n\ngo 1.27\n")
 			put(t, helper, "value."+ext, "package helper\nconst Value=1\n")
 			o.Config.Dependencies = map[string]string{"example.test/helper": helper}
@@ -143,8 +152,28 @@ func TestSymlinkAndHardlinkRejected(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
-		if _, e = Prepare(o); e == nil {
-			t.Fatal("link accepted")
+		want := "symlinks and special files forbidden"
+		if hard {
+			want = "hardlinked file forbidden"
+		}
+		if _, e = Prepare(o); e == nil || !strings.Contains(e.Error(), want) {
+			t.Fatalf("link rejection = %v, want %s", e, want)
+		}
+
+		o = fixture(t)
+		operation := "Symlink"
+		if hard {
+			operation = "Link"
+		}
+		put(t, o.PackageRoot, "scripts/build.go", `package main
+import("os";"path/filepath")
+func main(){if err:=os.`+operation+`(filepath.Join(os.Getenv("SOURCE_DIR"),"schema"),filepath.Join(os.Getenv("OUT_DIR"),"generated.go"));err!=nil{panic(err)}}`)
+		p := prepare(t, o)
+		if _, e = p.Execute(context.Background(), func() error { return nil }, nil); e == nil || !strings.Contains(e.Error(), want) {
+			t.Fatalf("output link rejection = %v, want %s", e, want)
+		}
+		if _, e := os.Stat(filepath.Join(p.options.ArtifactRoot, "entries", p.ID)); !os.IsNotExist(e) {
+			t.Fatal("linked output published a cache entry")
 		}
 	}
 }
@@ -255,7 +284,7 @@ func TestUnauthorizedNeverExecutes(t *testing.T) {
 func TestHelperManifestRejectsBootstrap(t *testing.T) {
 	for _, manifest := range []string{"module example.test/helper\nrequire example.test/missing v1.0.0\n", "module wrong\n", "module example.test/helper\ntoolchain go9.1\n", "module example.test/helper\nreplace example.test/missing => /tmp\n"} {
 		o := fixture(t)
-		helper := t.TempDir()
+		helper := fixtureTempDir(t)
 		put(t, helper, "go.mod", manifest)
 		o.Config.Dependencies = map[string]string{"example.test/helper": helper}
 		if _, e := Prepare(o); e == nil {
@@ -268,7 +297,7 @@ func TestHelperCommentsDoNotCreateCycle(t *testing.T) {
 	o := fixture(t)
 	o.Config.Dependencies = map[string]string{}
 	for _, name := range []string{"a", "b"} {
-		root := t.TempDir()
+		root := fixtureTempDir(t)
 		mod := "example.test/" + name
 		other := "example.test/b"
 		if name == "b" {
@@ -337,7 +366,7 @@ func TestOverlappingHelperModulesNoFalseCycle(t *testing.T) {
 		"example.test/a/sub": "package sub\nconst Value=7\n",
 	}
 	for mod, source := range sources {
-		root := t.TempDir()
+		root := fixtureTempDir(t)
 		put(t, root, "go.mod", "module "+mod+"\n\ngo 1.27\n")
 		put(t, root, "value.go", source)
 		put(t, root, "extra.gox", "package "+strings.SplitN(strings.TrimPrefix(source, "package "), "\n", 2)[0]+"\nconst Extra=1\n")
@@ -349,7 +378,7 @@ func TestOverlappingHelperModulesNoFalseCycle(t *testing.T) {
 func TestManagedLayoutsExcludedFromSourceSnapshots(t *testing.T) {
 	o := fixture(t)
 	o.Config.Inputs = append(o.Config.Inputs, "scripts")
-	helper := t.TempDir()
+	helper := fixtureTempDir(t)
 	put(t, helper, "go.mod", "module example.test/helper\n\ngo 1.27\n")
 	put(t, helper, "value.go", "package helper\nconst Value=1\n")
 	o.Config.Dependencies = map[string]string{"example.test/helper": helper}
@@ -387,7 +416,7 @@ func TestManagedLayoutsExcludedFromSourceSnapshots(t *testing.T) {
 	}
 }
 func TestOutputSnapshotNeverSkipsManagedMarkers(t *testing.T) {
-	root := t.TempDir()
+	root := fixtureTempDir(t)
 	put(t, root, ".goxide-layout.json", "{}")
 	files, e := snapshotMode(root, true)
 	if e != nil {
@@ -409,7 +438,7 @@ func TestTOMLManifestReservedAndHelperBootstrap(t *testing.T) {
 		})
 	}
 	o := fixture(t)
-	helper := t.TempDir()
+	helper := fixtureTempDir(t)
 	put(t, helper, "go.mod", "module example.test/helper\n\ngo 1.27\n")
 	os.Remove(filepath.Join(helper, "go.mod"))
 	put(t, helper, "goxide.toml", "[go_mod]\nmodule='example.test/helper'\ngo='1.27'\n[build]\nentry='tools/build.go'\n")

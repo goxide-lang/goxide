@@ -10,7 +10,7 @@ import (
 
 func nativeRootMappingFixture(t *testing.T) (*Workspace, Manifest) {
 	t.Helper()
-	root := t.TempDir()
+	root := sourceTempDir(t)
 	app := filepath.Join(root, "app")
 	m, err := Parse("native.toml", []byte(mappingHeader+`
 [dependencies.dep]
@@ -138,7 +138,7 @@ func TestNativeExternalRootOfflineLocalReplacement(t *testing.T) {
 	t.Setenv("GOMODCACHE", t.TempDir())
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
 	lock := Lock{NativeWorkspace: &NativeWorkspaceLock{Sums: map[string]string{}}}
-	view := t.TempDir()
+	view := sourceTempDir(t)
 	if _, err := NativeView(w, view, map[string]bool{m.Module: true}, lock.NativeWorkspace); err != nil {
 		t.Fatal(err)
 	}

@@ -18,7 +18,11 @@ func prepareStandaloneSourceModule(input, provider string, cfg config.Config) (_
 	if err != nil {
 		return nil, err
 	}
-	temporary, err := os.MkdirTemp("", "goxide-standalone-")
+	temporaryRoot, err := filepath.EvalSymlinks(os.TempDir())
+	if err != nil {
+		return nil, err
+	}
+	temporary, err := os.MkdirTemp(temporaryRoot, "goxide-standalone-")
 	if err != nil {
 		return nil, err
 	}

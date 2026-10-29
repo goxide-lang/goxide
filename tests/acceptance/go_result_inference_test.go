@@ -195,7 +195,7 @@ func TestGoResultInferenceModules(t *testing.T) {
  pub enum Event{Other,Failed,}
  func Events()([]Event,error){return []Event{Event::Other},nil}
  `)
-	prodOut := filepath.Join(t.TempDir(), "producer")
+	prodOut := filepath.Join(formalDependencyDir(t), "producer")
 	packagesCommand(t, root, cli, true, "transpile", "-o", prodOut, producer)
 	consumer := t.TempDir()
 	writeMacroFixtureRoots(t, consumer, map[string]rootconfig.Mapping{

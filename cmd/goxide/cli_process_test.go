@@ -58,7 +58,7 @@ func TestCLIProcessContract(t *testing.T) {
 	}
 	fixture := func(t *testing.T) string {
 		t.Helper()
-		d := t.TempDir()
+		d := canonicalTempDir(t)
 		if runtime.GOOS != "windows" {
 			if err := os.Mkdir(filepath.Join(d, "fakebin"), 0700); err != nil {
 				t.Fatal(err)
@@ -207,7 +207,7 @@ func TestCLIProcessContract(t *testing.T) {
 	})
 	for _, mode := range []string{"directory", "project"} {
 		t.Run("native-run-"+mode, func(t *testing.T) {
-			d := t.TempDir()
+			d := canonicalTempDir(t)
 			files := map[string]string{
 				"main.gox": "package main\nuse json;\nuse os;\nfunc main(){json::NewEncoder(os::Stdout).Encode(os::Args[1:])}\n",
 			}

@@ -18,7 +18,7 @@ import (
 
 func versionProxy(t *testing.T) (string, string) {
 	t.Helper()
-	proxy, cache := t.TempDir(), t.TempDir()
+	proxy, cache := t.TempDir(), canonicalTempDir(t)
 	t.Setenv("GOPROXY", "file://"+filepath.ToSlash(proxy))
 	t.Setenv("GOSUMDB", "off")
 	t.Setenv("GOMODCACHE", cache)
@@ -538,7 +538,7 @@ path = '../dep'
 }
 
 func TestVersionSourceLateGitBoundary(t *testing.T) {
-	base := t.TempDir()
+	base := canonicalTempDir(t)
 	root := filepath.Join(base, "root")
 	repo := filepath.Join(base, "repo")
 	outside := filepath.Join(base, "outside")

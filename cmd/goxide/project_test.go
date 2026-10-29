@@ -225,7 +225,7 @@ func TestProjectNativeModuleVersionAndReplace(t *testing.T) {
 	projectWrite(t, versionDir, map[string]string{"list": "v1.0.0\n", "v1.0.0.info": `{"Version":"v1.0.0","Time":"2024-01-01T00:00:00Z"}`, "v1.0.0.mod": files["go.mod"], "v1.0.0.zip": archive.String()})
 	t.Setenv("GOPROXY", "file://"+filepath.ToSlash(proxy))
 	t.Setenv("GOSUMDB", "off")
-	modcache := t.TempDir()
+	modcache := canonicalTempDir(t)
 	t.Setenv("GOMODCACHE", modcache)
 	t.Cleanup(func() {
 		filepath.Walk(modcache, func(path string, info os.FileInfo, e error) error {
@@ -366,7 +366,7 @@ path = '../dep'
 }
 
 func TestProjectGitCheckoutBoundaries(t *testing.T) {
-	base := t.TempDir()
+	base := canonicalTempDir(t)
 	repo := filepath.Join(base, "repo")
 	root := filepath.Join(base, "root")
 	outside := filepath.Join(base, "outside")

@@ -204,7 +204,7 @@ pub macro_rules! retained {($call:expr)=>{go_result_keep!(int,$call)};}
 type Partial = struct{Value int; Err error}
 func Wrapped()Result[int,Partial]{return go_result_keep!(int,Read())}
 `)
-	prodOut := filepath.Join(t.TempDir(), "producer")
+	prodOut := filepath.Join(formalDependencyDir(t), "producer")
 	packagesCommand(t, root, cli, true, "transpile", "-o", prodOut, producer)
 	consumer := t.TempDir()
 	writeMacroFixtureRoots(t, consumer, map[string]rootconfig.Mapping{

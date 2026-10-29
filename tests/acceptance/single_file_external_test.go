@@ -21,7 +21,7 @@ func TestSingleFileExternalRecoveryCLI(t *testing.T) {
 	cli := filepath.Join(t.TempDir(), "goxide")
 	deliveryCommand(t, root, tool, true, nil, "run", "./scripts/build.go", "-o", cli)
 	outside := t.TempDir()
-	base := t.TempDir()
+	base := formalDependencyDir(t)
 	producer := filepath.Join(base, "producer")
 	library := filepath.Join(base, "library")
 	module := func(name, replacement string) string {

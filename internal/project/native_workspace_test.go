@@ -8,7 +8,7 @@ import (
 )
 
 func TestNativeWorkspaceCopyUnknownMarker(t *testing.T) {
-	src := t.TempDir()
+	src := sourceTempDir(t)
 	dst := t.TempDir()
 	os.MkdirAll(filepath.Join(src, "notes"), 0755)
 	os.WriteFile(filepath.Join(src, "notes", LayoutMarker), []byte("not an owner marker"), 0644)

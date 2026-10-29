@@ -15,6 +15,15 @@ import (
 
 const stdFixtureImports = "[dependencies.fmt]\ngo=\"fmt\"\n[dependencies.errors]\ngo=\"errors\"\n[dependencies.reflect]\ngo=\"reflect\"\n[dependencies.math]\ngo=\"math\"\n"
 
+func formalDependencyDir(t *testing.T) string {
+	t.Helper()
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
 func writeStdFormalManifest(t *testing.T, directory, module, name string, dependencies map[string]string) {
 	t.Helper()
 	manifest := testdeps.FormalManifest(t, module, name, stdFixtureImports)

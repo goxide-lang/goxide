@@ -221,6 +221,10 @@ func (p *Plan) Execute(ctx context.Context, authorize func() error, log io.Write
 		return fail, e
 	}
 	defer os.RemoveAll(scratch)
+	scratch, e = filepath.EvalSymlinks(scratch)
+	if e != nil {
+		return fail, e
+	}
 	timeout := p.options.Config.TimeoutSeconds
 	if timeout <= 0 {
 		timeout = 120

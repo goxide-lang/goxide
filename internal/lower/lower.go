@@ -186,18 +186,23 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 			e.fail(e.tree, "Go 输出格式化失败: "+err.Error())
 			return nil, e.err
 		}
+		// Reparse the printed source to normalize positions synthesized by lowering.
+		// Formatting the original AST alone can retain noncanonical call wrapping.
 		data, err := format.Source(buf.Bytes())
 		if err != nil {
 			e.fail(e.tree, "生成的 Go 语法无效: "+err.Error())
 			return nil, e.err
 		}
-		set := gotoken.NewFileSet()
-		parsed, err := goparser.ParseFile(set, e.name, data, goparser.AllErrors|goparser.ParseComments)
-		if err != nil {
-			e.fail(e.tree, "生成的 Go 语法无效: "+err.Error())
-			return nil, e.err
+		if len(e.goFile.Imports) > 1 {
+			set := gotoken.NewFileSet()
+			parsed, err := goparser.ParseFile(set, e.name, data, goparser.ImportsOnly|goparser.AllErrors|goparser.ParseComments)
+			if err != nil {
+				e.fail(e.tree, "生成的 Go 语法无效: "+err.Error())
+				return nil, e.err
+			}
+			data = canonicalImports(parsed, set, data)
 		}
-		out[e.name] = canonicalImports(parsed, set, data)
+		out[e.name] = data
 		if options.sourceMaps != nil {
 			options.sourceMaps[e.name] = e
 		}

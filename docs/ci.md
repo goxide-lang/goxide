@@ -8,7 +8,7 @@
 | --- | --- |
 | 所有 PR、push main、手动触发 | 全树 race 一次、普通模式差异与生产预算检查、独立 vet/gofmt、文档检查 |
 | 所有 CI | 六个平台的 CLI 构建及解压运行验收，插件 Node 测试及通用 VSIX 打包；产物保留 7 天 |
-| 网站及依赖相关变更 | 网站工具回归、离线 CLI 示例/导出数据/WASM 构建、带 `goxideweb` 标签的 HTTP race/vet |
+| 网站及依赖相关变更 | 网站工具与 Node/WASI 回归、离线 CLI 示例/导出数据/WASM 构建、sandbox 浏览器及路由验收、带 `goxideweb` 标签的 HTTP race/vet |
 | CI summary | 无路径过滤，始终汇总；失败、取消或应运行却跳过都不能报告成功 |
 
 PR 在 `opened`、`synchronize`、`reopened`、`ready_for_review` 和 `converted_to_draft` 时运行；同一 PR
@@ -16,19 +16,22 @@ PR 在 `opened`、`synchronize`、`reopened`、`ready_for_review` 和 `converted
 读取精确 head 对应 run 的状态/汇总，失败才读取对应 job 日志。最终 SHA 已绿后停止
 重复本地或远端验证；本地仅做实现所需的定向检查。
 
-网站选择包含 `website/`、`cmd/`、`internal/`、`go.mod/go.sum`、`examples/`、
-`docs/rfcs/` 和 CI 本身。生成产物保持被忽略，不上传或部署。
+网站选择包含 `website/`、`cmd/`、`internal/`、`go.mod/go.sum`、`scripts/build.go`、`examples/`、
+`docs/rfcs/` 和 CI 本身；同时包含实际发布的五份指南/状态文档，以及阅读指南、文法、翻译语义、
+前端 AST、enum 表示和已确认决策六份设计文档。文件清单与 `website/docs_content.py` 对齐。
+生成网站保持被忽略，不上传或部署；浏览器诊断单独保留为 CI 产物。
 网站使用 `python3 -B website/build.py --worktree` 构建当前 checkout；CLI 示例、
-导出数据与 WASM 记录同一源码摘要，并在构建前后校验一致。网站 job 仅追加 HTTP 包的 race/vet。
+导出数据与 WASM 记录同一源码摘要，并在构建前后校验一致。网站 job 另执行托管审计、浏览器验收和 HTTP 包的 race/vet。
 
 准备任务从 `go.mod` 选择配套 Go，固定具体补丁版本和 checkout 提交，供全部检查和构建使用。
 Python 3.12，Linux runner 提供 C 编译器；网站和插件各自使用 Node 22 与对应的 `package-lock.json` 执行 `npm ci`。
 完整 Git 历史用于 catalog 快照。缓存按锁文件选取；先用仓外清单副本
 预热完整固定模块图并 `verify`，逐字节确认 `go.mod/go.sum` 未变。网站 job 随后设置 `GOPROXY=off`；
-原生检查保留 Go proxy 配置，供 P5 独立空模块缓存测试首次获取固定依赖，后续离线重跑由测试显式控制。
+原生检查保留 Go proxy 配置。P5 普通模式使用独立空模块缓存首次获取固定依赖；race 模式复用
+共享模块缓存，缺少固定依赖时仍可独立获取。两种模式都显式执行后续 offline/locked 重放。
 Go 构建缓存和宏机器码缓存分别恢复；冷 cache、离线、校验和、权限/安全夹具仍验证各自的边界。
 全树测试移除外层 `GOWORK` 以保留 workspace 发现合同；其余脚本保留自身隔离规则。
-原生 `GOMAXPROCS=4`；若增加 Node 执行 Go WASM 的入口，仅该进程设为 1。
+原生 `GOMAXPROCS=4`；Node/WASI 和浏览器验收步骤将其设为 1。
 
 宏宿主默认将机器码缓存写入 `os.UserCacheDir()/goxide/wazero`，Linux 为 `~/.cache/goxide/wazero`；
 `GOXIDE_WASM_CACHE` 可指定私有缓存根。磁盘目录按 wazero 依赖的版本和校验和隔离，依赖身份未知或
@@ -90,6 +93,8 @@ compile 和 acceptance 通过当前 race 构建的 `go test -list '^(Test|Exampl
 race 测试宿主（含进程内 CLI 与 LSP）的默认预算乘 20，以容纳插桩开销；显式毫秒级耗尽、循环、取消断言不变。
 普通测试、CLI、发布二进制和 LSP 的真实宏宿主仍使用生产预算，外层 `-race` 不会自动传播到子进程。
 生成代码的 `go test -race` 必须保留，因为它检测的是生成程序，而非编译器测试进程。
+P5 的生成程序 build/run/race/vet 只在普通模式执行；项目准备、导入检查、锁与产物稳定性、
+作者文件保护和失败原子性仍在普通与 race 两种模式执行。
 
 可删的是重复执行同一断言的流程和无调用者的测试辅助函数；不能仅按文件主题删除测试。
 例如语义诊断、生成代码运行、跨包/原生 Go 消费、CLI 交付分别验证不同边界；
@@ -137,13 +142,18 @@ WASM 准备/编译/执行，不等于纯 guest 执行时间。
 发布只选择 `goxide-*` 交付产物。CI summary 要求 native、整个 race 矩阵及其它必需作业成功，
 失败、取消或应运行却跳过均不得报告通过。
 
-## 浏览器 CI 跟踪缺口
+## 浏览器验收
 
-现有 `website/redesign-qa.mjs`、`website/catalog-qa.mjs` 均显式设置 `chromiumSandbox: true`。
-CI 尚未调用浏览器验收；接入时先在实际 runner 确认保留 sandbox 的 Chromium 可以启动，
-再运行 HTTP/真实 Worker/UI 的应用验收。
-不得修改内核或浏览器安全设置来使测试通过。这里的 WASM 构建和 HTTP 通过不代表
-浏览器 QA 通过，也不替代该验收；汇总和 PR 持续显示此缺口。
+web 作业使用 runner 已安装的 Google Chrome，记录可执行路径和版本，先以
+`chromiumSandbox: true` 启动浏览器和页面，确认实际 runner 支持 sandbox。
+通过 `CHROMIUM` 将同一可执行文件传给所有浏览器脚本；不修改内核或关闭浏览器 sandbox。
+
+构建前执行 `npm run test:proc-macro --prefix website`，核对真实 Go SDK 的 native/WASI 响应、
+Worker 终止与恢复。构建和托管审计通过后，启动仅监听 loopback 的
+`website/hosting/preview.py --port 8084 --headers`，等待清单可访问，再依次执行
+`npm test --prefix website` 和 `website/hosting/qa-routes.mjs`。
+两个页面套件覆盖真实 Worker/CLI 一致性、编辑与导航、诊断及宏恢复；路由套件检查资源和真实 404。
+服务随步骤退出清理。截图、Worker 观察和预览日志通过 `always()` 上传，失败时仍保留诊断。
 
 A03 宏/Eq 组合的来源丢失由 [PR #10](https://github.com/goxide-lang/goxide/pull/10)
 修复，具体验收见 [issue #6](https://github.com/goxide-lang/goxide/issues/6)；这不代表全部

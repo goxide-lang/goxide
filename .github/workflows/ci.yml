@@ -94,14 +94,21 @@ jobs:
               changed = []
           ci = any(p.startswith(('.github/', 'scripts/ci_')) for p in changed)
           web = not has_base or ci or any(
-              p in ('go.mod', 'go.sum') or p.startswith((
+              p in (
+                  'go.mod', 'go.sum', 'scripts/build.go',
+                  'docs/website-guide.md', 'docs/using-goxide-gen.md',
+                  'docs/procedural-macros.md', 'docs/syntax-tools.md', 'docs/mvp-gap-audit.md',
+                  'docs/design/reading-guide.md', 'docs/design/language-grammar.md',
+                  'docs/design/translation-semantics.md', 'docs/design/frontend-ast.md',
+                  'docs/design/enum-representation.md', 'docs/design/decisions.md',
+              ) or p.startswith((
                   'website/', 'cmd/', 'internal/',
                   'examples/', 'docs/rfcs/',
               )) for p in changed)
           with open(os.environ['GITHUB_OUTPUT'], 'a') as out:
               print(f'web={str(web).lower()}', file=out)
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as out:
-              print(f'Website job: {web}. Browser QA is a tracked gap: see docs/ci.md.', file=out)
+              print(f'Website job (including sandboxed browser QA): {web}.', file=out)
           PY
 
   checks:
@@ -438,8 +445,56 @@ jobs:
         run: node website/compiler_test.mjs
       - name: Browser macro loading and deadline regressions
         run: node --test website/proc-macro-host_test.mjs
+      - name: WASI SDK and Worker contracts
+        env:
+          GOMAXPROCS: '1'
+        run: npm run test:proc-macro --prefix website
+      - name: Verify the runner browser with its sandbox enabled
+        working-directory: website
+        run: |
+          export CHROMIUM="${CHROME_BIN:-$(command -v google-chrome)}"
+          test -x "$CHROMIUM"
+          printf 'Browser: %s\n' "$CHROMIUM"
+          "$CHROMIUM" --version
+          echo "CHROMIUM=$CHROMIUM" >> "$GITHUB_ENV"
+          node --input-type=module <<'JS'
+          import { chromium } from 'playwright';
+          const browser = await chromium.launch({ executablePath: process.env.CHROMIUM, headless: true, chromiumSandbox: true });
+          try {
+              const page = await browser.newPage();
+              console.log(await page.evaluate(() => navigator.userAgent));
+          } finally {
+              await browser.close();
+          }
+          JS
       - name: Build matching CLI examples, exports and WASM offline
         run: python3 -B website/build.py --worktree
+      - name: Audit website artifacts
+        run: python3 -B website/hosting/audit.py
+      - name: Sandboxed browser and route acceptance
+        env:
+          QA_URL: http://127.0.0.1:8084
+          GOMAXPROCS: '1'
+        run: |
+          python3 -B website/hosting/preview.py --port 8084 --headers > "$RUNNER_TEMP/website-preview.log" 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          python3 - <<'PY'
+          import os, time, urllib.request
+          deadline = time.monotonic() + 30
+          while time.monotonic() < deadline:
+              try:
+                  with urllib.request.urlopen(os.environ['QA_URL'] + '/examples.json', timeout=1) as response:
+                      if response.status == 200:
+                          break
+              except OSError:
+                  pass
+              time.sleep(0.5)
+          else:
+              raise SystemExit('website preview did not become ready')
+          PY
+          npm test --prefix website
+          node website/hosting/qa-routes.mjs
       - name: Embedded HTTP server race gate
         run: python3 -B scripts/ci_go_test.py web-race -mod=readonly -race -vet=off -tags=goxideweb -count=1 -timeout=10m ./cmd/goxide-web
       - name: Embedded HTTP server vet gate
@@ -452,6 +507,16 @@ jobs:
         with:
           name: go-test-web
           path: ${{ runner.temp }}/goxide-go-test-*/
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Preserve browser diagnostics
+        if: always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: website-qa
+          path: |
+            website/qa-artifacts/
+            ${{ runner.temp }}/website-preview.log
           if-no-files-found: ignore
           retention-days: 7
 

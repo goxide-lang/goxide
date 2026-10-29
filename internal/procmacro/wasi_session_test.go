@@ -252,11 +252,7 @@ func wasiSessionResponse(t *testing.T) (pm.Request, []byte, []byte) {
 
 func wasiCachedModule(t *testing.T, host *WASIHost, wasm []byte) wazero.CompiledModule {
 	t.Helper()
-	prepared, err := PrepareWASM(wasm)
-	if err != nil {
-		t.Fatal(err)
-	}
-	compiled, ok := host.compiled[sha256.Sum256(prepared)]
+	compiled, ok := host.compiled[sha256.Sum256(wasm)]
 	if !ok {
 		t.Fatal("successful compilation was not cached")
 	}

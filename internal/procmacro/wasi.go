@@ -227,15 +227,18 @@ func (session *WASISession) Run(wasm []byte, request pm.Request) (response []byt
 	if err := pm.WriteRequest(&input, request); err != nil {
 		return nil, fmt.Errorf("procedural macro request: %w", err)
 	}
-	prepared, err := PrepareWASM(wasm)
-	if err != nil {
-		return nil, err
+	if len(wasm) > MaxWASMBytes {
+		return nil, fmt.Errorf("procedural macro WASM exceeds %d bytes", MaxWASMBytes)
 	}
-	id := sha256.Sum256(prepared)
+	id := sha256.Sum256(wasm)
 	compiled, cached := host.compiled[id]
 	if cached {
 		stats.MemoryHits++
 	} else {
+		prepared, err := PrepareWASM(wasm)
+		if err != nil {
+			return nil, err
+		}
 		for host.cacheBytes+len(prepared) > MaxWASMBytes {
 			oldID := host.order[0]
 			old := host.compiled[oldID]

@@ -111,11 +111,7 @@ func TestWASIHostAlternatingArtifactsReuseCompiledCode(t *testing.T) {
 		if err != nil || !bytes.Equal(output, response.Bytes()) {
 			t.Fatalf("fresh command response changed: %v\n%s", err, output)
 		}
-		prepared, err := PrepareWASM(artifact)
-		if err != nil {
-			t.Fatal(err)
-		}
-		id := sha256.Sum256(prepared)
+		id := sha256.Sum256(artifact)
 		current, ok := host.compiled[id]
 		if !ok {
 			t.Fatal("successful artifact was not retained in the compiled cache")

@@ -276,12 +276,14 @@ func main(){fmt::Println(h::Read(h::Get()))}
 		if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module a06.example/missing\ngo 1.27\n"), 0600); err != nil {
 			t.Fatal(err)
 		}
-		writeSingleExternalRoots(t, dir)
+		packagesWrite(t, dir, "goxide.roots.toml", `[roots.std]
+module = "github.com/goxide-lang/std"
+`)
 		packagesWrite(t, dir, "app.gox", "package main; use std; use std::PartialEq;\nuse std::sum as s;\nfunc main(){var v s::Option[int];_=v}\n")
 		before := singleExternalSnapshot(t, dir)
 		output := filepath.Join(t.TempDir(), "bad")
 		msg := deliveryCommand(t, outside, cli, false, nil, "build", "--runtime", root, "--go", tool, "-o", output, filepath.Join(dir, "app.gox"))
-		singleExternalContains(t, msg, `dependency root "std" has no packages in selected source "github.com/goxide-lang/std"`)
+		singleExternalContains(t, msg, `native source module github.com/goxide-lang/std is not in the selected Go module graph`)
 		if _, err := os.Stat(output); !os.IsNotExist(err) {
 			t.Fatalf("failed dependency selection wrote output: %v", err)
 		}

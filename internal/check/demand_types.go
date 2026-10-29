@@ -203,17 +203,6 @@ func copySubstitution(sub map[*types.TypeParam]types.Type) map[*types.TypeParam]
 	return copy
 }
 
-func usesSubstitution(t types.Type, sub map[*types.TypeParam]types.Type, seen map[types.Type]bool) bool {
-	if t == nil || seen[t] {
-		return false
-	}
-	seen[t] = true
-	if parameter, ok := t.(*types.TypeParam); ok {
-		return sub[parameter] != nil && sub[parameter] != parameter
-	}
-	return typeChildren(t, func(child types.Type) bool { return usesSubstitution(child, sub, seen) })
-}
-
 func containsTypeParameter(t types.Type) bool {
 	seen := map[types.Type]bool{}
 	var visit func(types.Type) bool
@@ -301,62 +290,84 @@ func bodyInfo(source *Info, sub map[*types.TypeParam]types.Type, constants map[*
 }
 
 func bodyInfoPermissions(source *Info, sub map[*types.TypeParam]types.Type, constants map[*ConstParam]ConstValue, sources map[*types.TypeParam]*permission) *Info {
+	return copyBodyInfo(source, sub, constants, sources, nil)
+}
+
+func copyBodyInfo(source *Info, sub map[*types.TypeParam]types.Type, constants map[*ConstParam]ConstValue, sources map[*types.TypeParam]*permission, selection *bodyInfoSelection) *Info {
 	result := *source
 	r := newBodyTypes(source, sub, constants)
-	result.ConstValues = make(map[ast.Expr]ConstValue, len(source.ConstValues))
-	for node, value := range source.ConstValues {
+	result.ConstValues = bodyNodeMap(source.ConstValues, selection)
+	for node, value := range result.ConstValues {
 		result.ConstValues[node] = resolveConst(value, constants)
 	}
-	result.GenericBounds = make(map[*ast.FuncDecl][]*TraitBound, len(source.GenericBounds))
-	for node, bounds := range source.GenericBounds {
-		for _, bound := range bounds {
+	result.GenericBounds = bodyNodeMap(source.GenericBounds, selection)
+	for node, bounds := range result.GenericBounds {
+		result.GenericBounds[node] = make([]*TraitBound, len(bounds))
+		for index, bound := range bounds {
 			c := &checker{out: source}
-			result.GenericBounds[node] = append(result.GenericBounds[node], c.substituteBoundApplication(bound, sub, constants, sources))
+			result.GenericBounds[node][index] = c.substituteBoundApplication(bound, sub, constants, sources)
 		}
 	}
-	result.EnumValid = make(map[*ast.CallExpr]*Instance, len(source.EnumValid))
-	for node, instance := range source.EnumValid {
+	result.EnumValid = bodyNodeMap(source.EnumValid, selection)
+	for node, instance := range result.EnumValid {
 		result.EnumValid[node] = r.enum(instance)
 	}
-	result.EnumAssertions = make(map[*ast.CallExpr]types.Type, len(source.EnumAssertions))
-	for node, typ := range source.EnumAssertions {
+	result.EnumAssertions = bodyNodeMap(source.EnumAssertions, selection)
+	for node, typ := range result.EnumAssertions {
 		result.EnumAssertions[node] = r.typ(typ)
 	}
-	result.Types = make(map[ast.Expr]types.Type, len(source.Types))
-	for node, typ := range source.Types {
+	result.Types = bodyNodeMap(source.Types, selection)
+	for node, typ := range result.Types {
 		result.Types[node] = r.typ(typ)
 	}
-	result.Symbols = make(map[*resolve.Symbol]types.Type, len(source.Symbols))
-	for symbol, typ := range source.Symbols {
-		result.Symbols[symbol] = r.typ(typ)
-	}
-	result.TypeOverrides = make(map[ast.Type]types.Type, len(source.TypeOverrides)+len(source.typeNodes))
-	for node, typ := range source.TypeOverrides {
-		result.TypeOverrides[node] = r.typ(typ)
-	}
-	for node, typ := range source.typeNodes {
-		if r.uses(typ, map[types.Type]bool{}) {
-			result.TypeOverrides[node] = r.typ(typ)
+	if selection == nil {
+		result.Symbols = cloneMap(source.Symbols)
+	} else {
+		result.Symbols = make(map[*resolve.Symbol]types.Type, len(selection.symbols))
+		for symbol := range selection.symbols {
+			if typ := source.Symbols[symbol]; typ != nil {
+				result.Symbols[symbol] = typ
+			}
 		}
 	}
-	result.GoMembers = cloneMap(source.GoMembers)
-	result.Members = cloneMap(source.Members)
-	result.TraitViews = cloneMap(source.TraitViews)
-	result.FunctionInstances = cloneMap(source.FunctionInstances)
-	result.Matches = make(map[*ast.MatchExpr]*Match, len(source.Matches))
-	for node, match := range source.Matches {
+	for symbol, typ := range result.Symbols {
+		result.Symbols[symbol] = r.typ(typ)
+	}
+	result.TypeOverrides = bodyNodeMap(source.TypeOverrides, selection)
+	for node, typ := range result.TypeOverrides {
+		result.TypeOverrides[node] = r.typ(typ)
+	}
+	if selection == nil {
+		for node, typ := range source.typeNodes {
+			if r.uses(typ, map[types.Type]bool{}) {
+				result.TypeOverrides[node] = r.typ(typ)
+			}
+		}
+	} else {
+		for _, node := range selection.nodes {
+			if typ, ok := node.(ast.Type); ok && r.uses(source.typeNodes[typ], map[types.Type]bool{}) {
+				result.TypeOverrides[typ] = r.typ(source.typeNodes[typ])
+			}
+		}
+	}
+	result.GoMembers = bodyNodeMap(source.GoMembers, selection)
+	result.Members = bodyNodeMap(source.Members, selection)
+	result.TraitViews = bodyNodeMap(source.TraitViews, selection)
+	result.FunctionInstances = bodyNodeMap(source.FunctionInstances, selection)
+	result.Matches = bodyNodeMap(source.Matches, selection)
+	for node, match := range result.Matches {
 		copy := *match
 		copy.Type, copy.Enum = r.typ(copy.Type), r.enum(copy.Enum)
 		result.Matches[node] = &copy
 	}
-	result.Constructors = make(map[ast.Expr]*Constructor, len(source.Constructors))
-	for node, constructor := range source.Constructors {
+	result.Constructors = bodyNodeMap(source.Constructors, selection)
+	for node, constructor := range result.Constructors {
 		copy := *constructor
 		copy.Enum = r.enum(copy.Enum)
 		result.Constructors[node] = &copy
 	}
-	result.Tries = make(map[*ast.TryExpr]*Try, len(source.Tries))
-	for node, attempt := range source.Tries {
+	result.Tries = bodyNodeMap(source.Tries, selection)
+	for node, attempt := range result.Tries {
 		copy := *attempt
 		copy.Input, copy.Output = r.enum(copy.Input), r.enum(copy.Output)
 		copy.Value, copy.Error = r.typ(copy.Value), r.typ(copy.Error)
@@ -367,13 +378,33 @@ func bodyInfoPermissions(source *Info, sub map[*types.TypeParam]types.Type, cons
 		}
 		result.Tries[node] = &copy
 	}
-	result.GoResults = make(map[*ast.CallExpr]*GoResult, len(source.GoResults))
-	for node, conversion := range source.GoResults {
+	result.GoResults = bodyNodeMap(source.GoResults, selection)
+	for node, conversion := range result.GoResults {
 		copy := *conversion
 		copy.Value, copy.Error, copy.Payload, copy.Result = r.typ(copy.Value), r.typ(copy.Error), r.typ(copy.Payload), r.typ(copy.Result)
 		result.GoResults[node] = &copy
 	}
 	return &result
+}
+
+func bodyNodeMap[K interface {
+	ast.Node
+	comparable
+}, V any](source map[K]V, selection *bodyInfoSelection) map[K]V {
+	if selection == nil {
+		return cloneMap(source)
+	}
+	result := make(map[K]V, min(len(source), len(selection.nodes)))
+	if len(source) != 0 {
+		for _, node := range selection.nodes {
+			if key, ok := node.(K); ok {
+				if value, ok := source[key]; ok {
+					result[key] = value
+				}
+			}
+		}
+	}
+	return result
 }
 
 func cloneMap[K comparable, V any](source map[K]V) map[K]V {

@@ -323,3 +323,46 @@ func run() { Accept[Box[int]](Box[int]{}) }
 	}
 	t.Fatalf("missing cyclic proof rejection: %v", diagnostics)
 }
+
+func TestDemandBodyRetainsReferencedGlobalDeclarations(t *testing.T) {
+	info := demandProgram(t, `
+type hidden struct { value int }
+type Visible = hidden
+var seed = Visible{value: 7}
+const offset int = 2
+trait Source { type Item; func get(self &Self) Self::Item }
+impl Source for int { type Item = Visible; func get(self &Self) Self::Item { return seed } }
+func Read[T Source](value &T) T::Source::Item { return value.get() }
+func run() int { value := 3; result := Read[int](&value); return result.value + seed.value + offset }
+func unrelated() int { local := 99; return local }
+`)
+	var run, read *check.BodyInstance
+	for _, body := range info.Demands.Roots {
+		if body.Decl != nil && body.Decl.Name.Name == "run" {
+			run = body
+		}
+	}
+	for _, instance := range info.Demands.Functions {
+		if instance.Decl.Name.Name == "Read" {
+			read = instance.Body
+		}
+	}
+	if run == nil || read == nil {
+		t.Fatal("missing ordinary or specialized body")
+	}
+	for symbol, typ := range info.Symbols {
+		switch symbol.Name.Name {
+		case "seed", "offset", "Read":
+			if !types.Identical(run.Info.Symbols[symbol], typ) {
+				t.Fatalf("ordinary body lost referenced global %s", symbol.Name.Name)
+			}
+		case "hidden", "Visible":
+			if !types.Identical(read.Info.Symbols[symbol], typ) {
+				t.Fatalf("specialized body lost inferred declaration %s", symbol.Name.Name)
+			}
+		}
+	}
+	if len(run.Info.GenericBounds[read.Decl]) != 1 {
+		t.Fatal("ordinary caller lost its callee's protocol callback declaration")
+	}
+}

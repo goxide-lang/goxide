@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/goxide-lang/goxide/internal/resolve"
 	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
@@ -89,6 +90,7 @@ type demandCollector struct {
 	stack        []*BodyInstance
 	count        int
 	failed       bool
+	typeSymbols  map[types.Type][]*resolve.Symbol
 }
 
 func (d *demandCollector) enter(file string) {
@@ -107,6 +109,15 @@ func (d *demandCollector) enter(file string) {
 }
 
 func (d *demandCollector) index() {
+	d.typeSymbols = map[types.Type][]*resolve.Symbol{}
+	for symbol, typ := range d.c.out.Symbols {
+		switch symbol.Kind {
+		case resolve.Type, resolve.Enum, resolve.Trait, resolve.TypeParam, resolve.Import:
+			if key := bodyTypeIdentity(typ); key != nil {
+				d.typeSymbols[key] = append(d.typeSymbols[key], symbol)
+			}
+		}
+	}
 	var names []string
 	for name := range d.c.out.Resolve.Files {
 		names = append(names, name)
@@ -370,7 +381,7 @@ func (d *demandCollector) addBody(body *BodyInstance) {
 	if body.Case != nil {
 		source = body.Case.Info
 	}
-	body.Info = bodyInfoPermissions(source, body.Substitution, body.ConstSubstitution, body.permissionSubstitution)
+	body.Info = copyBodyInfo(source, body.Substitution, body.ConstSubstitution, body.permissionSubstitution, d.selectBodyInfo(source, body))
 	body.Info.Demands = d.plan
 	d.stack = append(d.stack, body)
 	defer func() { d.stack = d.stack[:len(d.stack)-1] }()

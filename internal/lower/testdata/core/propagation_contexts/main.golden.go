@@ -1,7 +1,7 @@
 package main
 
-import sum "github.com/goxide-lang/std/sum"
 import fmt "fmt"
+import sum "github.com/goxide-lang/std/sum"
 
 type Gate interface {
 	isGate()
@@ -28,16 +28,15 @@ func load(ok bool, trace *[]string) sum.Result[int, string] {
 }
 
 func truth(trace *[]string) sum.Result[bool, string] {
-	var gxTry1 sum.Result[int, string] = load(false, trace)
-	var gxOk2 int
+	gxTry1 := load(false, trace)
 	switch sum.TagResult(gxTry1) {
 	case 1:
-		gxOk2 = sum.ValueOk(gxTry1)
 	case 2:
 		return sum.NewErr[bool, string](sum.ValueErr(gxTry1))
 	default:
 		panic("goxide: invalid Result at ?")
 	}
+	gxOk2 := sum.ValueOk(gxTry1)
 
 	n := gxOk2
 	return sum.NewOk[bool, string](n > 0)
@@ -46,16 +45,15 @@ func truth(trace *[]string) sum.Result[bool, string] {
 func shortCircuit(left bool, trace *[]string) sum.Result[string, string] {
 	var gxBool3 bool = left
 	if gxBool3 {
-		var gxTry4 sum.Result[bool, string] = truth(trace)
-		var gxOk5 bool
+		gxTry4 := truth(trace)
 		switch sum.TagResult(gxTry4) {
 		case 1:
-			gxOk5 = sum.ValueOk(gxTry4)
 		case 2:
 			return sum.NewErr[string, string](sum.ValueErr(gxTry4))
 		default:
 			panic("goxide: invalid Result at ?")
 		}
+		gxOk5 := sum.ValueOk(gxTry4)
 		gxBool3 = gxOk5
 	}
 
@@ -67,16 +65,15 @@ func closure(trace *[]string) sum.Result[string, string] {
 	inner := func() sum.Result[int, string] {
 		defer func() { *trace = append(*trace, "inner-cleanup") }()
 		{
-			var gxTry6 sum.Result[int, string] = load(false, trace)
-			var gxOk7 int
+			gxTry6 := load(false, trace)
 			switch sum.TagResult(gxTry6) {
 			case 1:
-				gxOk7 = sum.ValueOk(gxTry6)
 			case 2:
 				return sum.NewErr[int, string](sum.ValueErr(gxTry6))
 			default:
 				panic("goxide: invalid Result at ?")
 			}
+			gxOk7 := sum.ValueOk(gxTry6)
 
 			return sum.NewOk[int, string](gxOk7)
 		}
@@ -91,16 +88,15 @@ func deferred(ok bool, trace *[]string) sum.Result[string, string] {
 	defer func() { *trace = append(*trace, "cleanup") }()
 	{
 		var gxValue8 func(int) = func(n int) { *trace = append(*trace, "deferred") }
-		var gxTry9 sum.Result[int, string] = load(ok, trace)
-		var gxOk10 int
+		gxTry9 := load(ok, trace)
 		switch sum.TagResult(gxTry9) {
 		case 1:
-			gxOk10 = sum.ValueOk(gxTry9)
 		case 2:
 			return sum.NewErr[string, string](sum.ValueErr(gxTry9))
 		default:
 			panic("goxide: invalid Result at ?")
 		}
+		gxOk10 := sum.ValueOk(gxTry9)
 
 		defer gxValue8(gxOk10)
 	}
@@ -122,32 +118,30 @@ func guarded(ok bool, trace *[]string) sum.Result[string, string] {
 			gxPayload13 := gxVar12.Value
 			if gxPayload13 ==
 				0 {
-				var gxTry16 sum.Result[bool, string] = truth(trace)
-				var gxOk17 bool
+				gxTry16 := truth(trace)
 				switch sum.TagResult(gxTry16) {
 				case 1:
-					gxOk17 = sum.ValueOk(gxTry16)
 				case 2:
 					return sum.NewErr[string, string](sum.ValueErr(gxTry16))
 				default:
 					panic("goxide: invalid Result at ?")
 				}
+				gxOk17 := sum.ValueOk(gxTry16)
 				if gxOk17 {
 
 					return sum.NewOk[string, string]("incorrect")
 				} else {
 					{
 						n := gxPayload13
-						var gxTry14 sum.Result[int, string] = load(ok, trace)
-						var gxOk15 int
+						gxTry14 := load(ok, trace)
 						switch sum.TagResult(gxTry14) {
 						case 1:
-							gxOk15 = sum.ValueOk(gxTry14)
 						case 2:
 							return sum.NewErr[string, string](sum.ValueErr(gxTry14))
 						default:
 							panic("goxide: invalid Result at ?")
 						}
+						gxOk15 := sum.ValueOk(gxTry14)
 						if gxOk15 ==
 							n+3 {
 							return sum.NewOk[string, string]("guard")
@@ -159,16 +153,15 @@ func guarded(ok bool, trace *[]string) sum.Result[string, string] {
 			} else {
 				{
 					n := gxPayload13
-					var gxTry14 sum.Result[int, string] = load(ok, trace)
-					var gxOk15 int
+					gxTry14 := load(ok, trace)
 					switch sum.TagResult(gxTry14) {
 					case 1:
-						gxOk15 = sum.ValueOk(gxTry14)
 					case 2:
 						return sum.NewErr[string, string](sum.ValueErr(gxTry14))
 					default:
 						panic("goxide: invalid Result at ?")
 					}
+					gxOk15 := sum.ValueOk(gxTry14)
 					if gxOk15 ==
 						n+3 {
 						return sum.NewOk[string, string]("guard")
@@ -198,16 +191,15 @@ func optional(ok bool) sum.Option[string] {
 }
 
 func length(ok bool) sum.Option[int] {
-	var gxTry18 sum.Option[string] = optional(ok)
-	var gxOk19 string
+	gxTry18 := optional(ok)
 	switch sum.TagOption(gxTry18) {
 	case 1:
-		gxOk19 = sum.ValueSome(gxTry18)
 	case 0:
 		return sum.None[int]()
 	default:
 		panic("goxide: invalid Option at ?")
 	}
+	gxOk19 := sum.ValueSome(gxTry18)
 
 	s := gxOk19
 	return sum.NewSome[int](len(s))

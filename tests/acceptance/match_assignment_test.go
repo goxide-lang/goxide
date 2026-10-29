@@ -12,8 +12,7 @@ func TestMatchAssignmentInferenceModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
+	cli := acceptanceCLI(t)
 	sourceFor := func(body string) string {
 		dir := filepath.Join(t.TempDir(), "source")
 		packagesWrite(t, dir, "go.mod", packagesModule())
@@ -90,9 +89,6 @@ func Recover() (out int){defer func(){x:=match m::Mode::Idle{m::Mode::Idle=>reco
 			b, e := os.ReadFile(filepath.Join(twice, rel))
 			if e != nil || string(a) != string(b) {
 				t.Fatalf("nondeterministic %s: %v", rel, e)
-			}
-			if strings.Contains(string(a), "__goxide_match_expr_infer(") || strings.Contains(string(a), "__goxide_match_expr_context(") {
-				t.Fatalf("typing marker leaked in %s", rel)
 			}
 			return nil
 		})

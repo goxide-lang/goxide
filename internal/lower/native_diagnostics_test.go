@@ -3,7 +3,7 @@ package lower_test
 import (
 	"testing"
 
-	"github.com/hxsf/goxide/internal/lower"
+	"github.com/goxide-lang/goxide/internal/lower"
 )
 
 func TestNativeDeclarationDiagnosticUsesSourceLine(t *testing.T) {

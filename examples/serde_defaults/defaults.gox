@@ -1,13 +1,14 @@
 package main
+use std;
 
-impl Default for Settings {
-    func default() Settings {
+impl std::Default for Settings {
+    func Default() Settings {
         defaultTrace += "S"
         return Settings{Port: 8080}
     }
 }
-impl Default for Token {
-    func default() Token {
+impl std::Default for Token {
+    func Default() Token {
         defaultTrace += "T"
         return Token{Value: "private"}
     }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish the complete set of native archives after the release jobs pass."""
+"""Publish the complete CLI and editor artifacts after the release jobs pass."""
 import hashlib
 import json
 import os
@@ -11,8 +11,9 @@ commit = os.environ['RELEASE_COMMIT']
 go = os.environ['RELEASE_GO']
 prerelease = os.environ['RELEASE_PRERELEASE'] == 'true'
 dist = Path('release-dist')
-targets = ['darwin_amd64', 'darwin_arm64', 'linux_amd64', 'linux_arm64', 'windows_amd64']
+targets = ['darwin_amd64', 'darwin_arm64', 'linux_amd64', 'linux_arm64', 'windows_amd64', 'windows_arm64']
 names = [f'goxide_{tag}_{target}' + ('.zip' if target.startswith('windows') else '.tar.gz') for target in targets]
+names.append(f'goxide_{tag}.vsix')
 assert sorted(p.name for p in dist.iterdir()) == sorted(names), 'incomplete or unexpected release assets'
 (dist / 'checksums.txt').write_text(''.join(
     f'{hashlib.sha256((dist / name).read_bytes()).hexdigest()}  {name}\n' for name in sorted(names)))
@@ -23,10 +24,13 @@ notes.write_text(
        '即使版本只增加 patch 或 minor。\n\n' if prerelease else '')
     + f'- 源码提交：`{commit}`\n'
     + f'- 配套 Go：**`{go}`，必须完全匹配，包括补丁号**；Go 工具链需单独安装。\n'
-    + '- 平台：macOS / Linux amd64、arm64；Windows amd64。\n'
+    + '- 平台：macOS / Linux / Windows amd64、arm64。\n'
     + '- 解压对应平台归档，将 `goxide`（Windows 为 `goxide.exe`）放入 PATH，用 `goxide --version` 检查。\n'
-    + '- `goxide test` 使用 race detector，另需该平台的 C 编译器。\n'
-    + '- 每个归档均通过原生 runner 上的解压、版本、生成、运行、构建和项目测试；SHA-256 见 `checksums.txt`。\n\n'
+    + f'- VS Code：通过 **Extensions: Install from VSIX** 安装通用扩展 `goxide_{tag}.vsix`。\n'
+    + '- 扩展不内置 Goxide、Go、gopls 或 Delve。Go 后端能力按需安装官方 `gopls`；调试另需官方 `dlv`，并配置相应路径或 PATH。\n'
+    + '- `goxide test` 使用 race detector，另需该平台的 C 编译器；Go 不支持 Windows arm64 的 race detector，因此该目标暂不能使用 `goxide test`。\n'
+    + '- 每个 CLI 归档均通过原生 runner 上的解压、版本、生成、运行和构建；Windows arm64 实际执行生成 Go 的 `TestDescribe`（不加 `-race`），其它平台执行 CLI race 测试。\n'
+    + '- 六个平台归档和通用 VSIX 的 SHA-256 均见 `checksums.txt`。\n\n'
     + '[快速开始](https://goxide-lang.github.io/learn/) · [语言设计](https://goxide-lang.github.io/design/)\n', encoding='utf-8')
 view = subprocess.run(['gh', 'release', 'view', tag, '--json', 'isDraft'], capture_output=True, text=True)
 if view.returncode == 0:

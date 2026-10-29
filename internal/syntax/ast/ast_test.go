@@ -3,7 +3,7 @@ package ast_test
 import (
 	"testing"
 
-	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 func TestWalkVisitsSharedNodesOnce(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/config"
 )
 
 func TestGoChecksUseExplicitTargetSizes(t *testing.T) {

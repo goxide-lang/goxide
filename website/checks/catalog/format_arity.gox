@@ -1,2 +1,3 @@
 package main
-func main() { println!("{} {}", 1) }
+use std;
+func main() { std::println!("{} {}", 1) }

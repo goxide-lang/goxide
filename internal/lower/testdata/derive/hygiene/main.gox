@@ -1,0 +1,18 @@
+package main
+use std;
+use std::PartialEq;
+use fmt;
+type User struct { ID int }
+pub enum Nested[T] { Carry(T) }
+pub enum E { Variant, Integer(Nested[int]), Named(Nested[User]) }
+var visits int
+impl std::PartialEq for E {
+    func equals(self Self, PARAM Self) RESULT { std::enum_assert!(self); std::enum_assert!(PARAM); _ = PARAM; visits++; return true }
+}
+func rejects(f func()) (result bool) { defer func() { result = recover() != nil }(); f(); return false }
+func main() {
+    valid := std::PartialEq::equals(E::Variant, E::Variant)
+    var invalid E
+    rejected := rejects(func() { _ = std::PartialEq::equals(E::Variant, invalid) })
+    fmt::Println(valid, rejected, visits)
+}

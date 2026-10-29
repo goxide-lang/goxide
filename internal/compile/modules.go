@@ -2,6 +2,7 @@ package compile
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,15 +10,24 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"github.com/hxsf/goxide/internal/project"
+	"github.com/goxide-lang/goxide/internal/project"
 )
 
 // Each generated module gets the same Go-selected graph. Relative replacements
 // work both in the temporary tree and after PublishBundle moves its contents.
-func prepareModules(graph *project.Graph, generated map[string]string) error {
+func prepareModules(ctx context.Context, graph *project.Graph, generated map[string]string) error {
+	macroModules := map[string]bool{}
+	for _, edge := range graph.ProcEdges {
+		macroModules[edge.Plan.Root.Module] = true
+	}
 	for _, node := range graph.Nodes {
 		root := generated[node.Module]
 		edits := []string{"mod", "edit"}
+		for _, required := range node.Mod.Require {
+			if macroModules[required.Path] {
+				edits = append(edits, "-droprequire="+required.Path)
+			}
+		}
 		for _, replacement := range node.Mod.Replace {
 			old := replacement.Old.Path
 			if replacement.Old.Version != "" {
@@ -56,20 +66,24 @@ func prepareModules(graph *project.Graph, generated map[string]string) error {
 			edits = append(edits, "-replace="+module+"="+filepath.ToSlash(relative))
 		}
 		if len(edits) > 2 {
-			if _, err := goCommand(graph, root, edits...); err != nil {
+			if _, err := goCommand(ctx, graph, root, edits...); err != nil {
 				return err
 			}
 		}
 	}
 	for _, node := range graph.Nodes {
 		root := generated[node.Module]
+		planID := graph.DependencyPlanID
+		if planID == "" {
+			planID = graph.PlanID
+		}
 		key := project.Digest(struct {
 			Module   string
 			Manifest project.Manifest
 			Mod      string
 			Sources  map[string]project.Dependency
 			Plan     string
-		}{node.Module, node.Manifest, string(node.ModBytes), node.Sources, graph.PlanID})
+		}{node.Module, node.Manifest, string(node.ModBytes), node.Sources, planID})
 		sumPath := filepath.Join(root, "go.sum")
 		if _, err := os.Stat(sumPath); err == nil {
 			if err := os.Chmod(sumPath, 0o644); err != nil {
@@ -89,10 +103,10 @@ func prepareModules(graph *project.Graph, generated map[string]string) error {
 		} else if graph.Locked {
 			return fmt.Errorf("--locked: module configuration absent from lock: %s", node.Module)
 		}
-		if _, err := goCommand(graph, root, "mod", "download", "all"); err != nil {
+		if _, err := goCommand(ctx, graph, root, "mod", "download", "all"); err != nil {
 			return err
 		}
-		data, err := goCommand(graph, root, "list", "-mod=readonly", "-m", "-json", "all")
+		data, err := goCommand(ctx, graph, root, "list", "-mod=readonly", "-m", "-json", "all")
 		if err != nil {
 			return err
 		}
@@ -148,8 +162,8 @@ func prepareModules(graph *project.Graph, generated map[string]string) error {
 	return nil
 }
 
-func goCommand(graph *project.Graph, root string, args ...string) ([]byte, error) {
-	command := exec.Command(graph.Tool, args...)
+func goCommand(ctx context.Context, graph *project.Graph, root string, args ...string) ([]byte, error) {
+	command := exec.CommandContext(ctx, graph.Tool, args...)
 	command.Dir = root
 	command.Env = project.GoEnv(graph.Offline, graph.Environment)
 	var stderr bytes.Buffer

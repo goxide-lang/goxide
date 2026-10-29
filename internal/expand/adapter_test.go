@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/parser"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/parser"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 func TestAdapterTypeSlots(t *testing.T) {
@@ -182,25 +182,58 @@ outer!(type Local int)
 }
 
 func TestAdapterGenericSlots(t *testing.T) {
-	for _, test := range []struct {
-		name, matcher, template, input string
-		valid                          bool
-	}{
-		{"single type", `$T:type`, `Box[$T]`, `[]int`, true},
-		{"single index expression", `$i:expr`, `values[$i]`, `offset + 1`, true},
-		{"single unresolved identifier", `$i:ident`, `values[$i]`, `offset`, true},
-		{"multiple types", `$A:type, $B:type`, `Pair[$A, $B]`, `[]int, map[string]int`, true},
-		{"multiple expressions", `$A:expr, $B:expr`, `Pair[$A, $B]`, `int, string`, false},
-		{"multiple identifiers", `$A:ident, $B:ident`, `Pair[$A, $B]`, `int, string`, false},
+	// Argument count cannot distinguish type slots from mixed type/const slots.
+	// TestMacroGenericTypeCaptureCategories rejects these captures after lookup.
+	for _, test := range []struct{ name, matcher, template, input string }{
+		{"single type", `$T:type`, `Box[$T]`, `[]int`},
+		{"single index expression", `$i:expr`, `values[$i]`, `offset + 1`},
+		{"single unresolved identifier", `$i:ident`, `values[$i]`, `offset`},
+		{"multiple types", `$A:type, $B:type`, `Pair[$A, $B]`, `[]int, map[string]int`},
+		{"multiple expressions", `$A:expr, $B:expr`, `Pair[$A, $B]`, `int, string`},
+		{"multiple identifiers", `$A:ident, $B:ident`, `Pair[$A, $B]`, `int, string`},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := adapterExpand(t, fmt.Sprintf("macro_rules! generic { (%s) => { %s }; }\nvar _ = generic!(%s)\n", test.matcher, test.template, test.input))
-			if test.valid {
-				if err != nil {
-					t.Fatal(err)
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestAdapterCapturedPathArguments(t *testing.T) {
+	for _, test := range []struct{ kind, input string }{
+		{"expr", "Count + 1"}, {"ident", "Count"}, {"tt", "Count"}, {"type", "[]int"},
+	} {
+		t.Run(test.kind, func(t *testing.T) {
+			result, err := adapterExpand(t, fmt.Sprintf("macro_rules! generic { ($value:%s) => { Ops[$value]::make }; }\nvar _ = generic!(%s)\n", test.kind, test.input))
+			if err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			ast.Walk(result.Files[0], func(node ast.Node) bool {
+				path, ok := node.(*ast.PathExpr)
+				if !ok || len(path.Path.Segments) != 2 || path.Path.Segments[0].Name.Name != "Ops" {
+					return true
 				}
-			} else {
-				adapterCategoryError(t, err)
+				argument := path.Path.Segments[0].Args.Args[0]
+				captured := ast.Node(argument.Value)
+				if test.kind == "type" {
+					if argument.Type == nil || argument.Value != nil {
+						t.Fatalf("type argument = %#v", argument)
+					}
+					captured = argument.Type
+				} else if argument.Type != nil || argument.Value == nil {
+					t.Fatalf("value argument = %#v", argument)
+				}
+				if got := result.Captures[captured].Kind; got != test.kind {
+					t.Fatalf("capture kind = %q, want %q", got, test.kind)
+				}
+				found = true
+				return false
+			})
+			if !found {
+				t.Fatal("generic path argument missing")
 			}
 		})
 	}

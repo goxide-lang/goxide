@@ -11,9 +11,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/buildscript"
-	"github.com/hxsf/goxide/internal/project"
-	"github.com/hxsf/goxide/internal/scripttrust"
+	"github.com/goxide-lang/goxide/internal/buildscript"
+	"github.com/goxide-lang/goxide/internal/project"
+	"github.com/goxide-lang/goxide/internal/scripttrust"
 )
 
 type scriptPlans struct {

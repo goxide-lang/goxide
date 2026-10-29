@@ -3,7 +3,7 @@ package check
 import (
 	"go/types"
 
-	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 func (p *permissionChecker) adjustedReceiver(node ast.Expr, q *permission, address, deref bool, mode RefMode) *permission {
@@ -41,7 +41,7 @@ func (p *permissionChecker) adjustedReceiver(node ast.Expr, q *permission, addre
 func (p *permissionChecker) traitView(node ast.Expr, view *TraitView) *permission {
 	got := p.rawExpr(node, nil)
 	got = p.adjustedReceiver(node, got, view.Address, view.Deref, view.Capture)
-	want := p.fromGo(view.Impl.Target)
+	want := p.c.implHeadPermissions(view.Impl)[0]
 	if view.Capture != ValueRef {
 		want = &permission{typ: types.NewPointer(want.typ), ref: view.Capture, elem: want}
 	}
@@ -51,6 +51,7 @@ func (p *permissionChecker) traitView(node ast.Expr, view *TraitView) *permissio
 	q.fields = map[string]*permission{"target": got}
 	oldFile, oldPkg, oldImpl, oldTrait, oldSelf := p.c.file, p.c.pkg, p.c.currentImpl, p.c.currentTrait, p.c.currentSelf
 	p.c.enterImpl(view.Impl)
+	q.args = append(q.args, p.c.implHeadPermissions(view.Impl)[1:]...)
 	for _, a := range view.Impl.Trait.Associated {
 		q.args = append(q.args, p.implAssociated(view.Impl, a.Name, nil))
 	}
@@ -60,7 +61,7 @@ func (p *permissionChecker) traitView(node ast.Expr, view *TraitView) *permissio
 
 func (p *permissionChecker) traitMember(node ast.Expr, selection *MemberSelection) *permission {
 	m := selection.Member
-	if m.Native != nil && m.Decl == nil {
+	if m.Native != nil {
 		return p.nativeMethodExpression(node, m.Native, selection.Signature)
 	}
 	oldFile, oldPkg, oldImpl, oldTrait, oldSelf := p.c.file, p.c.pkg, p.c.currentImpl, p.c.currentTrait, p.c.currentSelf
@@ -71,7 +72,7 @@ func (p *permissionChecker) traitMember(node ast.Expr, selection *MemberSelectio
 	if selection.Receiver != nil {
 		actual = p.expr(selection.Receiver, nil)
 	}
-	if selection.Impl != nil && m.Native == nil {
+	if selection.Impl != nil {
 		p.c.enterImpl(selection.Impl)
 	} else {
 		p.c.currentImpl = nil
@@ -80,9 +81,7 @@ func (p *permissionChecker) traitMember(node ast.Expr, selection *MemberSelectio
 			p.c.currentSelf = m.Trait.Self
 			p.c.pkg = m.Trait.Type.Obj().Pkg()
 		}
-		if selection.Bound != nil {
-			p.c.currentSelf = selection.Bound.Param
-		}
+
 		if file := p.c.out.Resolve.Files[m.File]; file != nil {
 			p.c.file = file
 		}
@@ -96,20 +95,41 @@ func (p *permissionChecker) traitMember(node ast.Expr, selection *MemberSelectio
 	if m.Trait != nil {
 		sub := map[*types.TypeParam]*permission{}
 		if selection.Impl != nil {
-			sub[m.Trait.Self] = p.fromGo(selection.Impl.Target)
+			head := p.c.implHeadPermissions(selection.Impl)
+			sub[m.Trait.Self] = head[0]
+			for index, parameter := range m.Trait.TypeParams {
+				if index+1 < len(head) {
+					sub[parameter] = head[index+1]
+				}
+			}
 			for _, a := range m.Trait.Associated {
 				sub[a.Param] = p.implAssociated(selection.Impl, a.Name, nil)
 			}
 		}
 		if selection.Bound != nil {
-			sub[m.Trait.Self] = p.fromGo(selection.Bound.Param)
+			head := p.c.boundHeadPermissions(selection.Bound)
+			sub[m.Trait.Self] = head[0]
+			for index, parameter := range m.Trait.TypeParams {
+				if index+1 < len(head) {
+					sub[parameter] = head[index+1]
+				}
+			}
 			for _, a := range m.Trait.Associated {
 				sub[a.Param] = p.boundAssociated(selection.Bound, a.Name, nil)
 			}
 		}
 		if selection.Impl == nil && selection.Bound == nil && actual != nil {
 			if named, ok := types.Unalias(actual.typ).(*types.Named); ok {
-				for i, a := range m.Trait.Associated {
+				for index, parameter := range m.Trait.TypeParams {
+					if index < named.TypeArgs().Len() {
+						sub[parameter] = p.fromGo(named.TypeArgs().At(index))
+						if index < len(actual.args) {
+							sub[parameter] = actual.args[index]
+						}
+					}
+				}
+				for offset, a := range m.Trait.Associated {
+					i := len(m.Trait.TypeParams) + offset
 					if i < named.TypeArgs().Len() {
 						sub[a.Param] = p.fromGo(named.TypeArgs().At(i))
 						if i < len(actual.args) {
@@ -117,6 +137,21 @@ func (p *permissionChecker) traitMember(node ast.Expr, selection *MemberSelectio
 						}
 					}
 				}
+			}
+		}
+		q = p.substitutePermission(q, sub)
+	}
+	if selection.Impl != nil && selection.Impl.Template != nil {
+		sub := p.implSubstitution(selection.Impl, nil)
+		if actual != nil {
+			value := actual
+			if selection.Deref || selection.Member.Receiver != ValueRef && !selection.Address {
+				value = p.deref(value)
+			}
+			inferred := map[*types.TypeParam]*permission{}
+			p.inferPermission(p.c.implHeadPermissions(selection.Impl.Template)[0], value, inferred)
+			for param, permission := range inferred {
+				sub[param] = permission
 			}
 		}
 		q = p.substitutePermission(q, sub)
@@ -131,11 +166,17 @@ func (p *permissionChecker) traitMember(node ast.Expr, selection *MemberSelectio
 	if selection.Impl != nil {
 		base = selection.Impl.Target
 	} else {
-		base = selection.Bound.Param
+		base = selection.Bound.Target
 	}
-	q.receiver = p.fromGo(base)
+	source := p.fromGo(base)
+	if selection.Impl != nil {
+		source = p.c.implHeadPermissions(selection.Impl)[0]
+	} else if selection.Bound != nil {
+		source = p.c.boundHeadPermissions(selection.Bound)[0]
+	}
+	q.receiver = p.substitutePermission(source, p.instance)
 	if m.Receiver != ValueRef {
-		q.receiver = &permission{typ: types.NewPointer(base), ref: m.Receiver, elem: q.receiver}
+		q.receiver = &permission{typ: types.NewPointer(q.receiver.typ), ref: m.Receiver, elem: q.receiver}
 	}
 	if selection.MethodExpr {
 		q.params = append([]*permission{q.receiver}, q.params...)
@@ -219,13 +260,17 @@ func (p *permissionChecker) sourceMethod(method *types.Func) *permissionFunction
 }
 
 func (p *permissionChecker) implAssociated(impl *Impl, name string, sub map[*types.TypeParam]*permission) *permission {
+	if source := impl.associatedPermissions[name]; source != nil {
+		return p.substitutePermission(source, p.implSubstitution(impl, sub))
+	}
 	if !valid(impl.Associated[name]) {
 		return p.fromGo(impl.Associated[name])
 	}
 	if node := impl.AssociatedNodes[name]; node != nil {
 		oldFile, oldPkg, oldImpl, oldTrait, oldSelf := p.c.file, p.c.pkg, p.c.currentImpl, p.c.currentTrait, p.c.currentSelf
 		p.c.enterImpl(impl)
-		q := p.astType(node, sub)
+		sub = p.implSubstitution(impl, sub)
+		q := p.substitutePermission(p.astType(node, sub), sub)
 		p.c.file, p.c.pkg, p.c.currentImpl, p.c.currentTrait, p.c.currentSelf = oldFile, oldPkg, oldImpl, oldTrait, oldSelf
 		return q
 	}
@@ -233,11 +278,29 @@ func (p *permissionChecker) implAssociated(impl *Impl, name string, sub map[*typ
 }
 
 func (p *permissionChecker) boundAssociated(bound *TraitBound, name string, sub map[*types.TypeParam]*permission) *permission {
+	combined := map[*types.TypeParam]*permission{}
+	for param, value := range p.instance {
+		combined[param] = value
+	}
+	for param, typ := range bound.substitution {
+		combined[param] = p.fromGo(typ)
+	}
+	for param, permission := range bound.permissionSubstitution {
+		combined[param] = permission
+	}
+	for param, permission := range sub {
+		combined[param] = permission
+	}
+	sub = combined
+	if source := bound.associatedPermissions[name]; source != nil {
+		return p.substitutePermission(source, sub)
+	}
 	if node := bound.AssociatedNodes[name]; node != nil {
-		old := p.c.file
+		old, oldImpl, oldTrait, oldSelf := p.c.file, p.c.currentImpl, p.c.currentTrait, p.c.currentSelf
 		p.c.file = p.c.out.Resolve.Files[bound.File]
-		q := p.astType(node, sub)
-		p.c.file = old
+		p.c.currentImpl, p.c.currentTrait, p.c.currentSelf = nil, nil, nil
+		q := p.substitutePermission(p.astType(node, sub), sub)
+		p.c.file, p.c.currentImpl, p.c.currentTrait, p.c.currentSelf = old, oldImpl, oldTrait, oldSelf
 		return q
 	}
 	q := p.fromGo(bound.Associated[name])
@@ -246,16 +309,7 @@ func (p *permissionChecker) boundAssociated(bound *TraitBound, name string, sub 
 
 func (p *permissionChecker) checkImplSignatures() {
 	for _, impl := range p.c.implOrder {
-		if impl.AliasOf != nil {
-			p.c.enterImpl(impl)
-			for _, a := range impl.Trait.Associated {
-				if !p.sameSourcePermissions(p.implAssociated(impl, a.Name, nil), p.implAssociated(impl.AliasOf, a.Name, nil), map[[2]types.Type]bool{}) {
-					p.c.diag(impl.Decl, TraitInvalid, "conflicting associated reference permissions: "+a.Name)
-				}
-			}
-			p.c.leaveImpl()
-		}
-		if impl.Trait == nil || impl.Declare {
+		if impl.Trait == nil {
 			continue
 		}
 		p.c.enterImpl(impl)
@@ -270,7 +324,13 @@ func (p *permissionChecker) checkImplSignatures() {
 			p.c.currentImpl, p.c.currentTrait, p.c.currentSelf = nil, impl.Trait, impl.Trait.Self
 			_, _, params = receiverParams(decl.Decl)
 			want := p.functionType(params, decl.Decl.Results)
-			sub := map[*types.TypeParam]*permission{impl.Trait.Self: p.fromGo(impl.Target)}
+			head := p.c.implHeadPermissions(impl)
+			sub := map[*types.TypeParam]*permission{impl.Trait.Self: head[0]}
+			for index, parameter := range impl.Trait.TypeParams {
+				if index+1 < len(head) {
+					sub[parameter] = head[index+1]
+				}
+			}
 			for _, a := range impl.Trait.Associated {
 				sub[a.Param] = p.implAssociated(impl, a.Name, nil)
 			}
@@ -320,4 +380,46 @@ func (p *permissionChecker) sameSourcePermissions(a, b *permission, seen map[[2]
 		}
 	}
 	return true
+}
+
+func (p *permissionChecker) implSubstitution(impl *Impl, input map[*types.TypeParam]*permission) map[*types.TypeParam]*permission {
+	sub := map[*types.TypeParam]*permission{}
+	for param, permission := range impl.permissionSubstitution {
+		sub[param] = permission
+	}
+	for param, permission := range input {
+		sub[param] = permission
+	}
+	if impl.Template == nil {
+		return sub
+	}
+	for i, param := range impl.TypeParams {
+		if i < len(impl.TypeArgs) && sub[param] == nil {
+			sub[param] = p.fromGo(impl.TypeArgs[i])
+		}
+	}
+	for i, requirement := range impl.Template.Requirements {
+		if i >= len(impl.Requirements) {
+			continue
+		}
+		for _, param := range requirement.Projected {
+			for name, typ := range requirement.Associated {
+				if typ == param {
+					if i < len(impl.RequirementEvidence) {
+						witness := impl.RequirementEvidence[i]
+						if witness.Impl != nil {
+							sub[param] = p.implAssociated(witness.Impl, name, nil)
+						}
+						if witness.Bound != nil {
+							sub[param] = p.boundAssociated(witness.Bound, name, nil)
+						}
+					}
+					if sub[param] == nil {
+						sub[param] = p.fromGo(impl.Requirements[i].Associated[name])
+					}
+				}
+			}
+		}
+	}
+	return sub
 }

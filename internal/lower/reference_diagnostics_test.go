@@ -8,12 +8,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/check"
-	"github.com/hxsf/goxide/internal/expand"
-	"github.com/hxsf/goxide/internal/lower"
-	"github.com/hxsf/goxide/internal/resolve"
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/parser"
+	"github.com/goxide-lang/goxide/internal/check"
+	"github.com/goxide-lang/goxide/internal/expand"
+	"github.com/goxide-lang/goxide/internal/lower"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/parser"
 )
 
 func TestReferenceSourcePackageReturnRetainsPermission(t *testing.T) {
@@ -56,6 +56,7 @@ func main() {
 func TestReferenceRejectsPermissionLossAtSourceOperation(t *testing.T) {
 	const declarations = `
 type Record struct { Count int; Items []int; Counts map[string]int; Pointer *int }
+trait PartialEq { func equals(self Self, other Self) bool }
 func native(value *int) {}
 func writable(value &mut int) {}
 func store(value Record) {}
@@ -87,9 +88,9 @@ func (value &mut Record) Bump() { value.Count++ }
 		{"range-shared-element", check.ReferencePermission, `func f(value &[]Record) { for _, item := range *value { /*bad*/item.Items[0]/*end*/ = 1 } }`},
 		{"exposed-slot", check.ReferencePermission, `func f(value &Record) { items:=[]int{1}; address:=&items; items=value.Items; /*bad*/(*address)[0]/*end*/ = 1 }`},
 		{"closure-writeback", check.ReferencePermission, `func f(source &Record) { items:=[]int{1}; install:=func(){items=source.Items}; install(); /*bad*/items[0]/*end*/ = 2 }`},
-		{"manual-equality-method", check.ReferencePermission, `enum Manual { Count(int), }; impl PartialEq for Manual { func equals(self Manual,other Manual) bool { match self { Manual::Count(ref mut value) => { *value+=1 } }; return true } }; func f(value &Manual) { copied:=*value; _=/*bad*/copied.equals(copied)/*end*/ }`},
-		{"manual-equality-function", check.ReferencePermission, `enum Manual { Count(int), }; impl PartialEq for Manual { func equals(self Manual,other Manual) bool { match self { Manual::Count(ref mut value) => { *value+=1 } }; return true } }; func f(value &Manual) { copied:=*value; _=/*bad*/EqualsManual(copied,copied)/*end*/ }`},
-		{"derived-equality-manual-field", check.ReferencePermission, `enum Manual { Count(int), }; impl PartialEq for Manual { func equals(self Manual,other Manual) bool { match self { Manual::Count(ref mut value) => { *value+=1 } }; return true } }; #[derive(PartialEq)] type Envelope struct { Value Manual }; func f(value &Envelope) { copied:=*value; _=/*bad*/copied.equals(copied)/*end*/ }`},
+		{"manual-equality-method", check.ReferencePermission, `enum Manual { Items([]int), }; impl PartialEq for Manual { func equals(self Manual,other Manual) bool { match self { Manual::Items(items) => { items[0]+=1 } }; return true } }; func f(value &Manual) { copied:=*value; _=/*bad*/copied.equals(copied)/*end*/ }`},
+		{"manual-equality-function", check.ReferencePermission, `enum Manual { Items([]int), }; impl PartialEq for Manual { func equals(self Manual,other Manual) bool { match self { Manual::Items(items) => { items[0]+=1 } }; return true } }; func f(value &Manual) { copied:=*value; _=/*bad*/PartialEq::equals(copied,copied)/*end*/ }`},
+		{"equality-manual-field", check.ReferencePermission, `enum Manual { Items([]int), }; impl PartialEq for Manual { func equals(self Manual,other Manual) bool { match self { Manual::Items(items) => { items[0]+=1 } }; return true } }; type Envelope struct { Value Manual }; impl PartialEq for Envelope { func equals(self Self, other Self)bool{return PartialEq::equals(self.Value,other.Value)} }; func f(value &Envelope) { copied:=*value; _=/*bad*/copied.equals(copied)/*end*/ }`},
 		{"map-address", check.ReferenceAddress, `func f() { values:=map[string]int{"x":1}; _ = /*bad*/&mut values["x"]/*end*/ }`},
 		{"temporary-address", check.ReferenceAddress, `func makeValue() int {return 1}; func f() { _ = /*bad*/&mut makeValue()/*end*/ }`},
 		{"temporary-array", check.ReferenceAddress, `func makeArray() [1]int {return [1]int{1}}; func f() { _ = /*bad*/&mut makeArray()[0]/*end*/ }`},

@@ -1,0 +1,30 @@
+{
+  "command": [
+    "go",
+    "test",
+    "-pgo=off",
+    "-p=1",
+    "-cpu=1",
+    "-run",
+    "^$",
+    "-bench",
+    "^BenchmarkUnitDispatchStrategy$",
+    "-benchmem",
+    "-benchtime=300ms",
+    "-count=7",
+    "./internal/enumbench"
+  ],
+  "environment": {
+    "GOTOOLCHAIN": "local",
+    "GOWORK": "off",
+    "TMPDIR": "/private/tmp",
+    "GOMAXPROCS": "1",
+    "GOGC": "100",
+    "GOMEMLIMIT": "off"
+  },
+  "go": "go version go1.27.1 darwin/arm64",
+  "cpu": "Apple M2",
+  "baseline_commit": "fc4408f25f23e199fed09f6f20e805dbd64dce86",
+  "benchmark_source_commit": "253a349330a255eeb3ba4cb6c45172e46ae89c14",
+  "assembly_directory": "/private/tmp/goxide-typeswitch-audit.bzdKuD"
+}

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/lower"
-	"github.com/hxsf/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/lower"
+	"github.com/goxide-lang/goxide/internal/resolve"
 )
 
 func TestUseCommentsStayWithImports(t *testing.T) {
@@ -33,6 +33,23 @@ func main() { fmt::Println("single") }
 `,
 			output: "single\n",
 			docs:   map[string]string{"fmt": "Formatting tools."},
+		},
+		{
+			name: "canonical_order_with_documentation",
+			source: `// Package main documents its imports.
+package main
+
+// String tools.
+use strings;
+
+// Formatting tools.
+use fmt;
+
+// main runs the fixture.
+func main() { fmt::Println(strings::Repeat("x", 2)) }
+`,
+			output: "xx\n",
+			docs:   map[string]string{"fmt": "Formatting tools.", "strings": "String tools."},
 		},
 		{
 			name: "merged_aliases_and_unused",

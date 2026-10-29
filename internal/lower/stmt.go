@@ -4,22 +4,28 @@ import (
 	goast "go/ast"
 	gotoken "go/token"
 
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 func (e *emitter) stmt(n syntax.Stmt) (out goast.Stmt) {
-	defer func() { e.macroLayout(n, out) }()
+	defer func() { e.macroLayout(n, out); e.recordSource(out, n) }()
 	if n == nil {
 		return nil
 	}
 	switch n := n.(type) {
 	case *syntax.AssignStmt:
+		if assignment := e.stableArrayAssignment(n); assignment != nil {
+			return assignment
+		}
 		pos := e.pos(n)
 		if len(n.Lhs) != 0 {
 			pos = e.end(n.Lhs[len(n.Lhs)-1])
 		}
 		return &goast.AssignStmt{Lhs: e.exprs(n.Lhs), TokPos: pos, Tok: tokenKind(n.Tok), Rhs: e.exprs(n.Rhs)}
 	case *syntax.IncDecStmt:
+		if e.stableArrayTarget(n.X) {
+			return &goast.IncDecStmt{X: e.lvalue(n.X), Tok: tokenKind(n.Tok)}
+		}
 		return &goast.IncDecStmt{X: e.expr(n.X), TokPos: e.end(n.X), Tok: tokenKind(n.Tok)}
 	case *syntax.ExprStmt:
 		return &goast.ExprStmt{X: e.expr(n.X)}
@@ -50,6 +56,9 @@ func (e *emitter) stmt(n syntax.Stmt) (out goast.Stmt) {
 	case *syntax.SwitchStmt:
 		return &goast.SwitchStmt{Switch: e.pos(n), Init: e.stmt(n.Init), Tag: e.expr(n.Tag), Body: e.cases(n, n.Cases)}
 	case *syntax.TypeSwitchStmt:
+		if e.validation != nil {
+			return e.validationTypeSwitch(n, e.stmt(n.Init), e.stmt(n.Assign))
+		}
 		return &goast.TypeSwitchStmt{Switch: e.pos(n), Init: e.stmt(n.Init), Assign: e.stmt(n.Assign), Body: e.cases(n, n.Cases)}
 	case *syntax.CaseClause:
 		list := e.exprs(n.List)
@@ -79,6 +88,9 @@ func (e *emitter) stmt(n syntax.Stmt) (out goast.Stmt) {
 	case *syntax.ForStmt:
 		return &goast.ForStmt{For: e.pos(n), Init: e.stmt(n.Init), Cond: e.expr(n.Cond), Post: e.stmt(n.Post), Body: e.block(n.Body)}
 	case *syntax.RangeStmt:
+		if statement := e.stableArrayRange(n); statement != nil {
+			return statement
+		}
 		tokPos := gotoken.NoPos
 		if n.Key != nil {
 			tokPos = e.end(n.Key)
@@ -122,7 +134,8 @@ func (e *emitter) stmts(nodes []syntax.Stmt) []goast.Stmt {
 	return list
 }
 
-func (e *emitter) block(n *syntax.Block) *goast.BlockStmt {
+func (e *emitter) block(n *syntax.Block) (out *goast.BlockStmt) {
+	defer func() { e.recordSource(out, n) }()
 	if n == nil {
 		return nil
 	}

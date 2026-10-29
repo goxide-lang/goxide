@@ -1,0 +1,107 @@
+package model
+use protocol::facade::From;
+use native;
+
+pub struct Failure { pub Cause any; pub Kind string }
+var conversionCalls int
+pub func ResetConversions() { conversionCalls=0 }
+pub func ConversionCalls() int { return conversionCalls }
+impl From[*native::Fault] for Failure {
+    func from(value *native::Fault) Self {
+        conversionCalls++
+        return Self{Cause:value,Kind:"fault"}
+    }
+}
+impl From[*native::OtherFault] for Failure {
+    func from(value *native::OtherFault) Self {
+        conversionCalls++
+        return Self{Cause:value,Kind:"other"}
+    }
+}
+func note(trace *[]string,label string) { *trace=append(*trace,label) }
+func operand(ok bool,value *native::Fault,trace *[]string) Result[int,*native::Fault] {
+    note(trace,"operand")
+    if ok { return Result[int,*native::Fault]::Ok(7) }
+    return Result[int,*native::Fault]::Err(value)
+}
+pub func TryFault(ok bool,value *native::Fault,trace *[]string) Result[int,Failure] {
+    defer note(trace,"defer")
+    note(trace,"before")
+    n:=operand(ok,value,trace)?
+    note(trace,"after")
+    return Result[int,Failure]::Ok(n+1)
+}
+pub func TryOther(value Result[int,*native::OtherFault]) Result[int,Failure] {
+    n:=value?
+    return Result[int,Failure]::Ok(n)
+}
+pub func TryShortCircuit(take bool,value *native::Fault,trace *[]string) Result[bool,Failure] {
+    return Result[bool,Failure]::Ok(take && operand(false,value,trace)? > 0)
+}
+pub func TryNested(value Result[int,*native::Fault]) bool {
+    result:=func() Result[int,Failure] {
+        n:=value?
+        return Result[int,Failure]::Ok(n)
+    }()
+    return match result { Result::Ok(_) => false, Result::Err(_) => true }
+}
+pub func TryNative(value *native::Fault) Result[int,Summary] {
+    n:=go_result!(native::Read(value))?
+    return Result[int,Summary]::Ok(n)
+}
+pub func TryNativeTypedNil() Result[int,Summary] {
+    n:=go_result!(native::ReadTypedNil())?
+    return Result[int,Summary]::Ok(n)
+}
+pub func TryInvalid(value Result[int,*native::Fault]) Result[int,Failure] {
+    n:=value?
+    return Result[int,Failure]::Ok(n)
+}
+pub func KeepOption(value Option[*native::Fault]) Option[*native::Fault] {
+    n:=value?
+    return Option[*native::Fault]::Some(n)
+}
+pub func TryAction(value Result[int,Action],trace *[]string) Result[int,Outcome] {
+    defer note(trace,"caller-defer")
+    n:=value?
+    return Result[int,Outcome]::Ok(n)
+}
+
+pub struct LocalFault { pub Value int }
+func (value *LocalFault) Error() string { return "local fault" }
+impl From[*LocalFault] for error {
+    func from(value *LocalFault) Self {
+        conversionCalls++
+        return native::Sentinel
+    }
+}
+pub func DirectAssignable(value Result[int,*LocalFault]) Result[int,error] {
+    n:=value?
+    return Result[int,error]::Ok(n)
+}
+pub func GenericPropagate[E any,F any](value Result[int,E]) Result[int,F] where F:From[E] {
+    n:=value?
+    return Result[int,F]::Ok(n)
+}
+pub func InstantiatedAssignable(value *LocalFault) Result[int,error] {
+    return GenericPropagate[*LocalFault,error](Result[int,*LocalFault]::Err(value))
+}
+pub func PrivateResult(value int) Result[int,secret] {
+    return Result[int,secret]::Err(Secret(value))
+}
+pub func OriginalFault() Result[int,*native::Fault] {
+    return Result[int,*native::Fault]::Err(native::Sentinel)
+}
+pub func PrivateSuccess(ok bool,value int) Result[secret,int] {
+    if ok { return Result[secret,int]::Ok(Secret(value)) }
+    return Result[secret,int]::Err(value)
+}
+pub func PrivateOption(ok bool,value int) Option[secret] {
+    if ok { return Option[secret]::Some(Secret(value)) }
+    return Option[secret]::None
+}
+pub func PrivateInvalid() Result[secret,int] {
+    var value Result[secret,int]
+    return value
+}
+pub func SecretValue(value secret) int { return int::from(value) }

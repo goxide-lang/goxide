@@ -1,4 +1,0 @@
-package main
-// 类型槽：捕获类别必须在模板使用点拒绝。
-macro_rules! slot { ($T:tt) => { func() int { switch any(4).(type) { case $T: return 1; default: return 0 } }() }; }
-func main() { _ = slot!(nil) }

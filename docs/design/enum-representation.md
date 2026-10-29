@@ -1,6 +1,6 @@
 # enum 表示与 match 降低
 
-状态：已确认（2026-10-13）。本文是新前端的 enum 规范，取代 `enums-and-match.md` 中与本文冲突的表示与降低章节；`frontend-ast.md` §5.1 只定义语法节点。
+状态：已确认，按不可变 payload 与固有成员映射更新。本文是新前端的 enum 规范，取代 `enums-and-match.md` 中与本文冲突的表示与降低章节；`frontend-ast.md` §5.1 只定义语法节点。
 
 ## 1. 表示
 
@@ -23,12 +23,13 @@ type CC struct{ K1, K2 int }
 func (*CC) isEE() {}
 ```
 
+- payload 槽位在 Goxide 中不可变；更新通过构造新 enum 并重绑定变量。容器 payload 按自身权限使用，`ref mut` / `match &mut` 不提供槽位写权限。详见[引用合同](enum-payload-borrows.md)。
 - 变体降级为**指针类型**使用：`&BB{...}`。接口方法定义在指针接收者上。
 - 标记方法名统一加 `is` 前缀加 enum 名（`isEE`）。加前缀是因为小写变体名会与结构体名相同（`enum ee { aa }` → `struct aa` 与 `func (*aa) aa()`，Go 报 field/method 同名）。
 - 标记方法**未导出**，因此只有声明包能实现该接口。Go 在跨包、跨 module 下都强制这一点，实测确认（见 §7）。这就是"闭合"的实现方式。
 - 命名：变体结构体名 = 变体名的 Go 名（按 `frontend-ast.md` §6.1 的可见性映射）。
 - 空变体是零字段结构体；带载荷变体的字段按源码顺序命名（元组变体用 `Value`，多载荷用 `V0`、`V1`；结构变体用字段名转成的 Go 名）。
-- 不生成 tag 常量、不生成 `Validate*`、不生成 `Tag*` / `Value*` / `Project*` 辅助函数。旧管线为元数据与跨包 ABI 生成的这些入口在新管线里都不存在。
+- 不生成 tag 常量或公开 `Validate*` API，不生成 `Tag*` / `Value*` / `Project*` 辅助函数。旧管线为元数据与跨包 ABI 生成的这些入口在新管线里都不存在。
 
 ### 1.1 P4 的类型锚与实例适配
 
@@ -39,6 +40,14 @@ carrier 的实例操作使用普通参数：按值接收 E，借用接收 `*E`�
 运行时 trait 的业务体只在对应 wrapper 上。值视图的 Go 便利入口可以在 E 接口声明 `AsNamed() Named`，由每个变体用一行方法转发同一个固定工厂，保留 `e.AsNamed().Name()`；不为 E 声明非法的 Go 接收者方法，也不把业务实现复制到变体。借用视图须保存真实枚举槽位，使用 `ForE(&e).AsNamed()` 或固定工厂；变体方法不能把自己临时装入 E 再取址，冒充原 owner。外部包拥有的适配同样使用 facade。
 
 值视图保存的 E 副本继续共享原变体对象；引用视图保存 `*E`，可观察 owner 的整体替换。旧 payload 投影仍遵循 [P3 引用合同](enum-payload-borrows.md)，不会随 owner 替换而改指向。nil 规则仍由本规范规定，不因 trait 适配新增统一非空检查。
+
+### 1.2 固有成员的已确认映射
+
+普通 `impl E` 无 self 的成员直接在空 carrier 上承载原业务体；`self Self` 与 `self &Self` 成员在 E 接口声明，并由各指针变体直接承载原业务体。Self 始终为完整 E，返回 Self 不改变成员位置。固有成员不受 trait sugar 开关控制；`self &mut Self` 固有成员拒绝。详见 [RFC 0020](../rfcs/0020-associated-functions.md)。
+
+值与只读方法值均捕获绑定时的变体对象，owner 后续重绑定不改变该对象。nil 接口按 Go 方法选择规则失败，typed-nil 变体进入方法后在业务体前 panic；原业务体保留直接 `defer` / `recover` 调用帧。
+
+普通 Go 泛型能表达的无条件方法直接生成；带待定协议条件的成员按 D38 的实际请求扁平化，不生成专用 view，也不将部分实例的能力写入整个泛型家族的方法集。本节不改变 §1.1 的 trait wrapper 规则。
 
 ## 2. nil 策略
 
@@ -56,6 +65,14 @@ if v == nil { panic("goxide: match on nil EE") }
 ```
 
 `_` 只表示“其余变体”，不改变 nil 的行为。穷尽性由 `check` 保证（§4），不依赖 Go 编译器。检查点放在实际使用处，既保留嵌套解构在 guard 前失败的顺序，也避免每次外层 `match` 都遍历整个载荷。
+
+### 2.1 显式外层有效性检查
+
+`enum_valid(value)` 已实现。它沿普通内建的解析和遮蔽规则，接收具体 enum 或已知 enum 泛型实例（含透明 alias），将实参求值一次并返回 bool。任意 `T any`、普通接口和指针都不是该内建的输入；检查 enum 指针时由调用方显式处理 nil 后解引用。
+
+当前值属于本 enum 的一个变体且外层存储有效时返回 true；nil 接口、typed-nil 变体、未知外层变体，以及空 enum 的任何值返回 false。检查不遍历 payload、不执行用户方法，也不使用反射或 recover。Option/Result 按其实际表示检查外层；None 和 Some(nil) 都是有效外层值。
+
+显式检查可用于 serde 等库返回自己的错误。后续 `match` 仍执行本节原有检查，不把此前返回 true 当作永久证明；普通可命名输入在调用处检查；只有跨包私有 enum、私有变体或私有类型实参无法在调用处命名时，才按需在 enum 定义包生成编译器内部检查函数。Go 自动推导类型实参，私有变体名留在定义包，不新增 Goxide 公开 API。完整使用边界见 [RFC 0031](../rfcs/0031-generic-protocol-impls.md#5-serde-迁移所需的普通表达性)。
 
 ## 3. match 降低
 

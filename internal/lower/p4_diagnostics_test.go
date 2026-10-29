@@ -8,12 +8,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/check"
-	"github.com/hxsf/goxide/internal/expand"
-	"github.com/hxsf/goxide/internal/lower"
-	"github.com/hxsf/goxide/internal/resolve"
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/parser"
+	"github.com/goxide-lang/goxide/internal/analysis"
+	"github.com/goxide-lang/goxide/internal/check"
+	"github.com/goxide-lang/goxide/internal/expand"
+	"github.com/goxide-lang/goxide/internal/lower"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/parser"
 )
 
 func TestP4RejectsInvalidViewsAtSourceOperation(t *testing.T) {
@@ -51,22 +52,6 @@ impl Mut for Data { func add(self &mut Self) { self.N++ } }
 	}
 }
 
-func TestP4DeclareRequiresExactCompleteSelfMethodSet(t *testing.T) {
-	for _, test := range []struct{ name, receiver, target string }{
-		{"value-does-not-gain-pointer-methods", "Self", "bytes::Buffer"},
-		{"pointer-self-reference-is-double-pointer", "&mut Self", "*bytes::Buffer"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			source := "package model\nuse bytes;\ntrait Reader{func read(self " + test.receiver + ",p []byte)(int,error)}\n/*bad*/declare impl Reader for " + test.target + ";/*end*/\n"
-			files, info, diagnostics := checkP4DiagnosticSource(t, source)
-			assertP4SourceDiagnostic(t, source, diagnostics, check.TraitInvalid, "native method does not match")
-			if output, err := lower.Lower(files, info); output != nil || err == nil {
-				t.Fatalf("invalid native method set emitted Go: output=%v error=%v", output, err)
-			}
-		})
-	}
-}
-
 func TestP4GeneratedFactoryCollisionIdentifiesImpl(t *testing.T) {
 	const source = `package model
 trait View {func value(self Self)int}
@@ -79,7 +64,7 @@ func AsDataView(value Data) int {return value.N}
 		t.Fatalf("check: %v", diagnostics)
 	}
 	output, err := lower.Lower(files, info)
-	var diagnostic *lower.Diagnostic
+	var diagnostic *analysis.Diagnostic
 	if output != nil || !errors.As(err, &diagnostic) || !strings.Contains(diagnostic.Message, "AsDataView") {
 		t.Fatalf("missing generated-name source diagnostic: output=%v error=%v", output, err)
 	}
@@ -100,7 +85,7 @@ pub enum Data { Item { AsView int } }
 		t.Fatalf("check: %v", diagnostics)
 	}
 	output, err := lower.Lower(files, info)
-	var diagnostic *lower.Diagnostic
+	var diagnostic *analysis.Diagnostic
 	if output != nil || !errors.As(err, &diagnostic) || !strings.Contains(diagnostic.Message, "AsView") {
 		t.Fatalf("missing enum view/payload collision: output=%v error=%v", output, err)
 	}

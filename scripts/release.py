@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Build one native CLI archive and run the unpacked binary against a real project."""
+"""Build one CI or release CLI archive and exercise its unpacked native binary."""
 import gzip
 import io
+import json
 import os
 from pathlib import Path
 import shutil
@@ -36,17 +37,23 @@ with tempfile.TemporaryDirectory(prefix='goxide-release-') as temporary:
     work = Path(temporary).resolve()
     package = work / name
     package.mkdir()
-    subprocess.run(['go', 'build', '-mod=readonly', '-trimpath', '-buildvcs=false',
+    subprocess.run(['go', 'run', '-mod=readonly', './scripts/build.go',
                     f'-ldflags=-s -w -buildid= -X main.version={tag}',
-                    '-o', str(package / binary), './cmd/goxide'],
+                    '-o', str(package / binary)],
                    cwd=ROOT, env=dict(env, CGO_ENABLED='0'), check=True)
     shutil.copyfile(ROOT / 'LICENSE', package / 'LICENSE')
+    test_requirement = (
+        'Go does not support -race on Windows arm64, so goxide test is unavailable on this target.\n'
+        'This archive is validated with a native test of the generated Go without -race.\n'
+        if target == 'windows_arm64' else
+        'goxide test uses -race and also needs a native C compiler.\n')
     (package / 'README.txt').write_text(
         f'Goxide {tag}\n\n'
         f'Target: {goos}/{goarch}\nRequired Go toolchain: {goversion} (exact version)\n'
         'Pre-1.0 releases are experimental and may contain breaking changes.\n'
         'Put the goxide executable on PATH. Run goxide --version to inspect the build.\n'
-        'Install the matching Go toolchain separately; goxide test also needs a C compiler for -race.\n'
+        'Install the matching Go toolchain separately.\n'
+        f'{test_requirement}'
         'Quickstart: https://goxide-lang.github.io/learn/\n'
         'Source and license: https://github.com/goxide-lang/goxide\n', encoding='utf-8')
     if goos == 'windows':
@@ -80,7 +87,17 @@ with tempfile.TemporaryDirectory(prefix='goxide-release-') as temporary:
     executable = work / ('orders.exe' if goos == 'windows' else 'orders')
     run(cli, 'build', '--offline', '--locked', '-o', str(executable), '.', cwd=project)
     assert run(str(executable), cwd=project) == expected
-    # The CLI runs project tests with -race, which needs the runner's native C compiler.
-    env['CGO_ENABLED'] = '1'
-    run(cli, 'test', '--offline', '--locked', '.', cwd=project)
-    print(f'PASS {name}: unpacked version, generation, run, build and project test; {goversion}')
+    if target == 'windows_arm64':
+        # Go has no race runtime for this target; exercise the generated test directly.
+        env['CGO_ENABLED'] = '0'
+        output = run('go', 'test', '-json', '-count=1', '-mod=readonly',
+                     '-run=^TestDescribe$', './...', cwd=work / 'generated' / 'module')
+        events = [json.loads(line) for line in output.splitlines()]
+        assert any(event.get('Action') == 'pass' and event.get('Test') == 'TestDescribe'
+                   for event in events), f'generated TestDescribe did not pass:\n{output}'
+        test = 'generated Go TestDescribe (without race)'
+    else:
+        env['CGO_ENABLED'] = '1'
+        run(cli, 'test', '--offline', '--locked', '.', cwd=project)
+        test = 'CLI race test'
+    print(f'PASS {name}: unpacked version, generation, run, build and {test}; {goversion}')

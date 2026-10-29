@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/config"
 )
 
 func testConfig(t *testing.T, features ...config.Features) config.Config {

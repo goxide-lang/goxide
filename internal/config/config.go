@@ -14,7 +14,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 // A nil Declared set permits any valid feature name, as in a native Go module.
@@ -25,9 +25,12 @@ type Features struct {
 // Features vary by source module; Environment and Reads belong to the invocation.
 type Config struct {
 	Features    Features
+	GoSugar     *bool // Nil enables Go member sugar.
 	Environment *Environment
 	Reads       *Reads
 }
+
+func (c Config) GoSugarEnabled() bool { return c.GoSugar == nil || *c.GoSugar }
 
 func (c Config) Sizes() types.Sizes {
 	if c.Environment == nil {

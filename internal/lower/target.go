@@ -2,23 +2,13 @@ package lower
 
 import (
 	"fmt"
-	"go/build"
 	"go/build/constraint"
-	"io"
-	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/config"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/config"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
-
-// Goxide sources obey the same filename and header selection as their Go output.
-func matchesModuleSource(filename string, context build.Context) (bool, error) {
-	context.OpenFile = func(string) (io.ReadCloser, error) { return os.Open(filename) }
-	base := strings.TrimSuffix(filepath.Base(filename), ".gox") + ".go"
-	return context.MatchFile(filepath.Dir(filename), base)
-}
 
 // ApplyTargetConstraints marks every generated file in each package whose
 // configuration queried the target. files must retain the original AST pointers,

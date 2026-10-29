@@ -16,55 +16,29 @@ Goxide 为 Go 增加 enum、match、声明宏、派生和显式协议，生成�
 
 ## 安装
 
-`v0.0.1` 是实验性预发布，尚非正式稳定发行。后续版本即使只增加 patch 或 minor，仍可能对语言、CLI、配置格式和生成代码作出不兼容变更。
+本网站对应当前开发中的 Goxide。语言、CLI、配置格式和生成代码仍可能在 patch 或 minor 更新中发生不兼容变更。
 
-### 下载 CLI v0.0.1
+### 从对应源码构建当前 CLI
 
-按运行 CLI 的机器选择平台与 CPU 架构。归档包含 Goxide 可执行文件、许可证和安装说明；Go 工具链需要单独安装。
+本页教程使用正式 std/serde 过程宏和协议。请使用页面所列编译器提交构建 CLI；安装页的命令会固定到网站实际使用的源码版本。
 
-| 平台 | CPU 架构 | 下载 |
-| --- | --- | --- |
-| macOS | Intel（amd64） | [下载 tar.gz](https://github.com/goxide-lang/goxide/releases/download/v0.0.1/goxide_v0.0.1_darwin_amd64.tar.gz) |
-| macOS | Apple silicon（arm64） | [下载 tar.gz](https://github.com/goxide-lang/goxide/releases/download/v0.0.1/goxide_v0.0.1_darwin_arm64.tar.gz) |
-| Linux | x86-64（amd64） | [下载 tar.gz](https://github.com/goxide-lang/goxide/releases/download/v0.0.1/goxide_v0.0.1_linux_amd64.tar.gz) |
-| Linux | ARM64（arm64） | [下载 tar.gz](https://github.com/goxide-lang/goxide/releases/download/v0.0.1/goxide_v0.0.1_linux_arm64.tar.gz) |
-| Windows | x64（amd64） | [下载 zip](https://github.com/goxide-lang/goxide/releases/download/v0.0.1/goxide_v0.0.1_windows_amd64.zip) |
-
-[SHA-256 校验值](https://github.com/goxide-lang/goxide/releases/download/v0.0.1/checksums.txt) · [v0.0.1 版本说明](https://github.com/goxide-lang/goxide/releases/tag/v0.0.1)
-
-下载后核对归档的 SHA-256。解压归档，将其中 `goxide`（Windows 为 `goxide.exe`）所在目录加入 `PATH`。
-
-### 配套 Go 与安装检查
-
-这五个平台的预编译 CLI 均使用 **Go 1.27.2** 构建，运行编译命令时必须使用 **Go 1.27.2，补丁号也须一致**。将 Go 加入 `PATH`；`--go` 可以指定其他位置的同版本 Go 可执行文件。CLI 不会自动下载或切换 Go 工具链。
+先安装 **Go 1.27.3** 和 Git。下面的环境变量写法适用于 macOS / Linux 终端；运行命令时也必须使用 **Go 1.27.3，补丁号也须一致**。
 
 ```sh
+git clone https://github.com/goxide-lang/goxide.git
+cd goxide
+GOTOOLCHAIN=local GOWORK=off go run ./scripts/build.go -o ./bin/goxide
+export PATH="$PWD/bin:$PATH"
 go version
 goxide --version
 goxide env
 ```
 
-`go version` 的版本应为 `go1.27.2`；发布二进制的版本输出应为：
+`scripts/build.go` 将所用语法 SDK 的内容身份写入 CLI，供过程宏编译和缓存校验使用。构建会下载 `go.mod` 中固定的公开依赖。源码构建的 CLI 版本显示为 `dev`，工具链版本应为 `go1.27.3`。
 
-```text
-goxide v0.0.1 (go1.27.2)
-```
+Windows 使用相同 Go 版本，将输出路径改为 `./bin/goxide.exe`，并把该 `bin` 目录加入 `PATH`。`--go` 可以指定其他位置的同版本 Go 可执行文件；CLI 不会自动下载或切换 Go 工具链。
 
-`goxide test` 使用 Go race detector，还需要启用 cgo 并安装该平台的 C 编译器。只运行浏览器 Playground 时，无需安装本地 CLI 或 Go。
-
-### 从标签源码安装
-
-也可以使用 Go 1.27.2 从同一标签构建。下面的环境变量写法适用于 macOS / Linux 终端：
-
-```sh
-git clone --branch v0.0.1 --depth 1 https://github.com/goxide-lang/goxide.git
-cd goxide
-GOTOOLCHAIN=local GOWORK=off go install -ldflags="-X main.version=v0.0.1" ./cmd/goxide
-```
-
-将 Go 安装可执行文件的目录加入 `PATH`：设置了 `GOBIN` 时使用该目录，否则使用 `go env GOPATH` 对应目录下的 `bin`。未传版本注入参数的普通源码构建显示 `goxide dev`，上述 `-ldflags` 将版本设为 `v0.0.1`。
-
-仓库位于 `goxide-lang/goxide`，Go module 路径仍为 `github.com/hxsf/goxide`。源码构建同样要求运行时所选 Go 与构建 CLI 的 Go 版本完全一致；更换 Go 版本后，须用新工具链重新构建 CLI。
+`goxide test` 使用 Go race detector，还需要启用 cgo 并安装该平台的 C 编译器。更换 Go 版本后，须用新工具链重新构建 CLI。只运行浏览器 Playground 时，无需安装本地 CLI 或 Go。
 
 ## 第一个 Goxide 项目
 
@@ -138,7 +112,7 @@ Goxide 保留 Go 的函数、结构体、控制流和包模型，并增加下列
 | Option、Result 与 `?` | 显式表示缺失或错误，提前返回错误结果 | [支持库与表示](design/enum-representation.md) |
 | 声明宏 | 在表达式、语句、类型和声明位置复用语法 | [宏](rfcs/0011-macros.md) |
 | 显式派生 | 为具体类型生成 Default、Clone、Debug、PartialEq、Eq、Error 或 serde 协议 | [派生](rfcs/0013-derive.md) |
-| 引用与 payload 投影 | 通过 `&` / `&mut` 区分读写权限，在 `match &value` 中访问原槽位 | [引用](rfcs/0005-borrows.md) |
+| 引用与 payload 投影 | 普通变量通过 `&` / `&mut` 区分读写权限；enum payload 槽不可变，`match &value` 只读访问，按值取得的容器保留自身权限 | [引用](rfcs/0005-borrows.md) |
 | trait、impl 与关联类型 | 为具体类型声明静态协议，适配现有 Go API | [trait](rfcs/0002-traits.md)、[关联类型](rfcs/0004-associated-types.md) |
 | 条件编译 | 按 feature、目标或环境选择完整声明 | [条件编译](#条件编译) |
 
@@ -147,6 +121,14 @@ Goxide 保留 Go 的函数、结构体、控制流和包模型，并增加下列
 宏中的名字通常按定义点解析；需要调用点名称时显式使用 `$caller::`。`pub` 声明公开名称，Go 风格声明也保留首字母大写的公开约定。
 
 这些链接包含完整语言设计；选择实际用法时结合[当前能力](#能力与设计)中的实现范围。可以在 [Playground](https://goxide-lang.github.io/playground.html) 中查看生成 Go，或从[混合快速开始](https://goxide-lang.github.io/learn/?stage=mixed)开始。
+
+## 过程宏
+
+过程宏与语法工具各有独立大章：[过程宏与 proc_macro](procedural-macros.md#过程宏概览)从完整项目讲三种入口、Context、卫生、诊断、目标配置和测试发布；[syntax 语法工具](syntax-tools.md#语法工具概览)讲 token 构造、syn 类型声明视图及公共 API。
+
+第一次编写自己的宏，从[第一个过程宏](procedural-macros.md#第一个过程宏)开始：页面给出两个清单、完整宏实现、消费者和测试。也可以下载[三类过程宏项目](https://goxide-lang.github.io/learn/?stage=procedural)，查看 Goxide 登记函数及完整 Go 辅助实现。标准库和序列化协议的使用见[标准库与 serde 派生](procedural-macros.md#标准库与-serde-派生)。
+
+浏览器执行随网站发布的固定宏；自定义宏在本地构建、运行和测试。在线体验范围见[执行环境与浏览器](procedural-macros.md#执行环境与浏览器)。
 
 ## 清单字段
 
@@ -394,13 +376,15 @@ optional 依赖不会自动创建同名 feature。未激活的 optional 来源�
 `#[cfg(...)]` 选择整个顶层声明，`#[cfg_attr(...)]` 按条件添加属性，`cfg!(...)` 返回布尔常量。
 
 ```gox
+use std;
+
 #[cfg(feature("json"))]
 func Encoding() string { return "json" }
 
 #[cfg(not(feature("json")))]
 func Encoding() string { return "plain" }
 
-#[cfg_attr(feature("trace"), derive(Debug))]
+#[cfg_attr(feature("trace"), derive(std::derive::Debug))]
 type Message struct { Text string }
 
 const HasJSON = cfg!(feature("json"))

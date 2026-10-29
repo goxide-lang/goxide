@@ -112,6 +112,7 @@ class CompilerIdentityTests(unittest.TestCase):
         self.files = {'go.mod': b'module fixture\n', 'go.sum': b'',
                       'internal/probe/probe.go': b'package probe\n',
                       'cmd/goxide/main.go': b'package main\n',
+                      build_support.MACRO_BUNDLE: b'{}\n',
                       build_support.DEPENDENCY_CONTEXT: b'[roots.fmt]\nsource="toolchain"\npackage="fmt"\n'}
         for name, data in self.files.items():
             path = self.root / name
@@ -164,9 +165,12 @@ class CompilerIdentityTests(unittest.TestCase):
             self.verify('0' * 64)
 
     def test_changed_embedded_dependency_context_rejected(self):
-        (self.root / build_support.DEPENDENCY_CONTEXT).write_text('[roots.undeclared]\n')
-        with self.assertRaisesRegex(ValueError, 'compiler source differs'):
-            self.verify()
+        for name in [build_support.DEPENDENCY_CONTEXT, build_support.MACRO_BUNDLE]:
+            with self.subTest(name=name):
+                (self.root / name).write_text('changed fixed input\n')
+                with self.assertRaisesRegex(ValueError, 'compiler source differs'):
+                    self.verify()
+                (self.root / name).write_bytes(self.files[name])
 
     def test_worktree_identity_distinguishes_source_bytes_from_base_commit(self):
         before = build_support.worktree_compiler_source(self.root)

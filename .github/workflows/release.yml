@@ -74,51 +74,11 @@ jobs:
     with:
       checkout_ref: ${{ needs.prepare.outputs.commit }}
       go_version: ${{ needs.prepare.outputs.go_version }}
-
-  build:
-    needs: prepare
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: ubuntu-24.04
-            target: linux_amd64
-          - runner: ubuntu-24.04-arm
-            target: linux_arm64
-          - runner: macos-15-intel
-            target: darwin_amd64
-          - runner: macos-15
-            target: darwin_arm64
-          - runner: windows-2025
-            target: windows_amd64
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          ref: ${{ needs.prepare.outputs.commit }}
-          persist-credentials: false
-      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
-        with:
-          go-version: ${{ needs.prepare.outputs.go_version }}
-          cache-dependency-path: go.sum
-      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
-        with:
-          python-version: '3.12'
-      - name: Build, unpack and exercise the native CLI
-        env:
-          RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
-          RELEASE_TARGET: ${{ matrix.target }}
-        run: python -B scripts/release.py
-      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
-        with:
-          name: release-${{ matrix.target }}
-          path: release-dist/*
-          if-no-files-found: error
-          retention-days: 7
+      release_tag: ${{ needs.prepare.outputs.tag }}
+      release_prerelease: ${{ needs.prepare.outputs.prerelease == 'true' }}
 
   publish:
-    needs: [prepare, checks, build]
+    needs: [prepare, checks]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -134,10 +94,10 @@ jobs:
         run: test "$(git rev-parse HEAD)" = "$RELEASE_COMMIT"
       - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
         with:
-          pattern: release-*
+          pattern: goxide-*
           merge-multiple: true
           path: release-dist
-      - name: Publish the verified archives
+      - name: Publish the verified CLI archives and VSIX
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

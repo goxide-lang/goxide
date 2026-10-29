@@ -1,8 +1,9 @@
 package source
 use serde;
+use std;
 use errors;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize, std::derive::Clone, std::derive::Debug)]
 pub enum Mode { Idle, Ready(int), }
 var Sentinel = errors::New("source failed")
 type Fault struct{}
@@ -18,7 +19,6 @@ func Read(value Result[int,error]) (int,error) {
         Result[int,error]::Ok(n) => { return n,nil },
         Result[int,error]::Err(e) => { return 0,e },
     }
-    panic("unreachable")
 }
 func Missing() Option[int] { return Option[int]::None }
 func Present(n int) Option[int] { return Option[int]::Some(n) }
@@ -27,8 +27,11 @@ func ReadOption(value Option[int]) (int,bool) {
         Option[int]::Some(n) => { return n,true },
         Option[int]::None => { return 0,false },
     }
-    panic("unreachable")
 }
-func InvalidNested() Result[Mode,error] { return Result[Mode,error]::Ok(Mode{}) }
 type Count = int
 func AliasSuccess() Result[Count,error] { return Result[Count,error]::Ok(9) }
+
+impl Mode {
+    pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) }
+    pub func copy(value &Self) Self { return std::Clone::clone(value) }
+}

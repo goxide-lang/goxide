@@ -2,6 +2,7 @@ package compile_test
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	goast "go/ast"
 	"go/parser"
@@ -16,39 +17,45 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/check"
-	"github.com/hxsf/goxide/internal/compile"
-	"github.com/hxsf/goxide/internal/project"
+	"github.com/goxide-lang/goxide/internal/check"
+	"github.com/goxide-lang/goxide/internal/compile"
+	"github.com/goxide-lang/goxide/internal/procmacro"
+	"github.com/goxide-lang/goxide/internal/project"
 )
 
 func TestP5ProjectBuildRunTestAndStableLock(t *testing.T) {
-	cacheRoot, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	moduleCache := filepath.Join(cacheRoot, "modules")
-	t.Setenv("GOMODCACHE", moduleCache)
-	t.Cleanup(func() {
-		command := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "clean", "-modcache")
-		command.Env = append(project.GoEnv(true), "GOMODCACHE="+moduleCache)
-		if output, err := command.CombinedOutput(); err != nil {
-			t.Errorf("clean isolated module cache: %v\n%s", err, output)
+	options := p5Options(t)
+	if !p5Race {
+		cacheRoot, err := filepath.EvalSymlinks(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
 		}
-	})
+		moduleCache := filepath.Join(cacheRoot, "modules")
+		t.Setenv("GOMODCACHE", moduleCache)
+		t.Cleanup(func() {
+			command := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "clean", "-modcache")
+			command.Env = append(project.GoEnv(true), "GOMODCACHE="+moduleCache)
+			if output, err := command.CombinedOutput(); err != nil {
+				t.Errorf("clean isolated module cache: %v\n%s", err, output)
+			}
+		})
+	}
 	root := p5Project(t)
 	app := filepath.Join(root, "app")
 	before := p5Snapshot(t, root)
-	options := compile.Options{GoTool: filepath.Join(runtime.GOROOT(), "bin", "go")}
 	first, err := compile.PrepareProject(app, options)
 	if err != nil {
 		t.Fatal(err)
 	}
-	p5Go(t, first.Root, "build", "./...")
-	if got := p5Go(t, first.Root, "run", first.Entry); got != "initialized\n18 42 5 true\n{\"Value\":7} shared\n" {
-		t.Fatalf("project run = %q", got)
+	if !p5Race {
+		// Generated programs have their own race instrumentation, independent of this test process.
+		p5Go(t, first.Root, "build", "./...")
+		if got := p5Go(t, first.Root, "run", first.Entry); got != "initialized\n18 42 5 true\n{\"Value\":7} shared\n" {
+			t.Fatalf("project run = %q", got)
+		}
+		p5Go(t, first.Root, "test", "-count=1", "-race", "./...", "example.org/p5/kit/...")
+		p5Go(t, first.Root, "vet", "./...", "example.org/p5/kit/...")
 	}
-	p5Go(t, first.Root, "test", "-count=1", "-race", "./...", "example.org/p5/kit/...")
-	p5Go(t, first.Root, "vet", "./...", "example.org/p5/kit/...")
 	p5CheckImports(t, first.Root)
 
 	generated := p5Snapshot(t, filepath.Dir(first.Root))
@@ -79,8 +86,10 @@ func TestP5ProjectBuildRunTestAndStableLock(t *testing.T) {
 	if err != nil || !afterInfo.ModTime().Equal(lockInfo.ModTime()) {
 		t.Fatalf("unchanged lock was rewritten: %v", err)
 	}
-	if got := p5Go(t, second.Root, "run", second.Entry); got != "initialized\n18 42 5 true\n{\"Value\":7} shared\n" {
-		t.Fatalf("offline locked run = %q", got)
+	if !p5Race {
+		if got := p5Go(t, second.Root, "run", second.Entry); got != "initialized\n18 42 5 true\n{\"Value\":7} shared\n" {
+			t.Fatalf("offline locked run = %q", got)
+		}
 	}
 	for name, want := range before {
 		if got := p5Read(t, filepath.Join(root, filepath.FromSlash(name))); !bytes.Equal(got, want) {
@@ -116,7 +125,7 @@ func TestP5ImportedReadOnlyReturnKeepsPermission(t *testing.T) {
 	if err := os.WriteFile(filename, []byte(source), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, err := compile.PrepareProject(app, compile.Options{})
+	_, err := compile.PrepareProject(app, p5Options(t))
 	var diagnostic check.Diagnostic
 	if !errors.As(err, &diagnostic) || diagnostic.Code != check.ReferencePermission {
 		t.Fatalf("cross-module reexport lost read-only permission: %v", err)
@@ -128,6 +137,24 @@ func TestP5ImportedReadOnlyReturnKeepsPermission(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(app, "goxide.lock")); !os.IsNotExist(err) {
 		t.Fatalf("failed source check published a lock: %v", err)
 	}
+}
+
+func p5Options(t *testing.T) compile.Options {
+	t.Helper()
+	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
+	identity, err := procmacro.ReadSDKIdentity(context.Background(), tool, filepath.Join("..", ".."), project.GoEnv(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := procmacro.CompilerSDKIdentity
+	procmacro.CompilerSDKIdentity = identity
+	t.Cleanup(func() { procmacro.CompilerSDKIdentity = previous })
+	host, err := procmacro.NewWASIHostWithBudgets(context.Background(), procmacro.MaxInvocationTime*p5WASIBudgetMultiplier, procmacro.MaxCompilationTime*p5WASIBudgetMultiplier)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = host.Close() })
+	return compile.Options{GoTool: tool, RunProcMacro: host.Run}
 }
 
 func p5Project(t *testing.T) string {

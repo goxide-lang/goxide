@@ -1,0 +1,12 @@
+[go_mod]
+module="optionserde.example/service"
+go="1.27"
+[[bin]]
+name="option_serde"
+path="."
+[dependencies.std]
+go="github.com/goxide-lang/std"
+version="v0.0.2"
+[dependencies.serde]
+go="github.com/goxide-lang/serde"
+version="v0.0.2"

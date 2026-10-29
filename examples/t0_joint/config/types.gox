@@ -1,13 +1,14 @@
 package config
+use std;
 use serde;
 
-#[derive(serde::Serialize, serde::Deserialize, Default)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize, std::derive::Default)]
 pub enum Mode { #[default] Immediate, Batch(int), }
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
 type Settings struct { Port int }
-#[derive(serde::Serialize, serde::Deserialize, Default)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize, std::derive::Default)]
 type Flags struct { Enabled bool }
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
 #[serde(deny_unknown_fields)]
 type Request struct {
     Name string

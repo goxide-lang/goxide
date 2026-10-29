@@ -1,0 +1,32 @@
+package model
+use macros;
+use runtime;
+use errors;
+
+type Label = string
+type Cause = error
+#[derive(macros::LibraryError)]
+#[library_error("cannot open {{ {name} }}: {count} {ratio} {ready}")]
+pub struct Request {
+ name Label
+ count int
+ ratio float64
+ ready bool
+ #[library_source]
+ cause Cause
+}
+#[derive(macros::LibraryError)]
+#[library_error("")]
+pub struct Empty {}
+#[derive(macros::LibraryError)]
+#[library_error("value {code}")]
+pub struct WithCode { code int }
+
+pub func New(cause error) Request { return Request{name:"data",count:3,ratio:1.25,ready:true,cause:cause} }
+pub func EmptyError() error { return Empty{} }
+pub func CodeError() error { return WithCode{code:7} }
+pub func Check() bool {
+ cause:=errors::New("cause")
+ request:=New(cause)
+ return request.Error()=="cannot open { data }: 3 1.25 true" && errors::Is(request,cause) && request.Unwrap()==cause && EmptyError().Error()=="" && CodeError().Error()=="value 7"
+}

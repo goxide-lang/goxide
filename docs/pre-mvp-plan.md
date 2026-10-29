@@ -1,6 +1,6 @@
 # 到 pre-MVP 的规划
 
-目标：用新前端（`parser → expand → resolve → check → lower`）替换现有文本管线，恢复到 README 记录的能力集合，然后开始 MVP 工作。
+目标：用新前端（`parser → expand → resolve → check → lower`）打通现有能力，再推进 MVP。阶段实施状态以[能力状态表](mvp-gap-audit.md)为准；本轮正式 std/serde 库迁移与 enum 合同调整已接入，验证状态也统一记在该表。
 
 规则：每个阶段一个分支、一组 Codex 任务、一次验收；阶段之间不混。旧管线在 P6 之前保持可用但冻结，只修阻塞性 bug。
 
@@ -27,9 +27,9 @@ gofmt -l internal cmd
 
 交付：一次做完，不拆里程碑。
 
-- enum 声明（含泛型参数与实例化）降低为闭合变体：标签加各变体独立内联槽，变体构造、载荷投影、零值语义。
+- 用户 enum 声明（含泛型参数与实例化）降低为密封接口与指针变体；变体构造、只读载荷投影及非法零值按 enum 规范。Option/Result 保留现有 std/sum 表示。
 - 泛型：类型参数与实例化，`Option[T]` / `Result[T, E]` 作为泛型类型而非固定实例；实例化取真实类型实参。
-- match 编译：穷尽性、guard、`ref` / `ref mut` 绑定、表达式体与块体、作为终结语句（不再要求补 `return`）。
+- match 编译：穷尽性、guard、值及 `ref` 只读绑定、表达式体与块体、作为终结语句；payload 槽位不可变。
 - `?` 传播：返回到最近的函数边界，单步错误转换，失败后不执行后续实参。
 - 新阶段 `internal/check`：穷尽性、非法值策略、不可达分支、`?` 的返回类型匹配、泛型实参的约束检查。
 
@@ -60,13 +60,15 @@ gofmt -l internal cmd
 
 ## P3 引用与 payload 投影
 
-交付：`&T` / `&mut T`、取引用、`ref` / `ref mut` 模式、payload 原位投影、`match &e`。
+交付：`&T` / `&mut T`、取引用、`ref` 与 `match &e` 的只读原位投影。enum payload 槽位不可变，`ref mut` / `match &mut e` 拒绝；enum 变量可整体重绑定，容器按自身权限使用。
 
 检查：借用示例运行；投影身份测试（指向同一槽位）；读写权限的正反例。
 
 退出：`examples/enum_borrows` 通过。
 
 ## P4 trait、impl 与关联类型（已完成）
+
+以下为阶段交付范围；后续已删除 `declare impl`，接入条件泛型和普通库协议。当前固有成员映射以 RFC 0020 为准：静态放 carrier，enum 值/只读方法放接口与变体，条件成员按 D38 实际请求扁平化。
 
 交付：非泛型 `trait`、本包具体 struct/enum 的固有及 trait `impl`、`T::method`、单 trait 约束泛型函数、普通关联类型、wrapper/marker，以及 `declare impl` 的 Go 侧适配。struct 与 enum 使用同一套源级成员查询；新管线独立完成检查与降低。
 

@@ -11,7 +11,7 @@ import (
 func TestSuppliedCrossPlatformLicensesAndCollision(t *testing.T) {
 	for _, collision := range []bool{false, true} {
 		t.Run(map[bool]string{false: "nested-licenses", true: "collision"}[collision], func(t *testing.T) {
-			root := t.TempDir()
+			root := sourceTempDir(t)
 			files := map[string]string{
 				"go.mod":                              "module example.org/app\ngo 1.27\n",
 				"vendor/modules.txt":                  "# example.org/a v1.0.0\n## explicit; go 1.27\nexample.org/a\n# example.org/a/sub v1.0.0\n## explicit; go 1.27\nexample.org/a/sub/pkg\n",

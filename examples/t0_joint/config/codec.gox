@@ -1,7 +1,8 @@
 package config
+use serde;
 
 use serde::json as serdejson;
 
-func Decode(input []byte)(Request,error){return serdejson::Unmarshal(input,DeserializeRequest)}
+func Decode(input []byte)(Request,error){return serdejson::Unmarshal(input,serde::Read[Request])}
 func RetryCount(q Request)int{return match q.Retry{Option[int]::None=>-1,Option[int]::Some(n)=>n}}
-func Encode(q Request)([]byte,error){return serdejson::Marshal(&q,SerializeRequest)}
+func Encode(q Request)([]byte,error){return serdejson::Marshal(&q,serde::Write[Request])}

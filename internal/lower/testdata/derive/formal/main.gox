@@ -1,0 +1,106 @@
+package main
+use std;
+use errors;
+use math;
+#[derive(std::derive::Default, std::derive::Clone, std::derive::Debug, std::derive::PartialEq, std::derive::Eq)]
+struct Record { First int; Second string }
+#[derive(std::derive::Clone, std::derive::Debug, std::derive::PartialEq, std::derive::Eq)]
+struct Box[T any] { Value T }
+#[derive(std::derive::Debug)]
+struct ComplexFields { Single complex64; Double complex128 }
+macro_rules! named {
+    ($owner:ident) => {
+        #[derive(std::derive::Default, std::derive::Clone, std::derive::Debug, std::derive::PartialEq, std::derive::Eq)]
+        struct $owner { r#match int }
+    };
+}
+named!(Captured)
+#[derive(std::derive::Default, std::derive::Clone, std::derive::Debug, std::derive::PartialEq, std::derive::Eq)]
+enum Choice[T any] { #[default] Empty, Value(T), Named { Text string }, }
+#[derive(std::derive::Clone, std::derive::Debug)]
+struct Containers { Slice []int; Fixed [2]int; Values map[string]int; Optional Option[int]; Result Result[int,string] }
+#[derive(std::derive::Error)]
+#[error("request failed")]
+struct Request { #[from] Cause error }
+#[derive(std::derive::Error)]
+enum Failure { #[error("failed input")] #[from] IO(error), #[error("bad count {Value}")] Count(int), #[error("empty")] Absent, }
+#[derive(std::derive::PartialEq, std::derive::Eq)]
+type Count int
+#[derive(std::derive::PartialEq, std::derive::Eq)]
+type Integers []int
+#[derive(std::derive::PartialEq, std::derive::Eq)]
+type IntegerMap map[string]int
+#[derive(std::derive::PartialEq, std::derive::Eq, std::derive::NativeKey)]
+type IntegerArray [2]int
+var defaultCalls int
+struct Ticket { Value int }
+impl std::Default for Ticket {func Default()Self{defaultCalls++;return Self{Value:defaultCalls}}}
+#[derive(std::derive::Default)]
+struct Sequence { First Ticket; Second Ticket }
+#[derive(std::derive::PartialEq,std::derive::NativeKey)]
+struct Key { ID int; Label string }
+struct Touch {}
+var touch func()
+impl std::PartialEq for Touch {func equals(self Self,other Self)bool{touch();return true}}
+#[derive(std::derive::PartialEq)]
+enum Mutable { Pair { First Touch; Last []int }, }
+#[derive(std::derive::Eq)]
+struct Promise { Value int }
+impl std::PartialEq for Promise {func equals(self Self,other Self)bool{return self.Value==other.Value}}
+impl std::DerivedPartialEq for Promise {}
+func requireEq[T std::Eq](value T) {}
+struct Settings { Port int }
+func recursivePort(n int) int {if n==0{return 42};return recursivePort(n-1)}
+impl std::Default for Settings {func Default()Self{return Self{Port:recursivePort(3)}}}
+func main() {
+    captured:=std::default_value[Captured]()
+    if captured.r#match!=0||!std::PartialEq::equals(captured,std::Clone::clone(&captured))||std::Debug::debug(&captured)!="Captured { match: 0 }" {panic("captured owner and raw field")}
+    complexFields:=ComplexFields{Single:complex64(1+2i),Double:complex128(3-4i)}
+    if std::Debug::debug(&complexFields)!="ComplexFields { Single: (1+2i), Double: (3-4i) }" {panic("uniform complex Debug")}
+    if std::default_value[Settings]().Port!=42{panic("ordinary Default recursion")}
+    requireEq(Promise{Value:3})
+    mapLeft:=map[Key][]int{Key{ID:1,Label:"x"}:[]int{1,2}}
+    mapRight:=map[Key][]int{Key{ID:1,Label:"x"}:[]int{1,2}}
+    if !std::PartialEq::equals(mapLeft,mapRight){panic("native key map equality")}
+    left:=Mutable::Pair{First:Touch{},Last:[]int{1}}
+    right:=Mutable::Pair{First:Touch{},Last:[]int{1}}
+    touch=func(){match left{Mutable::Pair{First:_,Last:values}=>{values[0]=2}}}
+    if std::PartialEq::equals(left,right){panic("enum referents must be compared in field order")}
+
+    sequence:=std::default_value[Sequence]()
+    if defaultCalls!=2||sequence.First.Value!=1||sequence.Second.Value!=2{panic("business defaults source order")}
+
+    value := std::default_value[Record]()
+    value.First = 7
+    value.Second = "hello"
+    clone := std::Clone::clone(&value)
+    if !std::PartialEq::equals(value,clone) { panic("clone equality") }
+    generic := Box[int]{Value: 9}
+    if !std::PartialEq::equals(generic,Box[int]{Value:9}) { panic("generic equality") }
+    selected := Choice[int]::Value(4)
+    if !std::PartialEq::equals(selected,std::Clone::clone(&selected)) { panic("enum equality") }
+    if std::PartialEq::equals(selected,Choice[int]::Empty) { panic("enum discriminant") }
+    containers := Containers{Slice:[]int{1,2},Fixed:[2]int{3,4},Values:map[string]int{"b":2,"a":1},Optional:Option[int]::Some(5),Result:Result[int,string]::Ok(6)}
+    copied := std::Clone::clone(&containers)
+    copied.Slice[0]=99
+    copied.Values["a"]=99
+    if containers.Slice[0]!=1||containers.Values["a"]!=1 {panic("clone must own containers")}
+    if std::Debug::debug(&containers)!="Containers { Slice: [1, 2], Fixed: [3, 4], Values: {\"a\": 1, \"b\": 2}, Optional: Option::Some(5), Result: Result::Ok(6) }" {panic(std::Debug::debug(&containers))}
+    var missing []int
+    empty:=make([]int,0)
+    if std::PartialEq::equals(missing,empty) {panic("nil is not empty")}
+    if std::PartialEq::equals(math::NaN(),math::NaN()) {panic("NaN")}
+    if !std::PartialEq::equals(Count(2),Count(2)) {panic("defined scalar")}
+    if !std::PartialEq::equals(Integers{1,2},Integers{1,2})||!std::PartialEq::equals(IntegerMap{"x":2},IntegerMap{"x":2})||!std::PartialEq::equals(IntegerArray{1,2},IntegerArray{1,2}) {panic("defined container equality")}
+    if !std::PartialEq::equals(map[IntegerArray]int{IntegerArray{1,2}:3},map[IntegerArray]int{IntegerArray{1,2}:3}) {panic("defined native array key")}
+    if !std::PartialEq::equals(Option[int]::Some(7),Option[int]::Some(7)) {panic("Option equality")}
+    if !std::PartialEq::equals(Result[int,string]::Ok(8),Result[int,string]::Ok(8)) {panic("Result equality")}
+    cause:=errors::New("cause")
+    request:=Request::from::<std::From[error]>(cause)
+    if request.Error()!="request failed"||!errors::Is(request,cause) {panic("struct error")}
+    failure:=Failure::from::<std::From[error]>(cause)
+    if failure.Error()!="failed input"||!errors::Is(failure,cause) {panic("enum error")}
+    counted:=Failure::Count(7)
+    if counted.Error()!="bad count 7"||counted.Unwrap()!=nil {panic("enum formatting")}
+    std::println!("{:?} | {:?} | {:?}", value, generic, selected)
+}

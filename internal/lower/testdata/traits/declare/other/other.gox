@@ -1,8 +1,0 @@
-package other
-
-use bytes;
-use traitdeclare::adapters;
-
-declare impl adapters::Reader for bytes::Buffer;
-
-func View(source &mut bytes::Buffer) adapters::Reader { return source }

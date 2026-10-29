@@ -6,11 +6,11 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
-func key(id *ast.Ident) Key { return Key{id.Name, id.Ctx} }
+func key(id *ast.Ident) Key { return Key{Name: id.Name, Ctx: id.Ctx} }
 func newScope(kind ScopeKind, parent *Scope) *Scope {
 	return &Scope{Kind: kind, Parent: parent, Bindings: make(map[Key]*Symbol), Aliases: make(map[Key][]*Symbol), Labels: make(map[Key]*Symbol)}
 }
@@ -30,13 +30,13 @@ func prelude() *Scope {
 		k := Key{Name: name}
 		s.Bindings[k] = &Symbol{Name: k, Kind: kind, GoName: name}
 	}
+	k := Key{Name: "enum_valid"}
+	s.Bindings[k] = &Symbol{Name: k, Kind: Builtin, GoName: "enum_valid"}
+	k = Key{Name: "__goxide_enum_assert"}
+	s.Bindings[k] = &Symbol{Name: k, Kind: Builtin, GoName: k.Name}
 	for _, name := range []string{"Option", "Result"} {
 		k := Key{Name: name}
 		s.Bindings[k] = &Symbol{Name: k, Kind: Type, GoName: name}
-	}
-	for _, name := range []string{"Default", "Clone", "Debug", "PartialEq", "Eq"} {
-		k := Key{Name: name}
-		s.Bindings[k] = &Symbol{Name: k, Kind: Trait, GoName: name}
 	}
 	for name, goName := range map[string]string{
 		"i8": "int8", "i16": "int16", "i32": "int32", "i64": "int64", "isize": "int",
@@ -69,11 +69,18 @@ func isStatic(s *Symbol) bool {
 	return false
 }
 
+func shadowablePrelude(s *Symbol) bool {
+	return s.Kind == Variant || s.Name.Name == "Option" || s.Name.Name == "Result"
+}
+
 func (r *resolver) define(scope *Scope, node ast.Node, name *ast.Ident, kind Kind) *Symbol {
 	if name == nil {
 		return nil
 	}
 	s := &Symbol{Name: r.declarationKey(scope, name), Kind: kind, Decl: r.ref(name), GoName: name.Name}
+	if kind == Macro {
+		s.Name.Namespace = MacroNamespace
+	}
 	if !r.file.AST.NativeGo && name.Name == "crate" && isStatic(s) {
 		r.diag(name, "reserved-root", "crate is a reserved static path root")
 	}
@@ -96,7 +103,7 @@ func (r *resolver) define(scope *Scope, node ast.Node, name *ast.Ident, kind Kin
 		r.introduce(scope, name, old)
 		return s
 	}
-	if preimport := scope.Parent; !r.file.AST.NativeGo && scope.Kind == PackageScope && kind != Function && preimport.Bindings[s.Name] != nil && preimport.Bindings[s.Name].Kind != Variant && name.Name != "true" && name.Name != "false" && name.Name != "comparable" {
+	if preimport := scope.Parent; !r.file.AST.NativeGo && scope.Kind == PackageScope && kind != Function && preimport.Bindings[s.Name] != nil && !shadowablePrelude(preimport.Bindings[s.Name]) && name.Name != "true" && name.Name != "false" && name.Name != "comparable" {
 		r.diag(name, "prelude-conflict", fmt.Sprintf("package declaration %q conflicts with a preimported name", name.Name))
 	}
 	if kind == Type || kind == Enum || kind == Trait || kind == TypeParam {
@@ -142,31 +149,40 @@ func (r *resolver) lookup(scope *Scope, k Key, static bool) Resolution {
 			}
 		}
 	}
-	// File and package globs compete only after all explicit bindings.
-	var candidates []*Symbol
+	// Explicit globs compete after named bindings; the automatic prelude is last.
 	var deferred []string
-	seen := make(map[string]bool)
-	for _, u := range globs {
-		path := strings.Join(u.Target, "::")
-		if seen[path] {
-			continue
+	for _, implicit := range []bool{false, true} {
+		if implicit && fallback != nil && !shadowablePrelude(fallback) && (!static || isStatic(fallback)) {
+			// Go's preimported names precede the implicit source prelude.
+			return Resolution{Symbol: fallback}
 		}
-		seen[path] = true
-		if r.importer == nil {
-			if deferred == nil {
-				deferred = append(append([]string{}, u.Target...), k.Name)
+		var candidates []*Symbol
+		seen := make(map[string]bool)
+		for _, u := range globs {
+			if u.Implicit != implicit {
+				continue
 			}
-			continue
-		}
-		for _, e := range r.importer.Lookup(u.Target, k) {
-			symbol := externalSymbol(u.Target, e)
-			if !static || isStatic(symbol) {
-				candidates = append(candidates, symbol)
+			path := strings.Join(u.Target, "::")
+			if seen[path] {
+				continue
+			}
+			seen[path] = true
+			if r.importer == nil {
+				if deferred == nil && !implicit {
+					deferred = append(append([]string{}, u.Target...), k.Name)
+				}
+				continue
+			}
+			for _, e := range r.importer.Lookup(u.Target, k) {
+				symbol := externalSymbol(u.Target, e)
+				if !static || isStatic(symbol) {
+					candidates = append(candidates, symbol)
+				}
 			}
 		}
-	}
-	if len(candidates) > 0 {
-		return choices(candidates)
+		if len(candidates) > 0 {
+			return choices(candidates)
+		}
 	}
 	if fallback != nil && (!static || isStatic(fallback)) {
 		return Resolution{Symbol: fallback}
@@ -186,7 +202,7 @@ func (r *resolver) importTarget(res Resolution) Resolution {
 		return res
 	}
 	target := symbol.Target
-	name := Key{Name: target[len(target)-1], Ctx: symbol.Name.Ctx}
+	name := Key{Name: target[len(target)-1], Ctx: symbol.Name.Ctx, Namespace: symbol.Name.Namespace}
 	var symbols []*Symbol
 	for _, external := range r.importer.Lookup(target[:len(target)-1], name) {
 		symbols = append(symbols, externalSymbol(target[:len(target)-1], external))
@@ -246,22 +262,6 @@ func (r *resolver) record(n ast.Node, res Resolution) {
 
 func (r *resolver) validateIdents() {
 	selfRoots := make(map[*ast.Ident]bool)
-	defaultMembers := make(map[*ast.Ident]bool)
-	for _, item := range r.file.AST.Items {
-		impl, ok := item.(*ast.ImplDecl)
-		if !ok {
-			continue
-		}
-		trait, ok := impl.Trait.(*ast.PathType)
-		if !ok || len(trait.Path.Segments) != 1 || trait.Path.Segments[0].Name.Name != "Default" {
-			continue
-		}
-		for _, item := range impl.Items {
-			if function, ok := item.(*ast.FuncDecl); ok && function.Name.Name == "default" {
-				defaultMembers[function.Name] = true
-			}
-		}
-	}
 	ast.Walk(r.file.AST, func(n ast.Node) bool {
 		switch n.(type) {
 		case *ast.BadItem, *ast.BadStmt, *ast.BadExpr, *ast.BadType, *ast.BadPat:
@@ -272,7 +272,7 @@ func (r *resolver) validateIdents() {
 		if p, ok := n.(*ast.Path); ok && len(p.Segments) > 1 && p.Segments[0].Name.Name == "Self" {
 			selfRoots[p.Segments[0].Name] = true
 		}
-		if id, ok := n.(*ast.Ident); ok && !id.Raw && !selfRoots[id] && !defaultMembers[id] && token.IsHardReserved(id.Name) {
+		if id, ok := n.(*ast.Ident); ok && !id.Raw && !selfRoots[id] && token.IsHardReserved(id.Name) {
 			r.diag(id, "reserved", fmt.Sprintf("reserved word %q requires r#", id.Name))
 		}
 		return true

@@ -1,0 +1,11 @@
+package main
+
+macro_rules! forward { ($value:expr) => { $value }; }
+
+func run() int {
+    bonus := 100
+    value := 20
+    return forward!(func() int { value := value + 1; return value }())
+}
+
+func main() { println(run()) }

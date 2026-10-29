@@ -1,0 +1,9 @@
+package main
+
+use fmt;
+use macros;
+
+#[macros::constant(6 * 7)]
+func answer() int { return 0 }
+
+func main() { fmt::Println(answer()) }

@@ -1,15 +1,16 @@
 package acceptance_test
 
 import (
-	testdeps "github.com/hxsf/goxide/tests/testutil"
+	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/rootconfig"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
 func qualifiedSource(t *testing.T) (string, string) {
@@ -34,35 +35,35 @@ func qualifiedSource(t *testing.T) (string, string) {
 		if err != nil {
 			return err
 		}
-		if filepath.Ext(path) == ".gox" {
-			data = []byte(strings.NewReplacer("\n    panic(\"unreachable\")", "", "alternate::NewModeReady", "alternate::Mode::Ready", "p::Result[", "Result[", "p::Option[", "Option[", "renamed::Result[", "Result[", "func InvalidNested() Result[Mode,error] { return Result[Mode,error]::Ok(Mode{}) }", "").Replace(string(data)))
-		}
 		return testdeps.WriteFile(dst, data, 0600)
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	packagesWrite(t, source, "go.mod", "module qualified.example/app\ngo 1.27\n")
-	packagesWrite(t, source, "source/nil.go", `package source
-import "github.com/goxide-lang/std/sum"
-func InvalidNested()sum.Result[Mode,error]{return sum.NewOk[Mode,error](nil)}
-`)
+	packagesWrite(t, source, "go.mod", "module qualified.example/app\ngo 1.27\n"+stdFixtureGoRequirements(t))
 	return source, root
 }
 
-func compileQualifiedModule(t *testing.T, source, destination string) error {
+func compileQualifiedModule(t *testing.T, source string) (string, error) {
 	t.Helper()
-	roots, err := rootconfig.Load(source)
+	_, here, _, _ := runtime.Caller(0)
+	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
+	cli := acceptanceCLI(t)
+	destination := filepath.Join(t.TempDir(), "generated")
+	command := exec.Command(cli, "transpile", "-o", destination, source)
+	command.Dir = root
+	command.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=local", "GOPROXY=off")
+	output, err := command.CombinedOutput()
 	if err != nil {
-		t.Fatal(err)
+		return "", fmt.Errorf("qualified native module: %w\n%s", err, output)
 	}
-	return testdeps.Module(source, destination, roots)
+	return destination, nil
 }
 
 func TestQualifiedPackagesApplicationRace(t *testing.T) {
 	source, _ := qualifiedSource(t)
-	dest := filepath.Join(t.TempDir(), "generated")
-	if err := compileQualifiedModule(t, source, dest); err != nil {
+	dest, err := compileQualifiedModule(t, source)
+	if err != nil {
 		t.Fatal(err)
 	}
 	packagesWrite(t, dest, "qualified_test.go", qualifiedAssertions)
@@ -87,7 +88,7 @@ func wrong(value b::Mode) string {
  return match value {a::Mode::Idle => "idle",a::Mode::Ready(_) => "ready",}
 }
 `)
-	err := compileQualifiedModule(t, source, filepath.Join(t.TempDir(), "generated"))
+	_, err := compileQualifiedModule(t, source)
 	if err == nil {
 		t.Fatal("matched different packages' Mode values by name")
 	}
@@ -116,7 +117,7 @@ func wrong() Result[int,AppError] {
 }
 
 `)
-	err = compileQualifiedModule(t, source, filepath.Join(t.TempDir(), "generated"))
+	_, err = compileQualifiedModule(t, source)
 	if err == nil || !strings.Contains(err.Error(), "requires Option or Result") {
 		t.Fatalf("unregistered lookalike accepted or wrong failure: %v", err)
 	}
@@ -137,8 +138,8 @@ func concrete(value Result[string,error], seen *int) string {
  return out
 }
 `)
-	dest := filepath.Join(t.TempDir(), "generated")
-	if err := compileQualifiedModule(t, source, dest); err != nil {
+	dest, err := compileQualifiedModule(t, source)
+	if err != nil {
 		t.Fatal(err)
 	}
 	packagesWrite(t, dest, "concrete_test.go", `package main
@@ -163,7 +164,8 @@ func TestLocalConcreteValidation(t *testing.T){
 func TestQualifiedPackagesRejectDuplicateFrom(t *testing.T) {
 	source, _ := qualifiedSource(t)
 	packagesWrite(t, source, "bad.gox", `package main
-#[derive(Error)]
+use std;
+#[derive(std::derive::Error)]
 pub enum Duplicate {
  #[error("first")]
  #[from]
@@ -173,7 +175,7 @@ pub enum Duplicate {
  Second(error),
 }
 `)
-	err := compileQualifiedModule(t, source, filepath.Join(t.TempDir(), "generated"))
+	_, err := compileQualifiedModule(t, source)
 	if err == nil || !strings.Contains(strings.ToLower(err.Error()), "from") {
 		t.Fatalf("duplicate From accepted or wrong failure: %v", err)
 	}

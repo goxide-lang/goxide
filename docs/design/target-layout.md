@@ -10,32 +10,34 @@
 target/
   .goxide-layout.json
   .layout-lock/
-  units/<host>/<target>/<kind>/<name>/<config>/
+  units/<target>/<kind>/<name>/<config>/
     .goxide-unit.json
     bundle/module/
     bundle/deps/<module-hash>/
     bundle/policy-anchors/<module>/go.mod
     .goxide-files.json            # 文件 hash/mode，用于删旧文件及保护用户编辑
     intermediate/                # 临时生成视图与 Go 中间输出
+      macro/cli/                 # 过程宏当前磁盘输入的成功编译工作
+      macro/editor/              # 过程宏当前编辑输入的成功编译工作
   cache/git/<source-key>/         # 锁定 commit 的源码 checkout
   scripts/<host>/<target>/<package-id>/
     .goxide-unit.json              # 包级脚本缓存容器，跨 bin/example 共享
     script-cache/              # runner 所有权标记及 entries/<完整输入键>
-  bin/<host>/<target>/<kind>/<name>/<config>/
+  bin/<target>/<kind>/<name>/<config>/
     .goxide-unit.json
     <name>[.exe]
     .goxide-binary.json
 ```
 
-host/target 为 GOOS-GOARCH；kind 为 lib/bin/example。config 包含整个已解析 goxide 图各节点的 module/root/go.mod/manifest/feature、激活 Git commit、tags、目标入口与种类、编译器内容摘要、Go 目标环境选项、共享选版/来源计划以及 test 的 race 模式。**它是配置身份，不是源码内容缓存键。** 源码修改可复用同一最终二进制路径，生成 module/deps 也保持稳定；不会据 config 跳过转译。build/run/transpile 的相同普通配置可共享 unit，test 配置隔离。
+target 为 GOOS-GOARCH；units/bin 路径只保留这一层平台目录，宿主信息保存在 unit 元数据并参与配置身份；kind 为 lib/bin/example/proc-macro。config 包含整个已解析 goxide 图各节点的 module/root/go.mod/manifest/feature、激活 Git commit、tags、目标入口与种类、编译器内容摘要、Go 目标环境选项、共享选版/来源计划（含传递过程宏依赖配置）以及 test 的 race 模式。过程宏源码及本地 helper 的内容变化不进入路径身份，仍按当前输入重新编译并执行。**它是配置身份，不是源码内容缓存键。** 源码修改可复用同一最终二进制路径，生成 module/deps 也保持稳定；不会据 config 跳过转译。build/run/transpile 的相同普通配置可共享 unit，test 配置隔离。
 
-本次继续明确拒绝非宿主 GOOS/GOARCH；只有路径分区并不解决前端跨平台类型尺寸问题。不可把目录字段视为已实现交叉编译。
+工具链入口按所选目标生成并构建；非宿主 run/test 提前拒绝。过程宏固定构建为 wasip1/wasm，宿主差异仍由配置身份区分。
 
 ## 统一条件配置的接入设计
 
 统一配置与身份见 [RFC 0022](../rfcs/0022-project-toolchain.md#生成物与配置身份)。先在受管临时目录完成一次编译，取得动态宏展开中的完整 env 读取记录，再计算 UnitSpec.Config、选择目录并发布。摘要包括规范化目标、所选 Go 与有效后端设置、每模块 feature 声明/启用集合及实际读取键的 present/原值；键值无损编码，unset 不等于空串。未读取变量不因 env 功能影响摘要，工具链模式忽略的原始 GOOS/GOARCH 仅在源码查询后计入。
 
-Host 与 Target 分开保存，仍使用 GOOS-GOARCH 路径分区。目标两种拼写归一化后共享配置目录；目标和环境不写入依赖锁身份。原生生成及单文件模式不增加持久转译缓存。原值不落入 unit 标记；失败清理、租约和覆盖保护沿用现有流程。
+Host 与 Target 分开保存，units/bin 仅使用 Target 的 GOOS-GOARCH 路径分区。目标两种拼写归一化后共享配置目录；目标和环境不写入依赖锁身份。原生生成及单文件模式不增加持久转译缓存。原值不落入 unit 标记；失败清理、租约和覆盖保护沿用现有流程。
 
 ## 构建与保留
 
@@ -59,6 +61,10 @@ Host 与 Target 分开保存，仍使用 GOOS-GOARCH 路径分区。目标两种
 
 `goxide.lock` 仍在源码根；Git checkout 放在受管 `target/cache/git`；Go module/build cache 仍由 Go 的 GOMODCACHE/GOCACHE 管理。改变 target-dir 需要在新缓存位置获取已锁源码，但不应改变 lock；Go 缓存路径不受 target-dir 改写。最终 Go 命令的 GOTMPDIR 指向稳定 intermediate；Go 自行管理其短期文件。离线/锁定策略沿用 RFC 0022。
 
+过程宏的成功编译工作发布到对应 proc-macro unit 的 `intermediate/macro/{cli,editor}`，两种输入隔离，文件沿用覆盖保护与差量写入。会话和构建保留自己的私有输入与 WASM 字节，不从可变共享槽直接执行；每次准备仍以当前输入运行 Go 构建确认新鲜度。CLI 创建配置 unit 并沿用原有发布租约；编辑器准备使用私有目录，读取已发布锁和经过验证的共享 Git checkout。editor 槽仅在共享 unit 已存在且所有权匹配时发布，以 unit 内的 `.macro-editor-lock` 短租约串行化；它不获取项目或布局写锁，unit 缺失或槽繁忙时保留私有结果。共享范围是 Go 编译缓存与稳定工作槽，不包括展开 AST、绑定或类型；详情见[第 2 级宏缓存](compiler-and-tooling.md#8-过程宏与第-2-级缓存)。
+
+这些稳定宏槽当前保存成功工作镜像，不直接作为编译命中来源；编译复用仍由 Go 缓存负责。
+
 runner 使用 `project.OpenLayout(root, module, targetDir)` 持有 lease，再调用 `Layout.Begin(UnitSpec)`。返回 `Unit` 的 Directory、Bundle、Intermediate、BinaryDirectory。Close 只释放 lease，不清理产物。runner 必须自行定义脚本输出所有权与完整缓存键；不能仅凭 config 认定脚本结果新鲜。脚本信任授权必须存放于产物根之外，不得放在可清理、可版本控制的 target 或所有权标记中。布局模块本身不执行脚本、不提供信任决定、不触发安装脚本。联合runner见 [RFC 0023](../rfcs/0023-build-scripts.md)。
 
 为保持包级生成结果跨bin共享，联合runner使用 `Layout.ScriptCache` 创建独立scripts空间，调用 `ScriptCachePath` 计算同一路径；沿用所有权标记和layout lease。host/target/package决定容器位置，features/env/输入/工具等由runner完整缓存键分区。`CleanScriptCaches` 先验证全部脚本布局结构，再调用runner逐cache所有权检查与清理，保留其他units/bin、信任、源码和依赖缓存。生成器使用短期隔离目录，成功字节保存在脚本 cache 与当前 bundle；它不是 OS sandbox。
@@ -66,3 +72,5 @@ runner 使用 `project.OpenLayout(root, module, targetDir)` 持有 lease，再�
 ## 验证入口
 
 `internal/project/layout_test.go` 覆盖所有权、symlink、重复 lease、陌生 unit/bin、修改文件拒绝与保留。`cmd/goxide/layout_test.go` 使用真实 Go 临时多模块，验证默认输出/配置切换、多 bin/example/web embed、重复与离线构建、稳定 bundle 的新依赖可独立构建、旧生成文件清理、源码映射、CLI/env 优先级、跨项目 -o 拒绝及跨平台明确拒绝。其余 feature/Git/锁定回归见 [RFC 0022](../rfcs/0022-project-toolchain.md)。
+
+`internal/project/layout_macro_work_test.go` 和 `internal/compile/session_macros_test.go` 覆盖宏槽隔离、mtime、取消与修改保护，以及未保存宏输入、独立执行会话和更新后的实际 WASM 行为。

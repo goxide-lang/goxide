@@ -7,11 +7,12 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"fmt"
-	"github.com/hxsf/goxide/internal/config"
-	"github.com/hxsf/goxide/internal/paths"
-	"github.com/hxsf/goxide/internal/playground"
-	"github.com/hxsf/goxide/internal/rootconfig"
-	"github.com/hxsf/goxide/internal/typecheck"
+	"github.com/goxide-lang/goxide/internal/analysis"
+	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/playground"
+	"github.com/goxide-lang/goxide/internal/rootconfig"
+	"strings"
 	"syscall/js"
 )
 
@@ -41,13 +42,20 @@ func compile(_ js.Value, args []js.Value) (result any) {
 	if len(source) > 32768 {
 		return map[string]any{"error": "source exceeds 32 KiB"}
 	}
-	output, err := playground.CompilePackage([]playground.File{{Path: "playground.gox", Source: source}}, playground.Options{
-		Config: requestConfig(), Roots: dependencyRoots, Importer: typecheck.NewImporter("playground.gox", typecheck.ImporterOptions{Config: requestConfig()}), PackagePath: "goxide/generated",
-	})
+	var diagnostics []string
+	reportedErrors := false
+	options, err := compileOptions("goxide/generated", &diagnostics, &reportedErrors)
 	if err != nil {
 		return map[string]any{"error": err.Error()}
 	}
-	return map[string]any{"go": output[0].Source}
+	output, err := playground.CompilePackage([]playground.File{{Path: "playground.gox", Source: source}}, options)
+	if err != nil {
+		if reportedErrors {
+			err = analysis.SummarizeProcDiagnostics(err)
+		}
+		return map[string]any{"error": err.Error(), "diagnostics": strings.Join(diagnostics, "\n")}
+	}
+	return map[string]any{"go": output[0].Source, "diagnostics": strings.Join(diagnostics, "\n")}
 }
 
 func compilePackage(_ js.Value, args []js.Value) (result any) {
@@ -73,17 +81,24 @@ func compilePackage(_ js.Value, args []js.Value) (result any) {
 	}
 	// On js/wasm this reads only the export archives embedded at website build
 	// time. Each request receives a fresh importer and no request-local state.
-	output, err := playground.CompilePackage(files, playground.Options{
-		Config: requestConfig(), Roots: dependencyRoots, Importer: typecheck.NewImporter("playground.gox", typecheck.ImporterOptions{Config: requestConfig()}),
-	})
+	var diagnostics []string
+	reportedErrors := false
+	options, err := compileOptions("", &diagnostics, &reportedErrors)
 	if err != nil {
 		return map[string]any{"error": err.Error()}
+	}
+	output, err := playground.CompilePackage(files, options)
+	if err != nil {
+		if reportedErrors {
+			err = analysis.SummarizeProcDiagnostics(err)
+		}
+		return map[string]any{"error": err.Error(), "diagnostics": strings.Join(diagnostics, "\n")}
 	}
 	values := make([]any, len(output))
 	for i, file := range output {
 		values[i] = map[string]any{"path": file.Path, "source": file.Source}
 	}
-	return map[string]any{"files": values}
+	return map[string]any{"files": values, "diagnostics": strings.Join(diagnostics, "\n")}
 }
 
 func main() {
@@ -98,8 +113,20 @@ func main() {
 		js.Global().Call("postMessage", map[string]any{"type": "fatal", "error": err.Error()})
 		return
 	}
-	js.Global().Set("goxideCompile", js.FuncOf(compile))
-	js.Global().Set("goxideCompilePackage", js.FuncOf(compilePackage))
-	js.Global().Call("postMessage", map[string]any{"type": "ready", "rootsSha256": fmt.Sprintf("%x", sha256.Sum256(dependencyContext))})
+	if err := loadMacroBundle(); err != nil {
+		js.Global().Call("postMessage", map[string]any{"type": "fatal", "error": err.Error()})
+		return
+	}
+	js.Global().Set("goxideCompile", js.FuncOf(func(this js.Value, args []js.Value) any {
+		return asynchronousCompile(func() any { return compile(this, args) })
+	}))
+	js.Global().Set("goxideCompilePackage", js.FuncOf(func(this js.Value, args []js.Value) any {
+		return asynchronousCompile(func() any { return compilePackage(this, args) })
+	}))
+	artifacts := make([]any, 0, len(macroBundle.Artifacts))
+	for _, artifact := range macroBundle.Artifacts {
+		artifacts = append(artifacts, artifact.SHA256)
+	}
+	js.Global().Call("postMessage", map[string]any{"type": "ready", "rootsSha256": fmt.Sprintf("%x", sha256.Sum256(dependencyContext)), "macroArtifacts": artifacts})
 	select {}
 }

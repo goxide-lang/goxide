@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/lower"
-	testdeps "github.com/hxsf/goxide/tests/testutil"
+	"github.com/goxide-lang/goxide/internal/lower"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
 func TestReferenceValuesCopiesAndRebinding(t *testing.T) {
@@ -17,11 +17,11 @@ func TestReferenceValuesCopiesAndRebinding(t *testing.T) {
 }
 
 func TestReferenceEnumProjectionIdentityAndReplacement(t *testing.T) {
-	runReferenceFixture(t, "identity", "5 5\n5\ntrue 10 7 7\n8 8\n20 8\n2 1 3 0 5\n4 3 0 9\n")
+	runReferenceFixture(t, "identity", "true 10 1 1\n0 1 1\n20 1\n2 1 0\n0 3\n")
 }
 
 func TestReferenceMatchSnapshotEvaluationAndControl(t *testing.T) {
-	runReferenceFixture(t, "evaluation", "1 9\n2 sig\n3 done\nstop done\n10 xx\nindex x\n")
+	runReferenceFixture(t, "evaluation", "1 9\n1 sig\n3 done\nstop done\n10 xx\nindex x\n")
 }
 
 func TestReferenceSourcePackagesGenericFieldsAndMacros(t *testing.T) {
@@ -31,7 +31,7 @@ func TestReferenceSourcePackagesGenericFieldsAndMacros(t *testing.T) {
 func TestReferenceEnumBorrowExample(t *testing.T) {
 	module := prepareP2Example(t, "enum_borrows", "referenceexample")
 	runGo(t, module, "build", "./...")
-	if got := runGo(t, module, "run", "."); got != "5 5\n5\n" {
+	if got := runGo(t, module, "run", "."); got != "2 1\n2\n9\n" {
 		t.Fatalf("enum_borrows output = %q", got)
 	}
 }
@@ -41,18 +41,54 @@ func TestReferenceFlowRetainsOnlyCurrentSharedPermissions(t *testing.T) {
 }
 
 func TestReferenceDerivedProtocolsReadAndCloneSharedStorage(t *testing.T) {
-	runReferenceFixture(t, "protocols", "true true 1 2 9 8\nData { Items: [1], Counts: {\"one\": 2} }\ntrue true\nState::Pair(Data { Items: [1], Counts: {\"one\": 2} }) State::Pair(Data { Items: [7], Counts: {\"one\": 6} })\n")
+	source, err := os.ReadFile(filepath.Join("testdata", "references", "protocols", "main.gox"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := testdeps.FormalBinarySource(t, "main.gox", source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.MacroCalls < 6 {
+		t.Fatalf("reference protocols invoked %d procedural derives for six registrations", first.MacroCalls)
+	}
+	second, err := testdeps.FormalBinarySource(t, "main.gox", source)
+	if err != nil || !bytes.Equal(first.Go, second.Go) {
+		t.Fatalf("reference protocol generation changed: %v", err)
+	}
+	goldenName := filepath.Join("testdata", "references", "protocols", "main.golden.go")
+	if os.Getenv("GOXIDE_UPDATE_REFERENCE_GOLDEN") == "1" {
+		if err := os.WriteFile(goldenName, first.Go, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	golden, err := os.ReadFile(goldenName)
+	if err != nil || !bytes.Equal(first.Go, golden) {
+		t.Fatalf("reference protocol golden differs: %v\n%s", err, first.Go)
+	}
+	testdeps.RunFormalGo(t, first.Project, "build", "-mod=readonly", "./...")
+	if got := testdeps.RunFormalGo(t, first.Project, "run", "-mod=readonly", "."); got != "true true 1 2 9 8\nData { Items: [1], Counts: {\"one\": 2} }\ntrue true\nState::Pair(Data { Items: [1], Counts: {\"one\": 2} }) State::Pair(Data { Items: [7], Counts: {\"one\": 6} })\n" {
+		t.Fatalf("reference protocol output = %q", got)
+	}
+
 }
 
 func runReferenceFixture(t *testing.T, fixture, want string) {
 	t.Helper()
 	directory := filepath.Join("testdata", "references", fixture)
-	generated, err := lower.PrepareModule([]string{directory}, "referencefixture", testConfig(t))
+	source := t.TempDir()
+	if err := os.CopyFS(source, os.DirFS(directory)); err != nil {
+		t.Fatal(err)
+	}
+	if err := testdeps.WriteFile(filepath.Join(source, "go.mod"), []byte("module referencefixture\n\ngo 1.27\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	generated, err := lower.PrepareModule([]string{source}, "referencefixture", testConfig(t))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(generated) })
-	again, err := lower.PrepareModule([]string{directory}, "referencefixture", testConfig(t))
+	again, err := lower.PrepareModule([]string{source}, "referencefixture", testConfig(t))
 	if err != nil {
 		t.Fatal(err)
 	}

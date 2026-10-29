@@ -3,7 +3,7 @@ package check_test
 import (
 	"testing"
 
-	"github.com/hxsf/goxide/internal/check"
+	"github.com/goxide-lang/goxide/internal/check"
 )
 
 func TestReferenceGenericFunctionCapabilities(t *testing.T) {
@@ -72,6 +72,7 @@ func TestReferenceCopiedContainerElementsKeepPermissions(t *testing.T) {
 		{"append-pointer-elements", `out:=append([]*int{},view.Pointers...);*out[0]=9`, true},
 		{"copy-value-elements", `out:=make([]int,1);copy(out,view.Values);out[0]=9`, false},
 		{"append-value-elements", `out:=append([]int{},view.Values...);out[0]=9`, false},
+		{"renamed-public-field-elements", `out:=struct{pub values []int}{values:view.Values};out.values[0]++`, true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			files, resolved := parse(t, "package p;type Record struct{Pointers []*int;Values []int};func f(view &Record){"+test.body+"}")

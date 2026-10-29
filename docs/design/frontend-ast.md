@@ -2,6 +2,8 @@
 
 本文保留新前端的设计动机与 AST 约定。当前编译器已使用独立语法树，旧文本重写管线已经删除。完整的当前词法、文法及解析边界见[词法与文法](language-grammar.md)，阶段契约与 Go 降低见[编译与转译语义](translation-semantics.md)；下文原始设计中的暂定构造不自动等同于已经实现。
 
+`DeclareDecl` 承载既有 `declare func/type` 声明。`declare impl` 已移除，解析器与宏输出校验只接受前两种内部声明，见 [RFC 0003](../rfcs/0003-declare-impl.md)。
+
 ## 1. 为什么重写
 
 原来的前端没有自己的语法树。每个特性是一个 `[]byte → []byte` 的 pass：用 `go/scanner` 找到新语法，改写成 Go 能解析的文本，再交给 `go/parser`，位置靠 `sourcemap` 逐级合成。结果是：
@@ -66,7 +68,7 @@
 
 ### 3.3 保留字
 
-Go 的 25 个关键字不变。唯一的成员名例外按语法判断：impl 的协议类型是单段路径，且该段名字等于 `Default` 时，无 Go 风格接收者的成员函数名允许直接写 `default`，如 `impl Default for T { func default() T { ... } }`。这个语法位置不核验协议身份；`impl Default[int] for T` 也会先通过语法，再被具体协议检查拒绝。`default` 在包级函数、其他 impl、trait 或普通绑定位置仍须转义。新增三层：
+Go 的 25 个关键字不变。标准库 `Default` trait 的静态成员名为 `Default`，遵循普通标识符规则；关键字作为名称时使用 raw identifier。新增三层：
 
 | 层 | 词 | 规则 |
 | --- | --- | --- |
@@ -163,9 +165,11 @@ type Ident struct {
 | `Attrs []*Attr` | 所有声明、字段、变体、参数、match 分支、语句 | 声明 / 字段 / 变体上已使用 | 语句级 `cfg`、分析器提示 |
 | `Vis Visibility` | 所有声明、`use`、字段、impl 成员 | 未标注、`pub` | `pub(scope)` |
 | `Mods FuncMods` | 函数、闭包、trait / impl 成员 | `Unsafe` | `Async`、`Const` |
-| `Generics *GenericParams` 与 `Where *WhereClause` | 函数、类型、enum、trait、impl | 单约束泛型函数 | 泛型 trait、泛型 impl、多约束 |
+| `Generics *GenericParams` 与 `Where *WhereClause` | 函数、类型、enum、trait、impl | 普通 Go 泛型、条件 impl、多 trait 约束、函数/impl 的最小数组长度参数 | 泛型 trait、GAT、默认方法 |
 | `Mut bool` | 引用类型、引用表达式、绑定模式 | 已使用 | `let mut` |
 | `Root PathRoot` | 路径 | 无根 | `super::` |
+
+`GenericParam.Const` 区分 `const N int` 与类型形参。`GenericArg.Type` 和 `GenericArg.Value` 互斥；裸名字保持语法歧义，由 checker 按已解析形参种类解释。混合泛型实参中的宏捕获保留 `Captures` 身份，类型槽在形参确定后仍拒绝 `expr` / `ident` / `tt` 冒充类型。长度参数语义与生成边界见 [RFC 0031](../rfcs/0031-generic-protocol-impls.md#4-最小数组长度参数)。
 
 ## 5. 节点目录
 
@@ -185,14 +189,14 @@ type File struct {
 
 | 节点 | 语法 | 要点 |
 | --- | --- | --- |
-| `UseDecl` | `use a::b as c;` `use a::*;` `pub use ...` | `Tree` 字段是 use 树：路径、可选别名、glob；预留 `use a::{b, c}` 分组 |
+| `UseDecl` | `use a::b as c;` `use a::*;` `pub use ...` | `Tree` 字段是 use 树：路径、可选别名、glob、嵌套分组；分组在属性处理后按源码顺序展开为普通 use |
 | `ModDecl` | `mod child;` | 预留内联体 `mod m { ... }` |
 | `FuncDecl` | `func (r T) Name[T C](...) R { ... }` | Go 函数与方法；`Recv` 仅用于 Go 写法的方法；`Body` 为空表示无体声明 |
 | `TypeDecl` | `type A = B`、`type S struct{...}`、`struct S {...}` | `Form` 区分 Go 写法和 `struct` 糖；别名用 `Alias bool` |
 | `EnumDecl` | `enum E[T] { A, B(int), }` | 变体见下 |
 | `TraitDecl` | `trait T { func m() Self; type Item }` | 成员是 `TraitItem`：方法签名（可带默认体）或关联类型 |
 | `ImplDecl` | `impl T for U { ... }`、`impl U { ... }` | `Trait` 为空表示固有 impl；成员是 `FuncDecl` 或关联类型绑定 |
-| `DeclareDecl` | `declare func p::F(...)`、`declare impl T for U;` | 包一个无体的 `FuncDecl` / `ImplDecl` / `TypeDecl` |
+| `DeclareDecl` | `declare func p::F(...)`、`declare type T` | 包装无体的 `FuncDecl` 或 `TypeDecl`；不包装 `ImplDecl` |
 | `MacroRulesDecl` | `macro_rules! name { (...) => {...}; }` | 见 5.6 |
 | `MacroItem` | 声明位置的 `name!(...)` | 展开后由展开结果替换，原节点保留在展开表里 |
 | `ConstDecl` / `VarDecl` | Go 的 `const` / `var`，含分组和 `iota` | 与 Go 相同 |
@@ -312,7 +316,7 @@ Go 的语句节点全部保留：赋值、短声明、自增自减、表达式�
 | 节点 | 语法 |
 | --- | --- |
 | `WildPat` | `_` |
-| `BindPat` | `x`、`ref x`、`ref mut x`；预留 `x @ P` 的子模式字段 |
+| `BindPat` | `x`、`ref x`、`ref mut x`；enum payload 的 `ref mut` 由语义阶段拒绝；预留 `x @ P` 的子模式字段 |
 | `LitPat` | `1`、`"a"`、`true`、`-1` |
 | `PathPat` | `E::V`、`None`、命名常量 |
 | `TuplePat` | `E::V(p, q)`、`Some(x)` |
@@ -347,6 +351,7 @@ type MacroRulesDecl struct {
 - 宏的参数和规则体在语法阶段只做括号配对，保存为 `TokenTree`。匹配器里的 `$x:expr`、重复 `$(...),*` 在宏展开阶段解析。
 - 展开时按片段类别调用解析器的对应入口（表达式、语句、类型、声明、模式），得到的 AST 节点带 `ExpnID` 和新的 `SyntaxCtx`。
 - 属性参数同样保存为 `TokenTree`。`derive`、`cfg` 和 `cfg_attr` 由编译器内建处理器解析；条件属性先决定有效属性集合，保留的其他属性再解析路径和归属。具体配置语法见 [RFC 0022](../rfcs/0022-project-toolchain.md#谓词)，接入状态见[能力状态表](../mvp-gap-audit.md)。
+- 已确认的[惰性属性保留与消费合同](../rfcs/0030-procedural-macros.md#惰性属性的保留与消费)区分宏请求、derive helper 与编译器声明属性。编译器惰性属性随声明保留到对应语义阶段；整体替换声明的宏负责在输出中转交属性，未知属性仍诊断。Go 成员 sugar 使用模块配置，不添加逐 impl 属性。
 
 ### 5.7 路径
 
@@ -363,6 +368,10 @@ type PathSegment struct {
 ```
 
 `::` 用于静态项，`.` 用于值，沿用[静态路径合同](static-paths.md)。因此 `strings::Repeat(strings.Text, 2)` 中前一个 `strings` 是命名空间、后一个是局部值，两者在 AST 里就是不同节点，不需要靠解析结果消歧。
+
+名字解析另区分普通空间与宏空间。trait、type、value、module 属于普通空间；`macro_rules!`、function-like、attribute、derive 宏共用宏空间。普通路径、宏调用和属性节点决定查询哪个空间，宏入口种类仍须匹配调用语法；不把同名宏和 trait 交给类型检查消歧。
+
+单个命名 `use` 导入目标在两空间的全部同名公开出口，别名和 glob 同样分别作用于两空间。每个空间独立按用户声明/命名 `use`、显式 glob、自动 prelude 的顺序选择；同一空间的歧义继续诊断，另一空间的同名绑定不遮蔽它。定义点卫生及私有 `use` 的文件作用域保持不变，完整规则见 [RFC 0030](../rfcs/0030-procedural-macros.md#3-登记导入与公开名字)。
 
 ## 6. 可见性
 
@@ -396,7 +405,7 @@ Go 只按首字母判断导出，所以源码名和生成的 Go 名可能不同�
 | `pub` + 小写名（函数、方法、类型、变量、常量） | 只生成大写名，包内引用一并改写，不保留小写副本。每个声明在 Go 里只有一个名字：函数身份唯一，没有包装帧；变量也不会出现两份存储 |
 | 私有，名字大写（仅新语法会出现） | 加下划线前缀，如 `enum Mode` 生成 `_Mode`。Go 视其为不导出，且不会与用户自己的 `mode` 冲突 |
 
-大写名由源码名首字母大写得到。得到的名字与包内已有声明冲突、或首字母无法大写（以 `_` 或无大小写的文字开头）时，在声明处报错。
+大写名由源码名首字母大写得到。得到的名字与包内已有普通声明冲突、或首字母无法大写（以 `_` 或无大小写的文字开头）时，在声明处报错。编译期宏名称不产生运行时 Go 声明，不占用普通项的 Go 名；宏输出的普通声明仍执行这些冲突检查。
 
 ## 7. 需要语法层处理的歧义
 
@@ -449,7 +458,7 @@ lower.Lower(files, check)         → map[string][]byte   // 每个 .gox 对应�
 
 三条跨阶段的约定：
 
-1. **标识符身份**。`ast.SyntaxCtx` 是解析结果和查询结果两侧共用的键。展开器为模板绑定分配新的 `Ctx`，捕获片段保留调用点的 `Ctx`。`resolve` 的作用域表按 `(Name, Ctx)` 建键，不按拼写。
+1. **标识符身份**。`ast.SyntaxCtx` 是解析结果和查询结果两侧共用的键。展开器为模板绑定分配新的 `Ctx`，捕获片段保留调用点的 `Ctx`。`resolve` 的普通空间与宏空间分别按 `(Name, Ctx)` 建键，不仅按拼写识别符号。
 2. **宏生成的声明**。进入调用方包的声明集合，其名字按调用点解析，`pub` 表示调用包的公开。`resolve` 必须把它们当普通声明处理，不区分来源。
 3. **诊断**。每个阶段返回自己的诊断列表，条目至少含 `Severity`、`Message`、`Span`（阶段输出的坐标系）和 `Origin`（可回溯到原始源文件与展开栈）。阶段之间不合并诊断，由调用方按 `Origin` 归并。
 
@@ -465,15 +474,15 @@ P2 接通已有的具体手写 Default、PartialEq 和空 Eq impl。Default 按�
 
 serde 的 Serialize/Deserialize 按实际 `use` 绑定的 canonical owner 分别登记，owner 为 `github.com/goxide-lang/serde`。新管线直接调用该模块的协议，JSON 格式实现仍由 serde 模块提供。现有退出示例依赖的打印、Error 派生与单步错误转换按其已确认合同接通；不读取旧管线的元数据，也不调用旧 lowering pass。
 
-### 8.3 P4 trait 与成员检查合同
+### 8.3 trait 与成员检查合同
 
-有体 `impl Trait for T` 的目标为本包具体非泛型 struct 或 enum；固有 `impl T` 使用同一类型身份。trait/impl 成员首参数为 `self` 时是实例成员，允许 `self Self`、`self &Self`、`self &mut Self`；其他成员为关联函数。`Self` 绑定源目标 T，引用是接收者类型的一部分，不把实现头改写成 `impl Trait for &T`。直接写出的 Go 函数和方法保留原生声明语义。
+P4 的有体 `impl Trait for T` 从本包具体 struct 或 enum 起步；当前泛型、容器、归属和条件规则统一见 [RFC 0031](../rfcs/0031-generic-protocol-impls.md)。固有 `impl T` 使用同一类型身份。trait/impl 成员首参数为 `self` 时是实例成员，允许 `self Self`、`self &Self`、`self &mut Self`；其他成员为关联函数。`Self` 绑定源目标 T，引用是接收者类型的一部分，不把实现头改写成 `impl Trait for &T`。直接写出的 Go 函数和方法保留原生声明语义。
 
 解析与检查旁表保留基础目标、接收权限、固有/trait 身份、关联类型绑定及选定成员。源级 struct/enum、透明 alias 和类型参数都经同一个成员查询入口；普通 Go 方法仍按真实 Go 类型信息查找。后端消费已选调用，不再按生成名称或 Go 方法集重复选择实现。
 
-关联类型的声明与绑定用已有 `AssocTypeDecl` / `AssocTypeBinding` 节点；投影统一为 `Self::Item`、`T::Trait::Item`。`Trait[Item = int]` 是完整关联类型绑定，不是新的位置参数 impl。泛型函数限每个类型参数单 trait 约束，未绑定投影必须从该约束及 carrier witness 获得类型证据。
+关联类型的声明与绑定用已有 `AssocTypeDecl` / `AssocTypeBinding` 节点；投影统一为 `Self::Item`、`T::Trait::Item`。`Trait[Item = int]` 是完整关联类型绑定，不是新的位置参数 impl。泛型函数可组合多个 trait 约束及 where 前提；未绑定投影按所属 trait 从已选静态证据取得类型。
 
-静态调用降低为空 carrier 操作，关联类型 witness 只参与 Go 类型推导；不执行类型锚或 witness，不传运行时字典。enum 的精确 Self 是 enum 接口 E；其变体实现类型锚返回同一空 carrier，读写 owner 的操作把 `*E` 作为普通参数。运行时实例视图另按[trait 合同](traits.md)生成命名 target wrapper，不能把 carrier 当作目标值或运行时 trait wrapper。
+具体实现保留既有空 carrier 入口；条件请求按实际需求生成普通 Go 函数，不能直接静态展开的泛型部分在定义包传入精确签名的操作函数。关联类型 witness 只参与 Go 类型推导；不执行类型锚或 witness，不传运行时字典。enum 的精确 Self 是 enum 接口 E；其变体实现类型锚返回同一空 carrier，读写 owner 的操作把 `*E` 作为普通参数。运行时实例视图另按[trait 合同](traits.md)生成命名 target wrapper，不能把 carrier 当作目标值或运行时 trait wrapper。
 
 ### 8.4 Feature 条件编译合同
 

@@ -6,13 +6,14 @@ import (
 	"go/format"
 	"go/parser"
 	"go/token"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/lower"
-	testdeps "github.com/hxsf/goxide/tests/testutil"
+	"github.com/goxide-lang/goxide/internal/lower"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
 func TestP4StaticProtocolExample(t *testing.T) {
@@ -24,8 +25,55 @@ func TestP4StaticProtocolExample(t *testing.T) {
 	}
 }
 
+func prepareP2Example(t *testing.T, example, modulePath string) string {
+	t.Helper()
+	source := filepath.Join("..", "..", "examples", example)
+	var modules []string
+	for range 2 {
+		module, err := lower.PrepareModule([]string{source}, modulePath, testConfig(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { os.RemoveAll(module) })
+		modules = append(modules, module)
+	}
+	err := filepath.WalkDir(modules[0], func(name string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		relative, err := filepath.Rel(modules[0], name)
+		if err != nil {
+			return err
+		}
+		first, err := os.ReadFile(name)
+		if err != nil {
+			return err
+		}
+		second, err := os.ReadFile(filepath.Join(modules[1], relative))
+		if err != nil {
+			return err
+		}
+		if !bytes.Equal(first, second) {
+			t.Fatalf("%s: repeated example generation changed %s", example, relative)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return modules[0]
+}
+
 func TestP4CarrierAssociatedTypesAndNativeEnumViews(t *testing.T) {
 	fixture := filepath.Join("testdata", "traits", "static")
+	input := t.TempDir()
+	if err := os.CopyFS(input, os.DirFS(fixture)); err != nil {
+		t.Fatal(err)
+	}
+	if err := testdeps.WriteFile(filepath.Join(input, "go.mod"), []byte("module traitfixture\n\ngo 1.27\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	fixture = input
 	module, err := lower.PrepareModule([]string{fixture}, "traitfixture", testConfig(t))
 	if err != nil {
 		t.Fatal(err)

@@ -7,7 +7,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 type Diagnostic struct {
@@ -27,6 +27,7 @@ type scanner struct {
 	semi        bool
 	delims      []delimiter
 	attrPrefix  int
+	previous    token.Kind
 }
 
 // Lex includes comments, inserted semicolons, and a final EOF token. It always
@@ -64,6 +65,9 @@ func (s *scanner) error(start, end int, message string) {
 }
 
 func (s *scanner) insertSemi(pos int) {
+	if pos > 0 && pos < len(s.src) && s.src[pos] == '\n' && s.src[pos-1] == '\r' {
+		pos--
+	}
 	s.tokens = append(s.tokens, token.Token{Kind: token.SEMICOLON, Text: ";", Start: uint32(pos), End: uint32(pos), Implicit: true})
 	s.semi = false
 }
@@ -77,7 +81,14 @@ func (s *scanner) emit(kind token.Kind, start int, raw bool) {
 	if kind == token.COMMENT {
 		return
 	}
-	attrClose := false
+	attrClose, qualifierClose := false, false
+	if kind == token.LSS && s.previous == token.DCOLON {
+		s.delims = append(s.delims, delimiter{kind: token.LSS})
+	} else if kind == token.GTR && len(s.delims) > 0 && s.delims[len(s.delims)-1].kind == token.LSS {
+		s.delims = s.delims[:len(s.delims)-1]
+		qualifierClose = true
+	}
+	s.previous = kind
 	switch kind {
 	case token.LPAREN, token.LBRACK, token.LBRACE:
 		s.delims = append(s.delims, delimiter{kind: kind, attr: kind == token.LBRACK && s.attrPrefix != 0})
@@ -97,7 +108,7 @@ func (s *scanner) emit(kind token.Kind, start int, raw bool) {
 	} else {
 		s.attrPrefix = 0
 	}
-	s.semi = kind.IsLiteral() || kind == token.BREAK || kind == token.CONTINUE || kind == token.FALLTHROUGH || kind == token.RETURN || kind == token.INC || kind == token.DEC || kind == token.RPAREN || kind == token.RBRACK || kind == token.RBRACE || kind == token.QUESTION || kind == token.SELF
+	s.semi = qualifierClose || kind.IsLiteral() || kind == token.BREAK || kind == token.CONTINUE || kind == token.FALLTHROUGH || kind == token.RETURN || kind == token.INC || kind == token.DEC || kind == token.RPAREN || kind == token.RBRACK || kind == token.RBRACE || kind == token.QUESTION || kind == token.SELF
 	if attrClose {
 		s.semi = false
 	}
@@ -158,6 +169,9 @@ func (s *scanner) next() {
 		if next == '/' {
 			s.pos += 2
 			for s.pos < len(s.src) && s.src[s.pos] != '\n' {
+				if s.src[s.pos] == '\r' && s.pos+1 < len(s.src) && s.src[s.pos+1] == '\n' {
+					break
+				}
 				s.pos++
 			}
 			s.emit(token.COMMENT, start, false)

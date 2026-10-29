@@ -1,0 +1,16 @@
+package main
+
+use testing;
+use macros;
+
+func TestProceduralMacros(t *testing::T) {
+    calls := 0
+    next := func() int { calls++; return 21 }
+    if macros::twice!(next()) != 42 || calls != 1 {
+        t.Fatal("function macro must evaluate its argument once")
+    }
+    order := Order{ID: 1001}
+    if answer() != 42 || order.typeName() != "Order" {
+        t.Fatal("attribute and derive expansions must affect the program")
+    }
+}

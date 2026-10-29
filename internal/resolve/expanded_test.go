@@ -7,14 +7,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/expand"
-	"github.com/hxsf/goxide/internal/resolve"
-	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/expand"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 type sourceMacroResolver map[string]*ast.File
 
-func (sources sourceMacroResolver) LookupMacro(path *ast.Path, _ expand.Scope) (*ast.MacroRulesDecl, *ast.File, error) {
+func (sources sourceMacroResolver) LookupMacro(path *ast.Path, _ expand.Scope) (expand.Macro, error) {
 	var names []string
 	for _, segment := range path.Segments {
 		names = append(names, segment.Name.Name)
@@ -23,11 +23,11 @@ func (sources sourceMacroResolver) LookupMacro(path *ast.Path, _ expand.Scope) (
 	if file != nil {
 		for _, item := range file.Items {
 			if macro, ok := item.(*ast.MacroRulesDecl); ok && macro.Name.Name == names[len(names)-1] {
-				return macro, file, nil
+				return expand.Macro{Rules: macro, File: file}, nil
 			}
 		}
 	}
-	return nil, nil, fmt.Errorf("missing source macro %s", strings.Join(names, "::"))
+	return expand.Macro{}, fmt.Errorf("missing source macro %s", strings.Join(names, "::"))
 }
 
 func expandForResolution(t *testing.T, files map[string]*ast.File, names []string, lookup expand.Resolver) *expand.Result {
@@ -454,14 +454,13 @@ func run() { known!(); value!(); absent!(); absent::nested!(); imported::unknown
 			}
 			noDiagnostics(t, result)
 			file := result.Files["p.gox"]
-			for _, tc := range []struct {
-				name string
-				kind resolve.Kind
-			}{{"known", resolve.Macro}, {"value", resolve.Variable}} {
-				id := named(t, files["p.gox"], source, tc.name+"!()", tc.name)
-				if symbol := file.References[id.ID()].Symbol; symbol == nil || symbol.Kind != tc.kind {
-					t.Fatalf("unexpanded %s did not use ordinary path resolution: %#v", tc.name, symbol)
-				}
+			id := named(t, files["p.gox"], source, "known!()", "known")
+			if symbol := file.References[id.ID()].Symbol; symbol == nil || symbol.Kind != resolve.Macro {
+				t.Fatalf("unexpanded macro did not use macro path resolution: %#v", symbol)
+			}
+			id = named(t, files["p.gox"], source, "value!()", "value")
+			if reference := file.References[id.ID()]; reference.Symbol != nil || !reference.Deferred {
+				t.Fatalf("ordinary value entered macro namespace: %#v", reference)
 			}
 			ast.Walk(file.AST, func(node ast.Node) bool {
 				if macro, ok := node.(*ast.MacroExpr); ok {

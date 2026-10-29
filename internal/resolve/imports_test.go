@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/resolve"
-	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 type testImporter map[string][]resolve.External

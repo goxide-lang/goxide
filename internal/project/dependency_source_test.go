@@ -88,7 +88,7 @@ func TestDependencySourceModuleIdentity(t *testing.T) {
 }
 
 func TestWorkspaceInferredDependencyIdentity(t *testing.T) {
-	root := t.TempDir()
+	root := sourceTempDir(t)
 	wsWrite(t, root, ManifestName, "[workspace]\nmembers=['app', 'lib']\n[workspace.dependencies.lib]\npath='lib'\n")
 	wsWrite(t, root, "app/"+ManifestName, mappingHeader+"[dependencies.lib]\nworkspace=true\n")
 	wsWrite(t, root, "lib/"+ManifestName, "[go_mod]\nmodule='example.org/lib'\ngo='1.27'\n[lib]\nname='lib'\npath='.'\n")
@@ -109,7 +109,7 @@ func TestWorkspaceInferredDependencyIdentity(t *testing.T) {
 }
 
 func TestCopiedNativeLockInferredDependency(t *testing.T) {
-	root := t.TempDir()
+	root := sourceTempDir(t)
 	app, lib := filepath.Join(root, "app"), filepath.Join(root, "lib")
 	manifest := mappingHeader + "[dependencies.lib]\npath='../lib'\n"
 	library := "[go_mod]\nmodule='example.org/lib'\ngo='1.27'\n[lib]\nname='lib'\npath='.'\n"
@@ -133,7 +133,7 @@ func TestCopiedNativeLockInferredDependency(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	copyRoot := t.TempDir()
+	copyRoot := sourceTempDir(t)
 	wsWrite(t, copyRoot, "consumer/"+ManifestName, strings.Replace(manifest, "../lib", "../relocated", 1))
 	wsWrite(t, copyRoot, "consumer/goxide.lock", string(data))
 	wsWrite(t, copyRoot, "relocated/"+ManifestName, library)

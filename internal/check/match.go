@@ -7,8 +7,8 @@ import (
 	"go/types"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/resolve"
-	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 func (c *checker) match(n *ast.MatchExpr, expected types.Type, statement bool) types.Type {
@@ -21,42 +21,34 @@ func (c *checker) match(n *ast.MatchExpr, expected types.Type, statement bool) t
 		}
 		t = c.out.Types[ref.X]
 	}
-	instance := c.out.EnumOf(t)
+	instance := c.enumOf(t)
+	if instance != nil && mode == WriteRef {
+		c.diag(n.X, ReferencePermission, "enum payload slots are immutable; use a value pattern")
+	}
 	if instance != nil && !c.enumAccessible(instance) {
 		c.diag(n, VariantMismatch, "internal-origin alias cannot expose enum variants outside its internal package boundary")
 	}
+	if instance == nil {
+		if valid(t) {
+			c.diag(n.X, VariantMismatch, "match requires a Goxide enum value with source declarations")
+		}
+		return types.Typ[types.Invalid]
+	}
 	info := &Match{Enum: instance, Statement: statement, Reference: mode}
 	c.out.Matches[n] = info
-	if instance == nil {
-		for _, arm := range n.Arms {
-			var variant ast.Pat
-			ast.Walk(arm.Pat, func(node ast.Node) bool {
-				switch pattern := node.(type) {
-				case *ast.TuplePat, *ast.StructPat:
-					variant = node.(ast.Pat)
-				case *ast.PathPat:
-					if symbol := c.symbol(pattern.Path); symbol == nil || symbol.Kind != resolve.Constant {
-						variant = pattern
-					}
-				case *ast.BindPat:
-					if symbol := c.symbol(pattern.Name); symbol != nil && symbol.Kind == resolve.Variant {
-						variant = pattern
-					}
-				}
-				return variant == nil
-			})
-			if variant != nil {
-				c.diag(variant, VariantMismatch, "enum variant pattern requires a Goxide enum value with source declarations")
-				delete(c.out.Matches, n)
-				return types.Typ[types.Invalid]
-			}
-		}
-	}
 	covered := map[string]bool{}
 	patterns := map[string][]ast.Pat{}
 	wild := false
 	var result types.Type
 	for _, arm := range n.Arms {
+		if instance != nil && mode != WriteRef {
+			ast.Walk(arm.Pat, func(node ast.Node) bool {
+				if binding, ok := node.(*ast.BindPat); ok && binding.Ref && binding.Mut {
+					c.diag(binding, ReferencePermission, "enum payload slots are immutable; use a value pattern")
+				}
+				return true
+			})
+		}
 		name := c.patternName(arm.Pat)
 		matchesEnum := c.patternMatches(arm.Pat, t)
 		unreachable := wild || covered[name]
@@ -95,10 +87,10 @@ func (c *checker) match(n *ast.MatchExpr, expected types.Type, statement bool) t
 		armType := c.expr(arm.Body, expected)
 		c.block(arm.Block)
 		if !statement && valid(armType) {
-			if armType == types.Typ[types.UntypedNil] && valid(expected) && !assignableArm(armType, expected) {
+			if armType == types.Typ[types.UntypedNil] && valid(expected) && !c.assignableGo(armType, expected) {
 				c.diag(arm.Body, ArmTypeMismatch, fmt.Sprintf("cannot use nil as %s in match arm", expected))
 			}
-			if valid(expected) && assignableArm(armType, expected) {
+			if valid(expected) && (c.assignableGo(armType, expected) || untyped(armType) && types.Identical(defaultType(armType), expected)) {
 				armType = expected
 			}
 			if result == nil {
@@ -113,16 +105,17 @@ func (c *checker) match(n *ast.MatchExpr, expected types.Type, statement bool) t
 	if instance != nil && !wild {
 		for _, variant := range instance.Enum.Variants {
 			if !covered[variant.Name] {
+				info.Missing = append(info.Missing, variant)
 				c.diag(n, NonExhaustive, fmt.Sprintf("match does not cover %s::%s", instance.Enum.Name, variant.Name))
 			}
 		}
 	}
 	if statement || result == nil {
 		result = types.Typ[types.Invalid]
-	} else if valid(expected) && assignableArm(result, expected) {
+	} else if valid(expected) && (c.assignableGo(result, expected) || untyped(result) && types.Identical(defaultType(result), expected)) {
 		result = expected
 	}
-	if c.out.EnumOf(result) != nil {
+	if c.enumOf(result) != nil {
 		for _, arm := range n.Arms {
 			if c.nilLiteral(arm.Body) {
 				c.expr(arm.Body, result)
@@ -227,7 +220,7 @@ func (c *checker) patternMatches(p ast.Pat, t types.Type) bool {
 	if symbol != nil && symbol.Kind == resolve.Constant {
 		return true
 	}
-	instance := c.out.EnumOf(t)
+	instance := c.enumOf(t)
 	con := c.constructor(path, symbol, t)
 	if instance != nil && con != nil && sameEnumInstance(con.Enum, instance) {
 		return true
@@ -237,7 +230,7 @@ func (c *checker) patternMatches(p ast.Pat, t types.Type) bool {
 }
 
 func (c *checker) patternFields(p ast.Pat, t types.Type) []Field {
-	if enum := c.out.EnumOf(t); enum != nil {
+	if enum := c.enumOf(t); enum != nil {
 		if variant := enum.Variant(c.patternName(p)); variant != nil {
 			return enum.Fields(variant)
 		}
@@ -290,7 +283,7 @@ func (c *checker) payloadIrrefutable(p ast.Pat, t types.Type) bool {
 		if !c.patternMatches(p, t) {
 			return false
 		}
-		if enum := c.out.EnumOf(t); enum != nil && len(enum.Enum.Variants) != 1 {
+		if enum := c.enumOf(t); enum != nil && len(enum.Enum.Variants) != 1 {
 			return false
 		}
 	}
@@ -332,7 +325,7 @@ func (c *checker) patternsCoverFields(rows [][]ast.Pat, fields []Field) bool {
 	if len(unrestricted) == len(rows) {
 		return c.patternsCoverFields(unrestricted, fields[1:])
 	}
-	enum := c.out.EnumOf(fields[0].Type)
+	enum := c.enumOf(fields[0].Type)
 	if enum == nil {
 		return c.patternsCoverFields(unrestricted, fields[1:])
 	}
@@ -480,7 +473,7 @@ func mergeArmType(a, b types.Type) types.Type {
 }
 
 func (c *checker) try(n *ast.TryExpr) types.Type {
-	input := c.out.EnumOf(c.expr(n.X, nil))
+	input := c.enumOf(c.expr(n.X, nil))
 	info := &Try{Input: input}
 	c.out.Tries[n] = info
 	if input == nil || !input.Enum.Builtin {
@@ -491,7 +484,7 @@ func (c *checker) try(n *ast.TryExpr) types.Type {
 		info.Value = input.Args[0]
 	}
 	if len(c.returns) == 1 {
-		info.Output = c.out.EnumOf(c.returns[0])
+		info.Output = c.enumOf(c.returns[0])
 	}
 	if info.Output == nil || !info.Output.Enum.Builtin || input.Enum.Name != info.Output.Enum.Name {
 		c.diag(n, TryReturnType, "? requires the nearest function to return the same Option or Result family")
@@ -500,27 +493,55 @@ func (c *checker) try(n *ast.TryExpr) types.Type {
 	if input.Enum.Name == "Result" && len(input.Args) > 1 && len(info.Output.Args) > 1 {
 		info.Error = input.Args[1]
 		target := info.Output.Args[1]
-		if !types.AssignableTo(info.Error, target) {
-			var found int
-			for _, helper := range c.conversions {
-				if !c.sameSourcePackage(helper.Decl.File, c.file.Name) {
-					continue
-				}
-				sig, ok := c.out.Symbols[helper].(*types.Signature)
-				if ok && sig.Params().Len() == 1 && sig.Results().Len() == 1 && types.Identical(sig.Params().At(0).Type(), info.Error) && types.Identical(sig.Results().At(0).Type(), target) {
-					info.Conversion = helper
-					found++
-				}
-			}
-			if found != 1 {
-				reason := "no explicit one-step conversion"
-				if found > 1 {
-					reason = "ambiguous explicit one-step conversion"
-				}
-				reason += "; requires a unique explicit From in the current package"
-				c.diag(n, TryReturnType, strings.Join([]string{"cannot propagate", info.Error.String(), "to", target.String() + ":", reason}, " "))
-			}
+		p := c.newPermissionChecker()
+		source := p.enumField(c.memberSource(n.X, c.out.Types[n.X]), input.Variant("Err"), 0)
+		want := p.fromGo(target)
+		if len(c.returnSources) == 1 {
+			want = p.enumField(c.returnSources[0], info.Output.Variant("Err"), 0)
+		}
+		if !c.assignableGo(info.Error, target) || !p.compatible(source, want, map[[2]types.Type]bool{}) {
+			info.Conversion = c.tryConversion(n, target, info.Error, want, source)
 		}
 	}
 	return info.Value
+}
+
+// ? is a language use of this exact standard declaration. User protocols with
+// the same spelling, helper functions, and Into never enter this query.
+func (c *checker) tryConversion(node *ast.TryExpr, target, source types.Type, targetSource, inputSource *permission) *MemberSelection {
+	var trait *Trait
+	for _, candidate := range c.out.Traits {
+		if candidate.Symbol.Name.Name == "From" && c.out.CanonicalPackagePath(candidate.Type.Obj().Pkg()) == "github.com/goxide-lang/std/convert" {
+			trait = candidate
+			break
+		}
+	}
+	if trait == nil || len(trait.TypeParams) != 1 || memberNamed(trait.Methods, "from", true) == nil {
+		c.diag(node, TryReturnType, fmt.Sprintf("cannot propagate %s to %s: canonical github.com/goxide-lang/std/convert::From is unavailable", source, target))
+		return nil
+	}
+	goal := &TraitBound{info: c.out, File: c.file.Name, Trait: trait, Target: target, Inputs: []types.Type{source}, targetPermission: targetSource, inputPermissions: []*permission{inputSource}}
+	witness := c.proveApplication(goal)
+	if witness.Impl == nil && witness.Bound == nil && len(witness.Cases) == 0 {
+		message := fmt.Sprintf("cannot propagate %s to %s: requires %s", source, target, goal.ApplicationKey())
+		if c.proofFailure != "" {
+			message += ": " + c.proofFailure
+		}
+		c.diag(node, TryReturnType, message)
+		return nil
+	}
+	selection := &MemberSelection{Evidence: witness}
+	if witness.Impl != nil {
+		selection.Impl = witness.Impl
+		selection.Member = memberNamed(witness.Impl.Methods, "from", true)
+		selection.Signature = selection.Member.Signature
+	} else {
+		selection.Bound = witness.Bound
+		if selection.Bound == nil {
+			selection.Bound = goal
+		}
+		selection.Member = memberNamed(trait.Methods, "from", true)
+		selection.Signature = selection.Bound.MethodSignature(selection.Member)
+	}
+	return selection
 }

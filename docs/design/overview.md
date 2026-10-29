@@ -4,6 +4,8 @@
 
 状态：设计阶段。本文记录方向与专题边界，不承诺文档中能力已经实现。
 
+`declare impl` 原生采用入口及相容合并已移除；普通有体 impl、运行时 wrapper、Go 双向调用和既有 `declare func/type` 支持保留，见 [RFC 0003](../rfcs/0003-declare-impl.md)。
+
 当前优先级（D21）：宏、enum/match、只读/可写访问分离为 T0；T0 不要求所有扩展一次交付。trait 后端已按 R24/RFC0019 确认统一 wrapper；旧[双路径研究](../rfcs/research/0004-trait-lowering-paths.md)仅保留历史比较，不覆盖该决定。
 
 ## 1. 目标
@@ -20,8 +22,8 @@ linter 与类型检查分别承担风险提示和语言合法性：语法、类�
 
 1. 显式 trait 实现，一个类型可实现多个 trait，允许不同实现拥有同名方法。
 2. 变体枚举、`Option`、`Result` 和带穷尽性检查的模式匹配。
-3. 卫生宏，以及覆盖宏展开前后位置关系的诊断与 IDE 支持；首版参考 Rust 的声明宏（模式 / 模板 / 重复），提供 print / println 与 Default / Clone / Debug 内建派生，用户可编程过程宏及自定义过程派生延期。
-4. Go 包互操作，用户在自己的普通 `.gox` 中声明采用原生 Go 方法或提供自定义实现；统一在 impl 包生成 wrapper 与 marker，通过固定包函数适配，并生成 Go 便利 helper。
+3. 卫生宏，以及覆盖宏展开前后位置关系的诊断与 IDE 支持；声明宏支持模式 / 模板 / 重复；受限 WASI 过程宏提供 std 打印、基础派生与 serde 派生，输出普通 trait/impl。
+4. Go 包互操作，普通原生函数、方法和 Go interface 按真实签名使用；需要适配而完整头不满足有体 impl 归属规则时，以自有包装类型提供普通有体 impl，并由固定工厂生成 trait 视图，见 [RFC 0003](../rfcs/0003-declare-impl.md)。
 5. 基础包围绕现有 Go std 提供 safe 声明与实际包装，并补充泛型 slice 的权限与 API 视图；额外包提供 quote / syn 风格语法工具。
 6. 用 Go 启动编译器与 LSP，之后逐步使用 goxide 自举。
 
@@ -39,7 +41,7 @@ linter 与类型检查分别承担风险提示和语言合法性：语法、类�
 | --- | --- | --- | --- |
 | 编译目标 | 已确认生成 Go 源码，复用 Go 工具链与运行时 | 包输出布局、增量构建、发布格式 | [工具链](compiler-and-tooling.md) |
 | trait | 原生使用 `trait`；显式 `impl`；Go `interface` 保留结构式语义 | 精确语法、可见性、完整泛型约束，Default / Clone 等静态 Self 操作 | [trait](traits.md) |
-| 多接口实现 | declare 与有体 impl 统一使用稳定 wrapper，业务方法与 marker 放在 wrapper；期望类型驱动固定工厂调用 | ABI 名称编码、权限和优化边界 | [trait](traits.md) |
+| 多接口实现 | 普通有体 impl 使用稳定 wrapper，业务方法与 marker 放在 wrapper；期望类型驱动固定工厂调用 | ABI 名称编码、权限和优化边界 | [trait](traits.md)、[移除合同](../rfcs/0003-declare-impl.md) |
 | Go 适配 | impl 包持有 wrapper、marker 和工厂；本地类型 As 方法、外部类型 ForT.As 入口方便 Go 使用 | 正式命名、冲突策略与声明绑定格式 | [Go原生类型的显式适配](go-interop.md) |
 | Go API 视图 | 普通 declare 补充类型契约；普通 Go 调用不因缺摘要要求 unsafe；Ptr/AsPtr 保留明确边界 | 统一标记未声明 callable 为 unsafe 已否决；U15 桥接待协调、声明分发与选择、引用诊断 | [原生 API 与裸指针](foreign-api.md) |
 | 关联类型 | 纳入设计，先支持普通关联类型 | 投影语法、泛型降低；GAT 等延期 | [关联类型](associated-types.md) |
@@ -73,16 +75,11 @@ linter 与类型检查分别承担风险提示和语言合法性：语法、类�
 
 ### 3.1 显式实现与稳定视图
 
-显式实现是 goxide 语义事实；方法集相符不会自动建立 impl。普通 `.gox` 中有两种实现模式：
-
-- `declare impl Trait for T;` 没有方法体，检查并采用 `T` 已有的业务方法，在 impl 包生成逐方法转发的 wrapper 与 marker。包级工厂返回 wrapper 视图；若接收者是指针，保留原目标指针而不保留原始接口动态类型。
-- `impl Trait for T { ... }` 提供完整实现，由编译器生成 wrapper，方法体与 marker 直接定义在 wrapper 上；原始类型的同名方法不会覆盖该实现。
-
-两种形式的行为来源分别为原生方法与用户方法体，运行时载体统一为 wrapper。[RFC 0019](../rfcs/0019-uniform-trait-wrappers.md) 已确认取代原始类型 marker 注入；具体命名和权限语法仍待定。
+显式实现是 Goxide 语义事实，方法集相符不会自动建立 impl。`impl Trait for T { ... }` 提供完整实现，编译器生成 wrapper，方法体与 marker 直接定义在 wrapper 上；原始类型的同名方法不会覆盖该实现。运行时载体与固定工厂见 [RFC 0019](../rfcs/0019-uniform-trait-wrappers.md)。
 
 以上是 trait 实现形式。固有成员另用 `impl T { ... }`，关联函数降低为包函数，实例成员按接收者规则生成方法。impl 中 `Self` 表示源目标类型，`self` 只在实例成员中绑定接收者。直接书写的 Go `func F(...)` / `func (r T) M(...)` 保留原生声明和行为，不自动变成 impl 成员或 trait wrapper；例子见 [RFC 0020](../rfcs/0020-associated-functions.md)。
 
-可形成运行时视图的 trait，其生成的 Go 接口包含业务方法和对应 marker。marker 表达显式采用，但不是不可伪造的安全证明：Go 代码可以自行实现或通过嵌入获得它。goxide 的精确 impl 判定仍由可见元数据与类型检查负责，读取到 Go 方法集中的 marker 不会自动建立 impl。Default 的无接收者构造和 Clone 的 Self 结果使用静态实现选择与普通 Go 函数，不强行改成返回 any 的接口方法；见[静态 trait 操作](macros.md#55-静态-trait-操作与-go-运行时接口)。
+可形成运行时视图的 trait，其生成的 Go 接口包含业务方法和对应 marker。marker 表达显式实现，但不是不可伪造的安全证明：Go 代码可以自行实现或通过嵌入获得它。Goxide 的精确 impl 判定由已选可达源码声明与类型检查负责，读取到 Go 方法集中的 marker 不会自动建立 impl。Default 的无接收者构造和 Clone 的 Self 结果使用静态实现选择与普通 Go 函数，不强行改成返回 any 的接口方法；见[静态 trait 操作](macros.md#55-静态-trait-操作与-go-运行时接口)。
 
 实现的行为来源由声明固定。后端通过元数据选择固定包级适配函数；类型与 impl 同包且满足 Go 方法接收者规则时可以生成 `t.AsXXX()`，其他类型生成 `adapters.ForT(t).AsXXX()`，便利 helper 只转发同一函数。新增 impl 不改变旧工厂、已发布 wrapper 归属或业务行为。
 
@@ -90,21 +87,15 @@ linter 与类型检查分别承担风险提示和语言合法性：语法、类�
 
 ### 3.2 声明来源与 Go 适配范围
 
-用户在 C 包自己的普通 `.gox` 文件中写：
+普通有体 impl 按完整实现头检查归属。trait owner 可以为外部类型提供实现；完整头不满足归属时，使用自有包装类型与有体 impl。透明别名不改变类型身份和归属。
 
-```goxide
-declare impl AorB::XXX for BBB::Type;
-```
-
-**声明的定义来源是 C，不是 AorB 或 BBB。** goxide 根据 C 的声明和显式导入的 impl 元数据形成可见实现集合，不扫描全磁盘或其他项目来收集声明，也不把它登记成 BBB 对所有项目公开的实现。AorB、BBB 的原源码无需修改，普通 Go 工具也不会读取 C 的 `.gox` 声明。
-
-普通 `.gox` 允许对外部 trait 与外部 Go 类型声明显式 impl；可见实现集合中，规范化后同一 impl 键的相容无体声明可合并，有体实现唯一，矛盾的绑定或契约报错；合并细节见 [RFC 0003](../rfcs/0003-declare-impl.md)。无方法体的声明必须通过真实 Go 方法集和签名检查，不能把缺失的方法当成已经实现，也不能静默切换成自定义实现。
+wrapper、marker 和工厂属于实现定义包。Goxide 根据参与构建的源码和显式依赖形成实现集合，不扫描其他项目收集关系，也不向原类型定义包注入实现。重复实现由一致性检查诊断，不相容合并；具体适配示例见 [Go 互操作](go-interop.md)。
 
 普通 `declare` 也用于补充 Go API 的 goxide 类型视图，不要求写作 unsafe declare。函数契约可以放在调用方 `.gox`、包内 `.d.gox` 或明确依赖的外置声明包中；具体规则见[原生 API 与裸指针](foreign-api.md)。函数视图声明与生成 wrapper/marker 的 impl 声明分别检查，声明可信不等于编译器已证明外部实现行为。
 
-`T` 与 `*T` 保持精确的接收者身份，不为满足 impl 自动取地址。外部 Go 类型的方法不能声明在调用方包中；当前生成的是 C 包自己定义的 wrapper，marker 与业务方法属于该 wrapper，工厂及 facade 也属于 C。已有 Go wrapper 可以按自身真实类型采用，不因此与原始结构体成为同一类型。
+`T` 与 `*T` 保持精确的接收者身份，不为满足 impl 自动取地址。外部 Go 类型的方法不能声明在调用方包中；当前生成的是 C 包自己定义的 wrapper，marker 与业务方法属于该 wrapper，工厂及 facade 也属于 C。自有包装类型与原始结构体保持不同类型身份。
 
-编译器和 LSP 必须读取同一份 impl 与方法解析结果。仅让补全“看起来有两个 impl”，而编译器不知道采用哪些方法，不算完成互操作。
+编译器和 LSP 必须读取同一份 impl 与方法解析结果。仅让补全“看起来有两个 impl”，而编译器没有记录所选业务体，不算完成互操作。
 
 ### 3.3 普通 Go 构建与发布
 

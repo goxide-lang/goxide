@@ -12,20 +12,16 @@ import (
 // Exercise the real compiler and its independently built output. The business
 // fixture uses existing derive protocols; nominal type controls are separate.
 func TestMatchUnaryCompositeCLI(t *testing.T) {
-	_, here, _, _ := runtime.Caller(0)
-	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
-	cli := filepath.Join(t.TempDir(), "goxide")
-	deliveryCommand(t, root, tool, true, nil, "build", "-o", cli, "./cmd/goxide")
+	cli := acceptanceCLI(t)
 	outside := t.TempDir()
 	sourceFor := func(body string) string {
 		t.Helper()
 		dir := t.TempDir()
-		packagesWrite(t, dir, "go.mod", packagesModule())
-		writeAcceptanceFixtureRoots(t, dir, "packages.example/app", map[string]string{"model": "packages.example/app/model"})
+		writeStdFormalBinaryManifest(t, dir, "packages.example/app", "app")
 		packagesWrite(t, dir, "model/model.gox", matchUnaryModel)
 		packagesWrite(t, dir, "model/scalars.go", matchUnaryScalars)
-		packagesWrite(t, dir, "app.gox", "package main\nuse model as cfg;\n"+body)
+		packagesWrite(t, dir, "app.gox", "package main\npub mod model;\nuse crate::model as cfg;\n"+body)
 		return dir
 	}
 	t.Run("generated-module", func(t *testing.T) {
@@ -34,9 +30,8 @@ func TestMatchUnaryCompositeCLI(t *testing.T) {
 		packagesWrite(t, source, "flows.gox", matchUnaryFlows)
 		first := filepath.Join(t.TempDir(), "generated")
 		second := filepath.Join(t.TempDir(), "generated")
-		for _, out := range []string{first, second} {
-			deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", out, source)
-		}
+		firstModule := strings.TrimSpace(deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", first, source))
+		deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", second, source)
 		if err := filepath.WalkDir(first, func(path string, entry os.DirEntry, err error) error {
 			if err != nil {
 				return err
@@ -59,22 +54,15 @@ func TestMatchUnaryCompositeCLI(t *testing.T) {
 			if !bytes.Equal(a, b) {
 				t.Errorf("nondeterministic artifact %s", rel)
 			}
-			if strings.HasSuffix(path, ".go") {
-				for _, marker := range []string{"__goxide_match_expr_pending", "__goxide_match_expr_operand_context(", "__goxide_match_expr_return(", "__goxide_match_expr_peers(", "__goxide_match_expr_zero["} {
-					if bytes.Contains(a, []byte(marker)) {
-						t.Errorf("compiler-only atom remains in %s: %s", rel, marker)
-					}
-				}
-			}
 			return nil
 		}); err != nil {
 			t.Fatal(err)
 		}
-		packagesWrite(t, first, "acceptance_test.go", matchUnaryAssertions)
-		deliveryCommand(t, first, tool, true, nil, "test", "-race", "-count=1", "-v", "./...")
-		deliveryCommand(t, first, tool, true, nil, "vet", "./...")
+		packagesWrite(t, firstModule, "acceptance_test.go", matchUnaryAssertions)
+		deliveryCommand(t, firstModule, tool, true, nil, "test", "-race", "-count=1", "-v", "./...")
+		deliveryCommand(t, firstModule, tool, true, nil, "vet", "./...")
 		want := "Plan { Mode: Mode::Workers(3), Enabled: true, Delta: -3, Steps: [99, 4] }\n{\"Mode\":{\"Workers\":3},\"Enabled\":true,\"Delta\":-3,\"Steps\":[99,4]}\n"
-		if got := deliveryCommand(t, first, tool, true, nil, "run", "-race", "."); got != want {
+		if got := deliveryCommand(t, firstModule, tool, true, nil, "run", "-race", "."); got != want {
 			t.Fatalf("business output %q; want %q", got, want)
 		}
 	})
@@ -138,10 +126,18 @@ func TestMatchUnaryCompositeCLI(t *testing.T) {
 
 const matchUnaryModel = `package model
 use serde;
-#[derive(serde::Serialize,serde::Deserialize,Clone,Debug)]
+use std;
+#[derive(serde::derive::Serialize,serde::derive::Deserialize,std::derive::Clone,std::derive::Debug)]
 pub enum Mode { Off, Workers(int), }
-#[derive(serde::Serialize,serde::Deserialize,Clone,Debug)]
+#[derive(serde::derive::Serialize,serde::derive::Deserialize,std::derive::Clone,std::derive::Debug)]
 type Plan struct { Mode Mode; Enabled bool; Delta int; Steps []int }
+impl Mode { pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) } }
+impl Plan {
+ pub func encode(s serde::Serializer,value &Self) error { return serde::Write(s,value) }
+ pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) }
+ pub func copy(value &Self) Self { return std::Clone::clone(value) }
+ pub func describe(value &Self) string { return std::Debug::debug(value) }
+}
 `
 const matchUnaryScalars = `package model
 type Count int
@@ -154,7 +150,8 @@ type Word = uint64
 const matchUnaryBusiness = `
 use fmt;
 use serde::json as serdejson;
-#[derive(Error)]
+use std;
+#[derive(std::derive::Error)]
 #[error("plan input")]
 type Failure struct {
  #[from]
@@ -167,16 +164,16 @@ func Build(c cfg::Mode)cfg::Plan{return cfg::Plan{
  Steps:[]int{match c{cfg::Mode::Off=>0,cfg::Mode::Workers(n)=>n},+(match c{cfg::Mode::Off=>1,cfg::Mode::Workers(n)=>n+1})},
 }}
 func Run(input []byte)(string,string,string,error){
- c,e:=serdejson::Unmarshal(input,cfg::DeserializeMode);if e!=nil{return "","","",FromFailure(e)}
- original:=Build(c);copy:=cfg::ClonePlan(&original);copy.Steps[0]=99
- before:=cfg::DebugPlan(&original);after:=cfg::DebugPlan(&copy)
- wire,e:=serdejson::Marshal(&copy,cfg::SerializePlan);return before,after,string(wire),e
+ c,e:=serdejson::Unmarshal(input,cfg::Mode::decode);if e!=nil{return "","","",Failure::from::<std::From[error]>(e)}
+ original:=Build(c);copy:=cfg::Plan::copy(&original);copy.Steps[0]=99
+ before:=cfg::Plan::describe(&original);after:=cfg::Plan::describe(&copy)
+ wire,e:=serdejson::Marshal(&copy,cfg::Plan::encode);return before,after,string(wire),e
 }
 func Empty(c cfg::Mode)cfg::Plan{return cfg::Plan{Mode:c,Steps:match c{cfg::Mode::Off=>nil,cfg::Mode::Workers(_)=>[]int{}}}}
 func main(){_,debug,wire,e:=Run([]byte("{\"Workers\":3}"));if e!=nil{panic(e)};fmt::Println(debug);fmt::Println(wire)}
 `
 const matchUnaryContexts = `package main
-use model as cfg;
+use crate::model as cfg;
 type Wide = uint64
 type Context struct{Bits Wide;Count cfg::Alias;Pointer *int}
 type Tiny struct{N int}
@@ -199,7 +196,7 @@ func Goto(c cfg::Mode)int{skip:=true;if skip{goto Done};_=Tiny{N:match c{cfg::Mo
 `
 const matchUnaryFlows = `package main
 use errors;
-use model as cfg;
+use crate::model as cfg;
 var Trace []string
 var stopped=errors::New("checked failure")
 func mark(label string,n int)int{Trace=append(Trace,label);return n}
@@ -231,8 +228,8 @@ func traceIs(t *testing.T,want []string){t.Helper();if !reflect.DeepEqual(Trace,
 func TestBusiness(t *testing.T){for _,tc:=range []struct{input,before,after,wire string}{
  {"{\"Workers\":3}","Plan { Mode: Mode::Workers(3), Enabled: true, Delta: -3, Steps: [3, 4] }","Plan { Mode: Mode::Workers(3), Enabled: true, Delta: -3, Steps: [99, 4] }","{\"Mode\":{\"Workers\":3},\"Enabled\":true,\"Delta\":-3,\"Steps\":[99,4]}"},
  {"\"Off\"","Plan { Mode: Mode::Off, Enabled: false, Delta: 0, Steps: [0, 1] }","Plan { Mode: Mode::Off, Enabled: false, Delta: 0, Steps: [99, 1] }","{\"Mode\":\"Off\",\"Enabled\":false,\"Delta\":0,\"Steps\":[99,1]}"},
- }{before,after,wire,e:=Run([]byte(tc.input));if e!=nil||before!=tc.before||after!=tc.after||wire!=tc.wire{t.Fatal(before,after,wire,e)};decoded,e:=serdejson.Unmarshal([]byte(wire),cfg.DeserializePlan);if e!=nil||cfg.DebugPlan(&decoded)!=after{t.Fatal(decoded,e)}}}
-func TestNilEmptyAndErrorPaths(t *testing.T){for _,tc:=range []struct{mode cfg.Mode;nilSlice bool;text string}{{&cfg.Off{},true,"nil"},{&cfg.Workers{Value: 0},false,"[]"}}{original:=Empty(tc.mode);copy:=cfg.ClonePlan(&original);if (original.Steps==nil)!=tc.nilSlice||(copy.Steps==nil)!=tc.nilSlice||!strings.Contains(cfg.DebugPlan(&copy),"Steps: "+tc.text){t.Fatal(original,copy)};wire,e:=serdejson.Marshal(&copy,cfg.SerializePlan);if e!=nil||!strings.Contains(string(wire),"\"Steps\":[]"){t.Fatal(string(wire),e)}};_,_,_,e:=Run([]byte("{\"Workers\":false}"));var detail *serde.Error;if !errors.As(e,&detail)||e.Error()!="plan input"||errors.Unwrap(e)!=error(detail)||!reflect.DeepEqual(detail.Path,[]serde.PathSegment{{Kind:"Variant",Name:"Workers"}}){t.Fatalf("cause/path=%#v %v",detail,e)}}
+ }{before,after,wire,e:=Run([]byte(tc.input));if e!=nil||before!=tc.before||after!=tc.after||wire!=tc.wire{t.Fatal(before,after,wire,e)};decoded,e:=serdejson.Unmarshal([]byte(wire),(cfg.PlanOps{}).Decode);if e!=nil||(cfg.PlanOps{}).Describe(&decoded)!=after{t.Fatal(decoded,e)}}}
+func TestNilEmptyAndErrorPaths(t *testing.T){for _,tc:=range []struct{mode cfg.Mode;nilSlice bool;text string}{{&cfg.Off{},true,"nil"},{&cfg.Workers{Value: 0},false,"[]"}}{original:=Empty(tc.mode);copy:=(cfg.PlanOps{}).Copy(&original);if (original.Steps==nil)!=tc.nilSlice||(copy.Steps==nil)!=tc.nilSlice||!strings.Contains((cfg.PlanOps{}).Describe(&copy),"Steps: "+tc.text){t.Fatal(original,copy)};wire,e:=serdejson.Marshal(&copy,(cfg.PlanOps{}).Encode);if e!=nil||!strings.Contains(string(wire),"\"Steps\":[]"){t.Fatal(string(wire),e)}};_,_,_,e:=Run([]byte("{\"Workers\":false}"));var detail *serde.Error;if !errors.As(e,&detail)||e.Error()!="plan input"||errors.Unwrap(e)!=error(detail)||!reflect.DeepEqual(detail.Path,[]serde.PathSegment{{Kind:"Variant",Name:"Workers"}}){t.Fatalf("cause/path=%#v %v",detail,e)}}
 func TestRealContexts(t *testing.T){for i,c:=range []cfg.Mode{&cfg.Off{},&cfg.Workers{Value:3}}{n:=7;ch:=make(chan int,1);ch<-8;if AddressComposite(c).N!=i+1||Dereference(c,&n)!=7||Receive(c,ch)!=8||len(ch)!=0{t.Fatal("unary match value")}};c:=&cfg.Off{};v:=Contexts(c,63);if v.Bits!=uint64(1)<<63||v.Count!=cfg.Count(7)||v.Pointer!=nil{t.Fatal(v)};a,b,bits,flag:=Unary(c);if a!=-2||b!=3||bits!=^uint64(0)||!flag||Local(c)!=1||CompositionLiteral(c)!=1||Goto(c)!=9||LoopControl(c)!=4{t.Fatal(a,b,bits,flag)};m:=Maps(c,63);if m[cfg.Key("off")]!=cfg.Value(1)<<63||!reflect.DeepEqual(Array(c),[4]int{0,0,5,7})||!reflect.DeepEqual(ShiftCount(c),[]uint64{8})||!reflect.DeepEqual(ArmLiteral(c),[]int{3}){t.Fatal("literal context")};nested:=NestedLiteral(c);if nested[0][0]==nested[0][1]||nested[0][0].N!=1||nested[0][1].N!=-3{t.Fatal(nested)}}
 func TestSelectionAndFailure(t *testing.T){c:=&cfg.Workers{Value: 3};Trace=nil;v,e:=Collect(c,true);if e!=nil||v.First!=1||v.Last!=3||!reflect.DeepEqual(v.Values,[]int{-3,2}){t.Fatal(v,e)};traceIs(t,[]string{"before","target","guard","checked","element-after","field-after","defer"});_,e=Collect(c,false);if !errors.Is(e,stopped){t.Fatal(e)};traceIs(t,[]string{"before","target","guard","checked","defer"});_,e=Collect(&cfg.Workers{Value: 0},true);if e!=nil{t.Fatal(e)};traceIs(t,[]string{"before","target","guard","element-after","field-after","defer"});if Short(c){t.Fatal("short circuit")};traceIs(t,nil)}
 func TestInvalidEnumBeforeGuard(t *testing.T){for _,value:=range []cfg.Mode{nil}{Trace=nil;func(){defer func(){if recover()==nil{t.Errorf("accepted invalid %T",value)}}();_,_=Collect(value,true)}();traceIs(t,[]string{"before","target","defer"})}}

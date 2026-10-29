@@ -1,0 +1,15 @@
+package main
+use serde;
+
+impl Request {
+    pub func encode(s serde::Serializer, value &Self) error { return serde::Write(s, value) }
+    pub func decode(d serde::Deserializer) (Self, error) { return serde::Read[Self](d) }
+}
+
+impl Mode {
+    pub func encode(s serde::Serializer, value &Self) error { return serde::Write(s, value) }
+}
+
+impl OutputOnly {
+    pub func encode(s serde::Serializer, value &Self) error { return serde::Write(s, value) }
+}

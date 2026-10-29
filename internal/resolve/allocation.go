@@ -3,8 +3,8 @@ package resolve
 import (
 	"go/types"
 
-	"github.com/hxsf/goxide/internal/expand"
-	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/expand"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 // Parsing cannot distinguish builtin new/make from a same-named function.
@@ -39,8 +39,11 @@ func (h *hygiene) allocationType(file *File, node ast.Node) *Diagnostic {
 		d := &Diagnostic{File: file.Name, Span: node.Span(), Code: "macro-allocation", Message: message}
 		h.diagnostic(node, d)
 		if use.File != nil {
-			d.File, d.Span, d.Definition = h.names[use.File], use.Span, use
-			d.Origin.File, d.Origin.Span = d.File, d.Span
+			d.Definition = use
+			if location, ok := h.expanded.Locations[node]; !ok || h.names[location.File] == "" {
+				d.File, d.Span = h.names[use.File], use.Span
+				d.Origin.File, d.Origin.Span = d.File, d.Span
+			}
 		}
 		return d
 	}

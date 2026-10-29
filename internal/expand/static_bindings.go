@@ -1,6 +1,6 @@
 package expand
 
-import ast "github.com/hxsf/goxide/internal/syntax/ast"
+import ast "github.com/goxide-lang/goxide/internal/syntax/ast"
 
 // StaticBindings identifies explicit source bindings before dependency roots are
 // routed. packageOf receives original files, including macro definition files.
@@ -10,6 +10,7 @@ type StaticBindings struct {
 	aliases      map[*ast.File]map[Key][]*ast.UseDecl
 	public       map[string]map[Key][]*ast.UseDecl
 	declarations map[string]map[Key]bool
+	macros       map[string]map[Key]bool
 }
 
 func NewStaticBindings(expanded *Result, packageOf func(*ast.File) string) *StaticBindings {
@@ -18,16 +19,18 @@ func NewStaticBindings(expanded *Result, packageOf func(*ast.File) string) *Stat
 		aliases:      map[*ast.File]map[Key][]*ast.UseDecl{},
 		public:       map[string]map[Key][]*ast.UseDecl{},
 		declarations: map[string]map[Key]bool{},
+		macros:       map[string]map[Key]bool{},
 	}
 	for _, file := range expanded.Files {
 		pkg := packageOf(bindings.owner(file, nil))
 		if bindings.declarations[pkg] == nil {
 			bindings.declarations[pkg] = map[Key]bool{}
+			bindings.macros[pkg] = map[Key]bool{}
 		}
 		for _, item := range file.Items {
-			collectStaticDeclarations(item, bindings.declarations[pkg])
+			collectStaticDeclarations(item, bindings.declarations[pkg], bindings.macros[pkg])
 			use, ok := item.(*ast.UseDecl)
-			if !ok || use.Tree == nil || use.Tree.Path == nil || len(use.Tree.Path.Segments) == 0 || use.Tree.Glob {
+			if !ok || use.Tree == nil || use.Tree.Children != nil || use.Tree.Path == nil || len(use.Tree.Path.Segments) == 0 || use.Tree.Glob {
 				continue
 			}
 			segments := use.Tree.Path.Segments
@@ -67,7 +70,7 @@ func (b *StaticBindings) Bound(file *ast.File, use *ast.UseDecl) bool {
 	for {
 		key := Key{Name: first.Name, Ctx: scope.Ctx}
 		pkg := b.packageOf(scope.File)
-		if b.declarations[pkg][key] {
+		if b.declarations[pkg][key] || len(use.Tree.Path.Segments) == 1 && b.macros[pkg][key] {
 			return true
 		}
 		for _, candidates := range [][]*ast.UseDecl{b.aliases[scope.File][key], b.public[pkg][key]} {
@@ -97,7 +100,7 @@ func (b *StaticBindings) owner(file *ast.File, name *ast.Ident) *ast.File {
 	return file
 }
 
-func collectStaticDeclarations(item ast.Item, names map[Key]bool) {
+func collectStaticDeclarations(item ast.Item, names, macros map[Key]bool) {
 	add := func(name *ast.Ident) {
 		if name != nil {
 			names[Key{Name: name.Name, Ctx: name.Ctx}] = true
@@ -116,8 +119,8 @@ func collectStaticDeclarations(item ast.Item, names map[Key]bool) {
 	case *ast.ModDecl:
 		add(item.Name)
 	case *ast.MacroRulesDecl:
-		add(item.Name)
+		macros[Key{Name: item.Name.Name, Ctx: item.Name.Ctx}] = true
 	case *ast.DeclareDecl:
-		collectStaticDeclarations(item.Decl, names)
+		collectStaticDeclarations(item.Decl, names, macros)
 	}
 }

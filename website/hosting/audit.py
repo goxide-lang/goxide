@@ -4,12 +4,23 @@ import hashlib,json,pathlib,re,zipfile
 if not __debug__:
  raise SystemExit('audit refuses Python optimization; checks must remain enabled')
 root=pathlib.Path(__file__).resolve().parents[1]/'dist'
-allowed={'rfc.html','playground.html','local.html','index.html','404.html','frontend-assets.json','THIRD-PARTY-LICENSES.txt','worker.js','_headers','.nojekyll','examples.json','compiler.wasm','wasm_exec.js','GO-LICENSE.txt','project-reexports.zip','learn/index.html','docs/index.html','design/index.html','tutorial-go.zip','tutorial-mixed.zip','tutorial-gox.zip','tutorial-features.zip'}
+manifest=json.loads((root/'examples.json').read_text())
+allowed={'rfc.html','playground.html','local.html','index.html','404.html','frontend-assets.json','THIRD-PARTY-LICENSES.txt','worker.js','proc-macro-worker.js','proc-macro-wasi.js','_headers','.nojekyll','examples.json','compiler.wasm','wasm_exec.js','GO-LICENSE.txt','project-reexports.zip','learn/index.html','docs/index.html','design/index.html','tutorial-go.zip','tutorial-mixed.zip','tutorial-gox.zip','tutorial-features.zip','tutorial-procedural.zip'}
+macro_bundle=manifest['macroBundle']
+assert re.fullmatch('[0-9a-f]{64}',macro_bundle['sha256']) and macro_bundle['package']=='playground', 'invalid macro bundle identity'
+macro_assets=macro_bundle['artifacts']
+assert 0<len(macro_assets)<=64, 'invalid macro asset count'
+assert len({asset['package'] for asset in macro_assets})==len(macro_assets), 'duplicate macro package'
+for asset in macro_assets:
+ assert re.fullmatch('[0-9a-f]{64}',asset['sha256']), 'invalid macro executable identity'
+ assert asset['path']=='proc-macros/'+asset['sha256']+'.wasm', 'invalid macro asset path'
+ assert hashlib.sha256((root/asset['path']).read_bytes()).hexdigest()==asset['sha256'], 'macro executable digest differs'
+ allowed.add(asset['path'])
 frontend_record=json.loads((root/'frontend-assets.json').read_text())
-assert frontend_record['websiteCommit']==json.loads((root/'examples.json').read_text())['websiteCommit'], 'frontend/compiler website identities differ'
+assert frontend_record['websiteCommit']==manifest['websiteCommit'], 'frontend/compiler website identities differ'
 frontend=frontend_record['assets']
 assert all(not p.is_symlink() for p in root.rglob('*')), 'publish symlink'
-assert {p.relative_to(root).as_posix() for p in root.rglob('*') if p.is_dir()}=={'assets','learn','docs','design'}, 'unexpected publish directory'
+assert {p.relative_to(root).as_posix() for p in root.rglob('*') if p.is_dir()}=={'assets','learn','docs','design','proc-macros'}, 'unexpected publish directory'
 assert all(re.fullmatch(r'assets/[A-Za-z0-9_.-]+\.(?:js|css|ttf)', name) for name in frontend), 'unexpected frontend asset path'
 assert {p.relative_to(root).as_posix() for p in root.rglob('*') if p.is_file()}==allowed|set(frontend),'publish directory differs from explicit allowlist'
 for name,digest in frontend.items():
@@ -22,11 +33,10 @@ patterns={
  'github-token':rb'(?:ghp_|github_pat_)[A-Za-z0-9_]{30,}',
  'aws-access-key':rb'AKIA[0-9A-Z]{16}',
 }
-manifest=json.loads((root/'examples.json').read_text())
 for project in manifest['projectExamples'] + manifest['tutorials']['stages']:
  if 'download' not in project:continue
  download=project['download'];path=root/download['path']
- assert path.name in {'project-reexports.zip','tutorial-go.zip','tutorial-mixed.zip','tutorial-gox.zip','tutorial-features.zip'}
+ assert path.name in {'project-reexports.zip','tutorial-go.zip','tutorial-mixed.zip','tutorial-gox.zip','tutorial-features.zip','tutorial-procedural.zip'}
  assert hashlib.sha256(path.read_bytes()).hexdigest()==download['sha256'], 'project archive digest differs'
  with zipfile.ZipFile(path) as archive:
   assert archive.namelist()==download['files'], 'project archive inventory differs'
@@ -40,20 +50,23 @@ for p in sorted(p for p in root.rglob('*') if p.is_file()):
  for label,pattern in patterns.items():
   assert not re.search(pattern,b),f'{p.name}: detected {label} (contents not printed)'
  report.append({'file':p.relative_to(root).as_posix(),'bytes':len(b),'sha256':hashlib.sha256(b).hexdigest()})
-# Decode WASM sections; custom debug/name sections are not needed for publication.
-b=(root/'compiler.wasm').read_bytes();assert b[:8]==b'\0asm\x01\0\0\0'
-def leb(i):
- value=shift=0
- while True:
-  byte=b[i];i+=1;value|=(byte&127)<<shift
-  if not byte&128:return value,i
-  shift+=7
-custom=[];i=8
-while i<len(b):
- section=b[i];length,start=leb(i+1);end=start+length
- assert end<=len(b)
- if section==0:
-  n,j=leb(start);name=b[j:j+n].decode();custom.append(name)
-  assert not name.startswith('.debug') and name!='name',f'unnecessary WASM custom section: {name}'
- i=end
+# The compiler and every fixed guest must omit unnecessary debug/name sections.
+custom={}
+for asset in ['compiler.wasm',*sorted({asset['path'] for asset in macro_assets})]:
+ b=(root/asset).read_bytes();assert b[:8]==b'\0asm\x01\0\0\0'
+ def leb(i):
+  value=shift=0
+  while True:
+   byte=b[i];i+=1;value|=(byte&127)<<shift
+   if not byte&128:return value,i
+   shift+=7
+ names=[];i=8
+ while i<len(b):
+  section=b[i];length,start=leb(i+1);end=start+length
+  assert end<=len(b)
+  if section==0:
+   n,j=leb(start);name=b[j:j+n].decode();names.append(name)
+   assert not name.startswith('.debug') and name!='name',f'{asset}: unnecessary WASM custom section: {name}'
+  i=end
+ custom[asset]=names
 print(json.dumps({'files':report,'totalBytes':sum(p['bytes'] for p in report),'wasmCustomSections':custom,'limitBytes':25*1024*1024,'scope':'allowlist and known-pattern audit; not proof against reverse engineering or every possible secret'},indent=2))

@@ -3,8 +3,8 @@ package resolve
 import (
 	"fmt"
 
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 func (r *resolver) walkFile() {
@@ -56,17 +56,17 @@ func (r *resolver) walkItem(scope *Scope, item ast.Item) {
 		}
 	case *ast.TraitDecl:
 		inner := r.lexicalScope(BlockScope, scope, n)
-		r.generics(inner, n.Generics, n.Where)
 		r.selfType(inner, n, r.file.Scopes[n.ID()])
+		r.generics(inner, n.Generics, n.Where)
 		for _, member := range n.Items {
 			r.walkItem(inner, member)
 		}
 	case *ast.ImplDecl:
 		inner := r.lexicalScope(BlockScope, scope, n)
+		r.selfType(inner, n, r.file.Scopes[n.ID()])
 		r.generics(inner, n.Generics, n.Where)
 		r.typ(inner, n.Trait)
 		r.typ(inner, n.Type)
-		r.selfType(inner, n, r.file.Scopes[n.ID()])
 		for _, member := range n.Items {
 			r.walkItem(inner, member)
 		}
@@ -114,8 +114,12 @@ func (r *resolver) generics(scope *Scope, params *ast.GenericParams, where *ast.
 		r.file.Scopes[params.ID()] = scope
 		for _, param := range params.Params {
 			r.file.Visibility[param.ID()] = Private
+			kind := TypeParam
+			if param.Const {
+				kind = ConstParam
+			}
 			for _, name := range param.Names {
-				sym := r.define(scope, param, name, TypeParam)
+				sym := r.define(scope, param, name, kind)
 				if len(param.Names) == 1 {
 					r.recordDeclaration(param, sym)
 				}
@@ -275,6 +279,7 @@ func (r *resolver) genericArgs(scope *Scope, args *ast.GenericArgs) {
 	if args != nil {
 		for _, arg := range args.Args {
 			r.typ(scope, arg.Type)
+			r.expr(scope, arg.Value)
 			if arg.Name != nil {
 				r.file.References[arg.Name.ID()] = Resolution{Deferred: true}
 			}
@@ -330,9 +335,8 @@ func (r *resolver) expr(scope *Scope, expr ast.Expr) {
 		r.expr(scope, n.X)
 		r.typ(scope, n.Type)
 	case *ast.CallExpr:
-		_, print := r.result.Prints[n]
 		_, adapter := r.result.GoResults[n]
-		if !print && !adapter {
+		if !adapter {
 			r.expr(scope, n.Fun)
 		}
 		for _, arg := range n.Args {

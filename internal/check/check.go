@@ -11,8 +11,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/resolve"
-	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 type Severity uint8
@@ -60,6 +61,7 @@ type Variant struct {
 }
 
 type Enum struct {
+	info         *Info
 	Name, GoName string
 	Decl         *ast.EnumDecl
 	Type         *types.Named
@@ -83,6 +85,10 @@ func (i *Instance) Variant(name string) *Variant {
 
 // Fields substitutes the enum's actual type arguments into a variant's payload.
 func (i *Instance) Fields(v *Variant) []Field {
+	return i.fields(v, nil)
+}
+
+func (i *Instance) fields(v *Variant, state *TypeState) []Field {
 	fields := append([]Field(nil), v.Fields...)
 	params := i.Enum.Type.TypeParams()
 	sub := make(map[*types.TypeParam]types.Type)
@@ -92,7 +98,11 @@ func (i *Instance) Fields(v *Variant) []Field {
 		}
 	}
 	for j := range fields {
-		fields[j].Type = substitute(fields[j].Type, sub)
+		if state != nil {
+			fields[j].Type = state.Substitute(i.Enum.info, fields[j].Type, sub, nil)
+		} else {
+			fields[j].Type = substitute(fields[j].Type, sub, i.Enum.info)
+		}
 	}
 	return fields
 }
@@ -107,6 +117,7 @@ const (
 
 type Match struct {
 	Enum      *Instance
+	Missing   []*Variant // Variants not covered by the checked, unguarded patterns.
 	Type      types.Type
 	Statement bool
 	Reference RefMode
@@ -120,33 +131,52 @@ type Constructor struct {
 type Try struct {
 	Input, Output *Instance
 	Value, Error  types.Type
-	Conversion    *resolve.Symbol
+	Conversion    *MemberSelection
 }
 
 type Info struct {
-	GoResults     map[*ast.CallExpr]*GoResult
-	Resolve       *resolve.Result
-	GoImporter    types.Importer
-	GoSizes       types.Sizes
-	Diagnostics   []Diagnostic
-	Types         map[ast.Expr]types.Type
-	Enums         map[*ast.EnumDecl]*Enum
-	Matches       map[*ast.MatchExpr]*Match
-	Tries         map[*ast.TryExpr]*Try
-	Constructors  map[ast.Expr]*Constructor
-	Symbols       map[*resolve.Symbol]types.Type
-	PackagePaths  map[string]string
-	Modules       map[*ast.ModDecl]*resolve.Package
-	Derives       map[*types.Named]*Derive
-	Equalities    map[*ast.CallExpr]types.Type
-	RefBindings   map[*ast.BindPat]RefMode
-	Traits        map[*ast.TraitDecl]*Trait
-	Impls         map[*ast.ImplDecl]*Impl
-	Members       map[ast.Expr]*MemberSelection
-	TraitViews    map[ast.Expr]*TraitView
-	TypeOverrides map[ast.Type]types.Type
-	GenericBounds map[*ast.FuncDecl][]*TraitBound
-	enums         map[*types.Named]*Enum
+	traitApplications   map[*types.Named]*TraitBound
+	BodyCases           map[*ast.FuncDecl][]*BodyCase
+	ImplCases           map[*Impl][]*ImplCase
+	parameterIdentities map[*types.TypeParam]string
+	ArrayPatterns       map[*types.TypeParam]*ArrayPattern
+	ConstParams         map[*resolve.Symbol]*ConstParam
+	ConstValues         map[ast.Expr]ConstValue
+	FunctionConstParams map[*types.Signature][]*ConstParam
+	FunctionGenerics    map[*types.Signature]*ast.GenericParams
+	EnumValid           map[*ast.CallExpr]*Instance
+	EnumAssertions      map[*ast.CallExpr]types.Type
+	GoResults           map[*ast.CallExpr]*GoResult
+	Resolve             *resolve.Result
+	// NativePackages shares complete pure Go package identities with GoImporter.
+	NativePackages    map[string]*types.Package
+	GoImporter        types.Importer
+	GoSizes           types.Sizes
+	Diagnostics       []Diagnostic
+	Types             map[ast.Expr]types.Type
+	Enums             map[*ast.EnumDecl]*Enum
+	Matches           map[*ast.MatchExpr]*Match
+	Tries             map[*ast.TryExpr]*Try
+	Constructors      map[ast.Expr]*Constructor
+	Symbols           map[*resolve.Symbol]types.Type
+	PackagePaths      map[string]string
+	Modules           map[*ast.ModDecl]*resolve.Package
+	RefBindings       map[*ast.BindPat]RefMode
+	Traits            map[*ast.TraitDecl]*Trait
+	Impls             map[*ast.ImplDecl]*Impl
+	ImplInstances     []*Impl
+	Members           map[ast.Expr]*MemberSelection
+	GoMembers         map[*ast.Ident]string
+	TraitViews        map[ast.Expr]*TraitView
+	TypeOverrides     map[ast.Type]types.Type
+	GenericBounds     map[*ast.FuncDecl][]*TraitBound
+	FunctionInstances map[ast.Node]*FunctionInstance
+	Demands           *DemandPlan
+	ConfigByFile      map[string]config.Config
+	Sugar             []*SugarMember
+	enums             map[*types.Named]*Enum
+	typeNodes         map[ast.Type]types.Type
+	goMemberNames     map[types.Object]string
 }
 
 func (r *Info) EnumOf(t types.Type) *Instance {
@@ -181,33 +211,57 @@ func (r *Info) EnumOf(t types.Type) *Instance {
 	return i
 }
 
-// Check leaves the input trees and resolver tables unchanged.
+// Check checks isolated in-memory input, using synthetic Option/Result types.
+// Module compilation supplies its real dependency graph through Options.Importer.
+// The input trees and resolver tables are left unchanged.
 func Check(files map[string]*ast.File, res *resolve.Result) (*Info, []Diagnostic) {
-	return CheckWithConversions(files, res, nil)
-}
-
-// CheckWithConversions registers only the explicitly supplied one-step helpers.
-func CheckWithConversions(files map[string]*ast.File, res *resolve.Result, helpers []resolve.Ref) (*Info, []Diagnostic) {
-	return checkFiles(files, res, helpers, importer.Default(), types.SizesFor("gc", runtime.GOARCH))
+	return checkFiles(files, res, Options{})
 }
 
 // CheckWithImporter uses the source module's Go dependency graph for external types.
 func CheckWithImporter(files map[string]*ast.File, res *resolve.Result, imports types.Importer, sizes types.Sizes) (*Info, []Diagnostic) {
-	return checkFiles(files, res, nil, imports, sizes)
+	return CheckWithOptions(files, res, Options{Importer: imports, Sizes: sizes})
 }
 
-func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resolve.Ref, imports types.Importer, sizes types.Sizes) (*Info, []Diagnostic) {
-	r := &Info{Resolve: res, Types: make(map[ast.Expr]types.Type), Enums: make(map[*ast.EnumDecl]*Enum), Matches: make(map[*ast.MatchExpr]*Match), Tries: make(map[*ast.TryExpr]*Try), Constructors: make(map[ast.Expr]*Constructor), Symbols: make(map[*resolve.Symbol]types.Type), enums: make(map[*types.Named]*Enum), Derives: make(map[*types.Named]*Derive), Equalities: make(map[*ast.CallExpr]types.Type)}
+// Options describes the selected source graph. Configuration follows the file's
+// owning distribution module, including declarations produced by macros.
+type Options struct {
+	Importer     types.Importer
+	Sizes        types.Sizes
+	ConfigByFile map[string]config.Config
+}
+
+func CheckWithOptions(files map[string]*ast.File, res *resolve.Result, options Options) (*Info, []Diagnostic) {
+	return checkFiles(files, res, options)
+}
+
+func checkFiles(files map[string]*ast.File, res *resolve.Result, options Options) (*Info, []Diagnostic) {
+	imports, sizes := options.Importer, options.Sizes
+	if imports == nil {
+		imports = importer.Default()
+	}
+	if sizes == nil {
+		sizes = types.SizesFor("gc", runtime.GOARCH)
+	}
+	r := &Info{Resolve: res, Types: make(map[ast.Expr]types.Type), Enums: make(map[*ast.EnumDecl]*Enum), Matches: make(map[*ast.MatchExpr]*Match), Tries: make(map[*ast.TryExpr]*Try), Constructors: make(map[ast.Expr]*Constructor), Symbols: make(map[*resolve.Symbol]types.Type), enums: make(map[*types.Named]*Enum)}
+	r.ArrayPatterns = map[*types.TypeParam]*ArrayPattern{}
+	r.FunctionConstParams = map[*types.Signature][]*ConstParam{}
+	r.FunctionGenerics = map[*types.Signature]*ast.GenericParams{}
 	r.GoImporter = imports
 	r.GoSizes = sizes
+	r.ConfigByFile = options.ConfigByFile
+	r.typeNodes = make(map[ast.Type]types.Type)
 	r.GoResults = make(map[*ast.CallExpr]*GoResult)
 	r.RefBindings = make(map[*ast.BindPat]RefMode)
 	r.Traits = make(map[*ast.TraitDecl]*Trait)
 	r.Impls = make(map[*ast.ImplDecl]*Impl)
 	r.Members = make(map[ast.Expr]*MemberSelection)
+	r.GoMembers = make(map[*ast.Ident]string)
+	r.goMemberNames = make(map[types.Object]string)
 	r.TraitViews = make(map[ast.Expr]*TraitView)
 	r.TypeOverrides = make(map[ast.Type]types.Type)
 	r.GenericBounds = make(map[*ast.FuncDecl][]*TraitBound)
+	r.FunctionInstances = make(map[ast.Node]*FunctionInstance)
 	r.Modules = make(map[*ast.ModDecl]*resolve.Package)
 	if res == nil {
 		return r, nil
@@ -215,16 +269,20 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 	c := &checker{out: r, files: files, importer: imports, named: make(map[*resolve.Symbol]*types.Named), variants: make(map[*resolve.Symbol]*Constructor), builtins: make(map[string]*Enum), packages: make(map[*resolve.Package]*types.Package), imported: make(map[string]*types.Package), constants: make(map[*resolve.Symbol]constant.Value), declarations: make(map[*resolve.Symbol]*typeDeclaration)}
 	c.traits = make(map[*resolve.Symbol]*Trait)
 	c.memberSymbols = make(map[*resolve.Symbol]*Member)
-	c.bounds = make(map[*types.TypeParam]*TraitBound)
+	c.bounds = make(map[*types.TypeParam][]*TraitBound)
 	c.functionBounds = make(map[*types.Signature][]*TraitBound)
 	c.sourceTypes = make(map[*resolve.Symbol]permissionDeclaration)
 	c.sourceValues = make(map[*resolve.Symbol]sourceExpression)
 	c.referenceModes = make(map[*resolve.Symbol]RefMode)
-	c.builtinEnums()
+	sourcePackages := c.prepareNativePackages(options.Importer != nil)
+	if len(r.Diagnostics) != 0 {
+		return r.checkedResult()
+	}
+	c.standalone = options.Importer == nil
 	r.PackagePaths = sourcePackagePaths(res)
 	c.checkImportedVisibility()
 	c.sourceModules()
-	for _, p := range res.Packages {
+	for _, p := range sourcePackages {
 		c.pkg = types.NewPackage(p.Dir, p.Name)
 		c.packages[p] = c.pkg
 		for _, f := range p.Files {
@@ -232,7 +290,7 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 			c.collect(f.AST.Items)
 		}
 	}
-	for _, p := range res.Packages {
+	for _, p := range sourcePackages {
 		c.pkg = c.packages[p]
 		for _, f := range p.Files {
 			c.file = f
@@ -241,47 +299,70 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 	}
 	c.prepareTraits()
 	c.prepareImpls()
-	for _, p := range res.Packages {
+	c.signaturePhase = 1
+	for _, p := range sourcePackages {
 		c.pkg = c.packages[p]
 		for _, f := range p.Files {
 			c.file = f
 			c.signatures(f.AST.Items)
 		}
 	}
+	if !c.certifyImpls() {
+		// Member and body evidence require a certified declaration graph.
+		// Stop here so derived missing-evidence errors cannot hide the actual
+		// overlapping declarations, including conflicts in dependencies.
+		return r.checkedResult()
+	}
+	c.checkTraitPrerequisiteCycles()
 	c.finishImpls()
+	c.signaturePhase = 2
+	for _, p := range sourcePackages {
+		c.pkg = c.packages[p]
+		for _, f := range p.Files {
+			c.file = f
+			c.signatures(f.AST.Items)
+		}
+	}
+	c.signaturePhase = 0
 	c.referenceHints = c.newPermissionChecker()
 	c.referenceHints.eachFile(func(items []ast.Item) { c.referenceHints.collect(items) })
 	c.enumNames()
-	c.collectDerives()
-	for _, ref := range helpers {
-		if f := res.Files[ref.File]; f != nil {
-			if s := f.Definitions[ref.ID]; s != nil {
-				c.conversions = append(c.conversions, s)
-			}
-		}
-	}
-	for _, p := range res.Packages {
+	c.checkRemainingAttributes()
+	c.prepareGoSugar()
+	c.validateConcreteImpls()
+	for _, p := range sourcePackages {
 		c.pkg = c.packages[p]
 		for _, f := range p.Files {
 			c.file = f
 			c.globals(f.AST.Items)
 		}
 	}
-	for _, p := range res.Packages {
-		c.pkg = c.packages[p]
-		for _, f := range p.Files {
-			c.file = f
-			for _, item := range f.AST.Items {
-				c.item(item)
+	for _, implementations := range []bool{true, false} {
+		for _, p := range sourcePackages {
+			c.pkg = c.packages[p]
+			for _, f := range p.Files {
+				c.file = f
+				c.checkItemPhase(f.AST.Items, implementations)
 			}
+		}
+		if implementations {
+			c.prepareImplCases()
+			c.out.Sugar = nil
+			c.prepareGoSugar()
 		}
 	}
 	for _, instance := range c.instances {
 		c.validateInstance(instance)
 	}
-	c.checkDefaultCycles()
 	c.checkEqualityComparisons()
 	c.checkReferences()
+	if len(r.Diagnostics) == 0 {
+		c.collectDemands()
+	}
+	return r.checkedResult()
+}
+
+func (r *Info) checkedResult() (*Info, []Diagnostic) {
 	sort.SliceStable(r.Diagnostics, func(i, j int) bool {
 		a, b := r.Diagnostics[i], r.Diagnostics[j]
 		if a.File != b.File {
@@ -293,34 +374,56 @@ func checkFiles(files map[string]*ast.File, res *resolve.Result, helpers []resol
 }
 
 type checker struct {
-	out             *Info
-	files           map[string]*ast.File
-	file            *resolve.File
-	pkg             *types.Package
-	packages        map[*resolve.Package]*types.Package
-	named           map[*resolve.Symbol]*types.Named
-	variants        map[*resolve.Symbol]*Constructor
-	builtins        map[string]*Enum
-	imported        map[string]*types.Package
-	importer        types.Importer
-	returns         []types.Type
-	conversions     []*resolve.Symbol
-	constants       map[*resolve.Symbol]constant.Value
-	instances       []genericInstance
-	declarations    map[*resolve.Symbol]*typeDeclaration
-	traits          map[*resolve.Symbol]*Trait
-	implOrder       []*Impl
-	memberSymbols   map[*resolve.Symbol]*Member
-	bounds          map[*types.TypeParam]*TraitBound
-	functionBounds  map[*types.Signature][]*TraitBound
-	currentImpl     *Impl
-	currentTrait    *Trait
-	currentSelf     types.Type
-	sourceTypes     map[*resolve.Symbol]permissionDeclaration
-	sourceValues    map[*resolve.Symbol]sourceExpression
-	referenceHints  *permissionChecker
-	referenceModes  map[*resolve.Symbol]RefMode
-	currentReceiver *resolve.Symbol
+	sourceMembers          map[string][]memberLookup
+	nativeMembers          map[string][]memberLookup
+	pendingDeclarations    []pendingDeclaration
+	pendingImpls           []pendingImpl
+	pendingTraits          []*Trait
+	traitRequirementsReady map[*Trait]bool
+	expectedSources        map[ast.Expr]*permission
+	returnSources          []*permission
+	caseFunctions          map[*types.Signature]caseFunction
+	signatureCases         map[*ast.FuncDecl]*bodyCaseState
+	checkedFunctions       map[*ast.FuncDecl]uint8
+	caseState              *bodyCaseState
+	checkingBodyCase       bool
+	signaturePhase         uint8
+	constantStack          map[*resolve.Symbol]bool
+	out                    *Info
+	files                  map[string]*ast.File
+	file                   *resolve.File
+	pkg                    *types.Package
+	packages               map[*resolve.Package]*types.Package
+	named                  map[*resolve.Symbol]*types.Named
+	variants               map[*resolve.Symbol]*Constructor
+	builtins               map[string]*Enum
+	builtinErrors          map[string]error
+	standalone             bool
+	imported               map[string]*types.Package
+	importer               types.Importer
+	returns                []types.Type
+	constants              map[*resolve.Symbol]constant.Value
+	instances              []genericInstance
+	declarations           map[*resolve.Symbol]*typeDeclaration
+	traits                 map[*resolve.Symbol]*Trait
+	implOrder              []*Impl
+	memberSymbols          map[*resolve.Symbol]*Member
+	bounds                 map[*types.TypeParam][]*TraitBound
+	activeBounds           []*TraitBound
+	activeGoConstraints    []GoPredicate
+	coherence              *coherenceState
+	proofStack             []proofObligation
+	proofFailure           string
+	functionBounds         map[*types.Signature][]*TraitBound
+	currentImpl            *Impl
+	currentTrait           *Trait
+	currentSelf            types.Type
+	sourceTypes            map[*resolve.Symbol]permissionDeclaration
+	sourceValues           map[*resolve.Symbol]sourceExpression
+	referenceHints         *permissionChecker
+	referenceModes         map[*resolve.Symbol]RefMode
+	currentReceiver        *resolve.Symbol
+	goInterop              *goInterop
 }
 
 func (c *checker) diag(n ast.Node, code, message string) {

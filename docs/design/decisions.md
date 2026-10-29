@@ -1,6 +1,6 @@
 # 设计决策与讨论覆盖登记
 
-更新：2026-10-01。项目暂称 goxide / Goxide；远端仓库名 `goxide` 不代表已经决定改名。
+更新：2026-10-22。项目暂称 goxide / Goxide；远端仓库名 `goxide` 不代表已经决定改名。
 
 本文区分讨论中确认的方向、为使设计可评审而写出的候选规则，以及仍没有方案的部分。**“已确认”不表示“已实现”**；实现分支已有有限可运行原型，准确范围见[实现说明](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/IMPLEMENTATION.md)；完整 goxide 编译器、linter、LSP 与可发布基础包尚未完成。实现进度以 [roadmap](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/ROADMAP.md) 为准。
 
@@ -14,6 +14,8 @@
 
 当前 P4 合同见 [trait](traits.md)、[关联类型](associated-types.md)及 D37：基础目标与三种 self 权限、统一 wrapper/marker、固定工厂、空 carrier 与关联类型 witness。struct/enum 共用成员查询；enum 值 As 与借用 owner 的 For 分别保留。类型关联函数和原生 Go 声明边界见 [RFC 0020](../rfcs/0020-associated-functions.md)。
 
+`declare impl` 及无体采用的相容合并已移除；普通有体 impl、运行时 wrapper、Go 双向调用及既有 `declare func/type` 支持保留，见 [RFC 0003](../rfcs/0003-declare-impl.md)。
+
 ## 2. 已确认的方向
 
 同步编号说明：远端 work 独立使用了 D19–D26，与本实现线程的 D19–D23 重号。本分支将远端新增决定记作 R19–R26，保留内容及 RFC 链接；本地 D19 warning-first、D20 风险分析非 MVP 等含义不变。
@@ -24,7 +26,7 @@
 | D02 | 所有新语法同时设计 Go 降低与双向互操作 | [总纲](overview.md)；不能只展示 goxide 写法 |
 | D03 | 改善安全性、显式实现与可读性、Go 包互操作是三项目标 | [符合程度](overview.md#21-三项目标的符合程度)；尚无完整安全性证明 |
 | D04 | 使用 trait 表达显式实现，保留 Go interface 的结构式语义；纳入普通关联类型 | [trait](traits.md)、[关联类型](associated-types.md)；P4 子集由 D37 收敛 |
-| D05 | `declare impl AorB::XXX for BBB::Type;` 可写在用户 C 包普通 .gox 内；无体采用原业务方法，通过 C 包 wrapper 显式转发并实现 marker | [Go 适配](go-interop.md)；原指针保持，接口动态类型是 wrapper，不向原始类型追加方法 |
+| D05 | 已删除 `declare impl` 原生采用入口及解析、检查、降低专用分支。普通 Go 双向调用保留，需要适配而完整头不满足有体 impl 归属规则时，使用自有包装类型和普通有体 impl | [移除合同](../rfcs/0003-declare-impl.md)；不改变普通有体 impl 的归属规则，不删除 `declare func/type` |
 | D06 | 有体 impl 的实现函数直接定义在对应 wrapper；多个 impl 的同名方法允许不同签名或行为；保持稳定 As 入口 | [trait](traits.md)；不再在原类型生成改名业务方法 |
 | D07 | 根据使用处期望类型决定是否插入 trait 适配；保留值本身的类型 | [使用处转换](traits.md#6-期望类型驱动的转换)；泛型和容器细节暂定 |
 | D08 | 拆分 Go 指针用途：Option 表达缺失、`mut& T` 表达写引用、`Arc[T]` 对应 Go 共享指针；不引入全局 move | [引用专题](pointers-and-borrows.md)；D19 更新默认诊断：别名/独占风险 warning，不承诺静态独占，Arc 使用 Go GC |
@@ -33,20 +35,22 @@
 | D11 | 历史决定：使用 `unsafe <expr>`；拆分指针经 unsafe as_ptr / `Ptr[T]`、AsPtr。**普通可写引用到匹配 Go 指针调用已由 D31 纠正，不再要求冗余 AsPtr**；真正 unsafe 操作另保留 | [Ptr / AsPtr](foreign-api.md)；Go 候选表示 `type Ptr[T any] *T`，源级精确拼写未冻结 |
 | D12 | 变体枚举、Option / Result、模式匹配；接受 Go 调用方能构造非法值，不能假称阻止了 Go 零值 | [枚举与 match](enums-and-match.md)；边界策略和布局见暂定项 |
 | D13 | pub 标记公开边界的方向；需要处理 Go 调用生成 API 的情况 | [总纲](overview.md#34-go-边界与非法值)；完整可见性与检查入口未定 |
-| D14 | 卫生宏参考 Rust；先做模式 / 模板声明宏及内建派生，提供 print / println、Default / Clone / Debug；用户过程宏后续考虑 | [宏](macros.md)；纯的用户 Syntax→Syntax 编译期程序仍是过程宏 |
+| D14 | 声明宏采用模式/模板与定义点卫生；过程宏在受限 WASI 中执行语法变换。std/serde 业务派生及打印是普通宏库，输出普通 impl | [宏](macros.md)、[RFC 0030](../rfcs/0030-procedural-macros.md)；不开放宏类型查询，不保留业务派生专用检查与来源特权 |
 | D15 | goxide 基础包提供现有 Go std 的 safe 视图与泛型 slice | [基础包](standard-library.md)；以 Go API 真实行为为依据，不以 Rust std 为规范 |
-| D16 | quote / syn 风格能力放在额外包 | [语法工具](syntax-tooling.md)；是否列入首个可用版本及协议仍暂定 |
+| D16 | 公共语法库采用独立 `github.com/goxide-lang/syntax` 仓库与 Go module；首批手写 Go 的 token / proc_macro 两包，后续 syn / quote 为同 module 的普通工具包 | [语法工具](syntax-tooling.md)；token 是唯一公共 TokenStream 类型所在包，SDK 只依赖 token 与 Go 标准库；首批库已按 RFC 0030 实现，宿主与转换桥留待编译器 internal 接入 |
 | D17 | 提供面向 goxide 的 LSP，未来考虑 goxide 自举 | [编译器与工具链](compiler-and-tooling.md)；启动语言、复用组件和阶段路线为暂定方案 |
 | D18 | 先完成设计；总纲和各专题分开，维护决策状态与路线，支持另一台机器继续 | [README](../../README.md)、[roadmap](https://github.com/goxide-lang/goxide/blob/43f930c2f0fd516c263f5c71b9205279af836393/ROADMAP.md)；本次修改不代表开始编译器实现 |
 | R19 | 发布完整 dist；同一 Go 模块携带 .go、.d.gox 与可选 .gox；Go 编译 .go，goxide 额外加载声明或源码 | [RFC 0001](../rfcs/0001-package-loading.md)；wrapper 与 marker 随 impl 包发布，无需外部方法注入 |
-| R20 | 相容 declare 可合并，有体实现保持唯一 | [RFC 0003](../rfcs/0003-declare-impl.md)；契约矛盾和原生采用/有体混合语义仍需明确 |
-| R21 | match 按模式区分值复制、只读借用与可变借用 | [RFC 0009](../rfcs/0009-match.md)；具体语法、作用域与支持原位借用的 ABI 未定 |
+| R20 | 已随 `declare impl` 删除无体采用的相容合并；普通有体实现继续接受一致性检查 | [RFC 0003](../rfcs/0003-declare-impl.md)；重复有体实现不合并，不保留泛型 declare 或 provider 选择分支 |
+| R21 | enum match 支持 payload 值复制与只读投影；payload 槽不可变，`ref mut` / `match &mut` 拒绝，变量可整体重绑定 | [payload 合同](enum-payload-borrows.md)；容器按自身权限使用，D29 已更新 |
 | R22 | 所有新特性和语法有独立 spec/RFC，以转译前后、双向调用和反例表达约束 | [RFC 清单](../rfcs/README.md)、[模板](../rfcs/TEMPLATE.md)；已写文档不代表已实现 |
 | R23 | goxide 源级使用变体枚举分派，不直接采用 Go 的 .(T)/.(type) 作为分派语法；增强保证由 goxide 工具链提供 | 后端和原生 Go 仍可使用 Go 类型检查/反射；普通 Go 调用者不获得 goxide 静态权限保证 |
 | R24 | 所有运行时 trait 视图统一 wrapper；trait 接口与 wrapper 保留 marker；固定工厂及 As/For helper | [RFC 0019](../rfcs/0019-uniform-trait-wrappers.md)；P4 权限、enum helper 和 nil 规则由 D37 收敛，跨包载体加载由 P5 接续 |
-| R25 | 构造函数等关联函数定义在独立 impl T 中，T::method 降低为普通 Go 包函数 | [RFC 0020](../rfcs/0020-associated-functions.md)；首参数 self 区分实例/关联成员，无 static；P4 采用 NewT/TMethod 并诊断名称冲突 |
+| R25 | 固有成员定义在 impl T；无 self 在空 carrier 承载原业务体，enum 值/只读 self 在接口与变体承载原业务体，struct 沿 Go receiver | [RFC 0020](../rfcs/0020-associated-functions.md)；enum 可写固有 self 拒绝，方法值捕获旧对象，typed-nil 在业务体前检查；条件成员按 D38 扁平化 |
 | R26 | impl 成员按 goxide 规则转译并支持 Self/self；直接书写的 Go 函数和方法保留原生 Go 语义 | [RFC 0020](../rfcs/0020-associated-functions.md)；Self 绑定源目标类型，self 仅绑定实例接收者；不全局替换同名 Go 标识符，不限制其他 goxide 特性只能位于 impl 内 |
 | D37 | P4：impl 以基础 T 为目标，self 使用 Self / &Self / &mut Self；关联投影为 Self::Item / T::Trait::Item，运行时值完整绑定；泛型关联类型经空 carrier witness 推导，Go 调用保留源类型实参数量 | [trait](traits.md)、[关联类型](associated-types.md)、[enum 类型锚](enum-representation.md#11-p4-的类型锚与实例适配)；struct/enum 统一查询，enum Self 为 E，类型锚/witness 不运行；值 As 转发与借用 ForE 保留身份；外部类型不注入 anchor，nil 沿用 Go/enum 规则 |
+| D38 | 条件 impl 按当前转译范围的实际请求扁平化；具体 impl 直接生成，普通 Go 泛型保留；不建条件专用 view，也不向整个泛型家族添加部分实例的能力；Go 通过明确普通函数入口使用条件能力 | [RFC 0031](../rfcs/0031-generic-protocol-impls.md)；模块 sugar 默认开启，CLI 仅覆盖入口模块，见 [trait](traits.md#go-成员-sugar) 和 [配置](toml-manifest.md#go-成员-sugar-配置) |
+| D39 | trait 位置类型参数是输入，关联类型是输出；完整实现头按有序 owner 检查，通用互斥共享类型、长度、Go 与协议约束；未知不当作互斥 | [RFC 0031](../rfcs/0031-generic-protocol-impls.md)、[RFC 0032](../rfcs/0032-from-into-conversions.md)；定义点证明与分支检查保留 source 权限，标准 identity/Into blanket 是普通 impl，参数化应用使用稳定 pair operations |
 
 已确认新增 **D19（2026-10-01）**：用户明确要求默认兼容 Go 式指针/别名；有具体风险依据先 warning，不以无法证明安全大面积拒绝。语法、类型、已确认不变量错误不降级；warning 与运行时 race 分开，不能宣称静态安全。该反馈否决 T01/T06 及前两轮严格默认，不撤销无关 D01–D18。
 
@@ -54,7 +58,7 @@
 
 已确认新增 **D21（2026-10-01）**：用户将宏、enum/match、指针能力中的只读/可写分离列为 T0。T0 是优先级，不表示全套特性一次实现。enum 的早期 raw 常量路线已被 D27 撤回；当前只有封闭变体，数值/string 通过 serde 映射，非法输入/匹配行为需明确。共享与内部可变考虑 goxide/std 包装，不先引入整套所有权或智能指针系统。用户认为宏收益明确；仍保留客观卫生、诊断和工具链验收，不把“100% 正向”写成实测结论。D20 不变。
 
-已确认新增 **D22（2026-10-01）**：`?` 首先限于 Option/Result，不公开 Try/Residual。thiserror 核心派生生成显式 From；返回 Result 的目标错误类型已知时允许唯一的一步显式转换，不搜索转换链、不接受任意泛型 blanket 转换。静态 Go `error` 只能走明确兜底或业务分类，不能推断其动态变体。精确语法、impl 选择细则和前端实现仍待闭合，见 RFC 0005。
+已确认新增 **D22（2026-10-01，按 RFC 0032 更新）**：`?` 限于 Option/Result，不公开 Try/Residual。Result 的错误可赋值时直接传播，否则按精确静态来源 E 与目标 F 选择唯一的标准 `F:From[E]`，选择在定义点冻结。允许通过通用归属、互斥和有限需求检查的显式泛型 impl；不搜索转换链，不猜静态 Go `error` 的动态变体。标准 identity 与 From → Into 均由普通库 impl 提供，Error 的 `#[from]` 等人体工程库后续生成普通 impl，见 [RFC 0032](../rfcs/0032-from-into-conversions.md)。
 
 **实施交接授权**：先冻结本地文档基线 `v0.0.0-mvp-doc`，再在独立实现会话推进模式宏、log/tracing 场景及 Debug/Clone/serde/thiserror 派生。JSON 是推荐首版格式，完整 Rust 兼容并非目标。本线程继续研究/spec/RFC，实现发现回流；授权实施不表示其他候选已经确认。
 
@@ -79,11 +83,11 @@
 | T11 | 字面量 `{}` / `{:?}` 对应 Display / Debug；打印失败 panic；固定字段式 derive 规则 | 格式子集、formatter、Default / Clone / Debug 精确协议及错误策略未冻结 |
 | T12（P4 子集已收敛） | 静态 Self 操作选择具体 impl，P4 使用空 carrier 及 witness；P2 派生 helper 保持既有合同 | D37；静态操作不塞入运行时接口，更宽派生和泛型 impl 另行推进 |
 | T13 | 用户建议 std 提供 Vec/借用视图和多种 Map；既有 Slice、ReadOutcome、copy/clone_with 为候选 | [Vec](../rfcs/0010-collections.md)、[Map](../rfcs/0017-maps.md)；赋值语义、元素借用、ABI、名称和具体后端未定 |
-| T14 | syntax 协议 + 普通 syn / quote 包可先于过程宏宿主提供 | 这是实现建议，不承诺首版交付；token 构造原语、卫生上下文和包版本尚未冻结 |
+| T14 | 后续 syn / quote 的 AST、ToTokens、模板插值与具体 API | 不在首批 token / SDK 实现范围；若 quote! 采用过程宏，独立源码项目直接使用 token builder，普通 syntax module 不反向依赖它 |
 | T15 | Go 启动前端 / LSP，独立 goxide AST 和语义 IR；复用 Go 包加载、输出和类型信息 | 自举阶段、复用边界、仓库布局和工具进程协议见[工具链草案](compiler-and-tooling.md) |
 | T16 | Unit 用 struct{}；第三方锁经普通 Lock/Unlock 原语接入 | 回调语法、没有结果的 return 插入、第三方适配构造器及来源检查 |
 | T17（P4 子集已收敛） | 固定工厂 `As<Type><Trait>`、`As<Trait>` / `For<Type>`、完整 trait 身份 marker 与名称冲突诊断 | [RFC 0019](../rfcs/0019-uniform-trait-wrappers.md)；跨包共享适配与发布信息由 P5 接续 |
-| T18（P4 已收敛） | self Self / &Self / &mut Self；new → NewT，其他关联函数 → TMethod，首版不重载 | [RFC 0020](../rfcs/0020-associated-functions.md)；pub 控制公开，私有入口首字母小写；enum 实例函数用显式 E / *E 参数 |
+| T18（已收敛） | self Self / &Self / &mut Self；是否有 self 决定成员位置，返回 Self 不改变分类；不重载 | [RFC 0020](../rfcs/0020-associated-functions.md)；pub 控制公开，真实借用槽位和方法值行为保留；R25 的新 Go 映射待实现 |
 
 ## 4. 未定与明确延期
 
@@ -92,8 +96,8 @@
 | ID | 未闭合问题 | 影响 |
 | --- | --- | --- |
 | U01 | 完整词法 / 语法、类型表示、包和符号身份；最终语言名称 | 解析器、诊断与稳定输出 |
-| U02 | 引用获取、保存/构造、字段及容器只读投影、输出槽位；持有类型必要性 | RFC 0003 §6.1–6.2 核对 D08/D11；内建容器写操作、浅复制元素引用及接口/any 断言须保留权限，类型表示尚未闭合。H 临时契约未批准且不是 MVP 前提；风险来源/别名分析另属 D20 长期工作 |
-| U03（P4 子集已收敛） | 基础目标上的 self 接收权限见 D37；Arc 等持有类型仍按专门设计推进 | 原生 *T 与源级引用不因 Go 表示相同而合并；declare 结构代入 Self 后验证精确方法集 |
+| U02 | 引用获取、保存/构造、字段及容器只读投影、输出槽位；持有类型必要性 | [引用合同](pointers-and-borrows.md)与[原生 API](foreign-api.md)核对 D08/D11；内建容器写操作、浅复制元素引用及接口/any 断言须保留权限，类型表示尚未闭合。H 临时契约未批准且不是 MVP 前提；风险来源/别名分析另属 D20 长期工作 |
+| U03（P4 子集已收敛） | 基础目标上的 self 接收权限见 D37；Arc 等持有类型仍按专门设计推进 | 原生 *T 与源级引用不因 Go 表示相同而合并；普通 Go 调用按真实方法集与源级权限检查 |
 | U04（P4 子集已收敛） | 单 trait 约束、普通关联投影及 carrier witness 已选定；更宽泛型系统延期 | 静态成员和裸 Self 不因此成为任意动态接口；不加入运行时字典 |
 | U05 | 递归 Go 类型视图、嵌套 Ptr / slice / map、函数值和回调桥接 | 不能把单层 *T 转换实验外推成全 ABI 兼容 |
 | U06 | pub、公开字段、回调及共享对象的验证时机和错误接口 | Go 双向边界与输入有效性 |
@@ -101,11 +105,11 @@
 | U08 | 支持值复制/原位借用的 enum 最终 ABI、循环对象图校验与容器初始化算法 | 借用必须指向原 payload；严格值不变量、性能和互操作成本 |
 | U09 | 宏匹配器完整语法、formatter 协议、静态派生协议、卫生与源码追踪协议 | 首版宏可用性；用户过程宏及可编程 derive 明确延期 |
 | U10 | safe Go std 包路径、逐入口契约、Slice ABI / Clone 策略、首批覆盖范围 | 不能宣称整个 Go std 已 safe |
-| U11 | 公共语法包协议、受控 token 构造、版本与过程宏宿主能力 | 普通语法工具与编译期扩展分别验收 |
+| U11 | 编译器转换桥、实际 SDK 协议内容匹配与受限过程宏宿主能力 | 公共 token/SDK 按 D16 和 [RFC 0030 草案](../rfcs/0030-procedural-macros.md) 首批实现；普通库边界与完整编译期扩展分别验收 |
 | U12 | 增量查询、完整 LSP、构建驱动、自举一致性验收 | 尚未实现；保持 Go seed 的方案为暂定 |
 | U13 | supertrait、GAT、特化、锁块语法 | 延期 / 另行设计；借用 match 已由 D21 纳入目标，具体实现见 U02/U08 |
 | U14 | Rust / LLVM 到 Go 汇编的受限计算内核路线 | 不作为首版主后端；ABI / GC / 栈约定等尚未解决 |
-| U17 | Option/Result 专用 `?` 的精确语法与实现、Go 多返回显式包装 | [RFC 0005](../rfcs/research/0005-option-result-question.md)；限域及显式 From 单步转换方向已确认，不公开 Try/Residual，不搜索转换链；Go error 静态类型需显式兜底或分类 |
+| U17（转换协议已收敛） | Option/Result 专用 `?`、参数化 From/Into 与定义点一步选择由 D22/D39 确认；Go 多返回使用显式包装 | [RFC 0032](../rfcs/0032-from-into-conversions.md)；公开发布与实现进度见[状态表](../mvp-gap-audit.md)，通用 Try/Residual 留待后续 |
 | U18 | serde-rs 分层到 Go/goxide 的接口映射、字段/数字/enum 策略及派生子集 | [RFC 0006](../rfcs/research/0006-serde-core-and-formats.md)；分层已确定，具体 helper/visitor ABI 与严格 JSON 偏差仍候选；无公开 core Value，格式 Value 不强制中转 |
 | U19（撤回） | 开放 raw/C enum 与同值别名 | 已由 D27 撤回；不再等待旧别名问题；serde 外部映射不创建开放 enum |
 | U16 | trait 双路径、消除包装的语义条件及发布 ABI | [RFC 0004](../rfcs/research/0004-trait-lowering-paths.md)；比较直接调用/值视图/指针视图/字典，D05/D06 未被候选替换 |
@@ -131,7 +135,6 @@
 | 连续下划线加一就能可逆编码组合名称 | 该编码有碰撞，不采用；正式符号编码未定 |
 | 无 I/O 的 Syntax→Syntax 编译期用户函数是非过程宏 | 分类错误已纠正；仍属于过程宏，首版采用声明模式与内建派生 |
 | safe 标准库参照 Rust std | 已纠正为 Go std；Rust 仅参考宏机制与派生协议 |
-| 独立的相同 declare 一律冲突 | 相容无体声明可合并，有体唯一；矛盾契约仍诊断 |
 | match 固定只有值绑定，借用模式延期 | 按模式区分值/只读借用/可变借用；旧值型 case 实验只是部分机制验证 |
 | dist 需要另建包下载/加载体系 | 同一 Go 模块携带 .go/.d.goxide/可选 .gox；外部 marker 的 lowering 单独评审 |
 
@@ -144,9 +147,9 @@
 
 已确认 **D27（最新用户反馈）**：语言仅封闭变体 enum，撤回开放 raw/C enum；serde 内建宏负责数值/string 外部映射，未知 variant 解码报错，不制造合法未知值。业务 validator 后置，现有结构类型/enum边界验证保留。
 
-已确认 **D28（最新用户反馈）**：struct 派生 Default 要求每个字段实现 Default，否则手写；enum 标记默认变体。后续用户确认：仅选中默认变体的 payload 字段需要 Default，非默认变体不要求；允许带 payload 的默认变体。手动 Default 采用 `impl Default for T { func default() T { ... } }`，不引入 static，首参数 self 区分实例成员与关联函数。Debug 必须清楚说明输出字段/payload内容与隐私、格式稳定性边界。
+已确认 **D28（最新用户反馈）**：struct 派生 Default 要求每个字段实现 Default，否则手写；enum 标记默认变体。后续用户确认：仅选中默认变体的 payload 字段需要 Default，非默认变体不要求；允许带 payload 的默认变体。手动 Default 采用 `impl Default for T { func Default() T { ... } }`，不引入 static，首参数 self 区分实例成员与关联函数。Debug 必须清楚说明输出字段/payload内容与隐私、格式稳定性边界。
 
-已确认 **D29（2026-10-13 用户确认）**：首版支持 `match &mut enum_value { Var1(inner) => *inner += 1 }` 的原位可写 payload 借用，引用指向真实存储。用户 enum 采用密封接口与指针变体，普通复制共享变体对象；整体替换 enum 后，旧 payload 投影仍指向旧对象。Option/Result 在 P6 前保留既有内联槽表示。该确认取代此前要求用户 enum 独立值复制的约束；[引用合同](enum-payload-borrows.md)规定两类存储的实际行为。D20 不变。
+已确认 **D29（按最新用户决定更新）**：enum payload 槽不可变，`match &mut e` 与 `ref mut` 不提供可写投影；变量 e 可整体重绑定。payload 中的容器和指针按自身权限使用，普通值模式不增加深层冻结。用户 enum 普通复制共享变体对象，重绑定后旧只读投影与固有方法值仍指向旧对象；Option/Result 保留现有内联槽，表示统一在 MVP-6。[引用合同](enum-payload-borrows.md)规定存储与权限，D20 不变。
 
 已确认 **D30（2026-10-02 用户收口纠正）**：goxide 跨 module 消费 goxide 库应恢复增强信息，普通 Go 消费生成库则不执行 goxide 静态增强检查，类似 TS/JS 消费边界。同模块联合验收不等于此能力已完成，也未获批准缩成同模块 MVP。
 
@@ -158,7 +161,7 @@
 
 已确认 **D34（2026-10-03 容器比较派生）**：slice/map 按 D33 区分 nil/空并递归调用元素/值的 PartialEq/Eq 协议，不以 reflect.DeepEqual 替代。原生 map 首片仅接纳能证明原生查找与相等契约一致的稳定键，不能由 float NaN、自定义 equals 或 Go comparable 偷渡资格；不引入 HashMap。嵌套 struct/array/enum 与 Option 状态需要真实生成验收。手写比较入口可下一片，指针拆分/原位 borrow 不前置阻断本轮独立 enum 阶段。
 
-已确认 **D35（2026-10-03 手写具体比较）**：接通具体 PartialEq/Eq 实现，首参 self 为实例、无 static，复用显式 equals registry，不新增完整 trait。手写 PartialEq 决定业务相等，派生包含该类型时调用其协议；手写 Eq 是作者承诺，不能自动授予原生 map 键资格。当前值参数 `func equals(self T, other T) bool` 与空 Eq impl 沿既有 helper 约定实施；不依赖或默认批准借用/所有权签名。enum 唯一比较入口先校验再执行用户体，保留原函数帧；不是所有公开函数的自动验证。[实施规则](../rfcs/0008-enums.md#手写具体-partialeqeq2026-10-03)区分本片边界与未定扩展。
+已确认 **D35（2026-10-03 手写具体比较）**：接通具体 PartialEq/Eq 实现，首参 self 为实例、无 static，复用显式 equals registry，不新增完整 trait。手写 PartialEq 决定业务相等，派生包含该类型时调用其协议；手写 Eq 是普通 marker impl 的作者承诺，不按 derive 来源限制；NativeKey 另承诺与稳定 Go 原生键相等一致且要求 comparable，Eq 不自动授予该资格。当前值参数 `func equals(self T, other T) bool` 与空 Eq impl 沿既有 helper 约定实施；不依赖或默认批准借用/所有权签名。enum 唯一比较入口先校验再执行用户体，保留原函数帧；不是所有公开函数的自动验证。[实施规则](../rfcs/0008-enums.md#手写具体-partialeqeq2026-10-03)区分本片边界与未定扩展。
 
 
 已确认 **D36（2026-10-04 显式 Go 多返回适配）**：提供普通 Ok/Err 与保留错误时返回值两种显式宏，覆盖 Reader 的部分成功。保值版不能经 `?` 静默丢弃 Value；原始 error 身份、typed-nil 语义、单次求值与用户函数边界保持。首片工程 API、具体类型/数量边界和真实验收见 [RFC 0005](../rfcs/research/0005-option-result-question.md#显式-go-result-适配宏2026-10-04)。不授权隐式原生调用转换、Residual/Try、tuple 或新指针设计。

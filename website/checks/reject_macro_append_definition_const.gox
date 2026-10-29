@@ -1,4 +1,0 @@
-package p
-const append=3
-macro_rules! push {($s:expr,$v:expr)=>{append($s,$v)};}
-func run(){_=push!([]int{},2)}

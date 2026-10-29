@@ -1,4 +1,0 @@
-package p
-import "fmt"
-macro_rules! show {($v:expr)=>{fmt.Println($v)};}
-func Run(){show!(42)}

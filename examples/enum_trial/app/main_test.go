@@ -45,7 +45,7 @@ func TestErrorChainAndClosedVariants(t *testing.T) {
 	}
 }
 func TestCrossModuleProtocols(t *testing.T) {
-	none := DefaultSnapshot()
+	none := (SnapshotOps{}).Initial()
 	nilSome := Snapshot{Data: cfg.Some(nil)}
 	emptySome := Snapshot{Data: cfg.Some([]int{})}
 	if !Same(none, none) || Same(none, nilSome) || Same(nilSome, emptySome) {
@@ -55,13 +55,13 @@ func TestCrossModuleProtocols(t *testing.T) {
 		v    Snapshot
 		want string
 	}{{none, "Option::None"}, {nilSome, "Option::Some(nil)"}, {emptySome, "Option::Some([])"}} {
-		clone := CloneSnapshot(&tc.v)
-		if !Same(tc.v, clone) || !strings.Contains(DebugSnapshot(&clone), tc.want) {
-			t.Fatal(DebugSnapshot(&clone), tc.want)
+		clone := tc.v.Copy()
+		if !Same(tc.v, clone) || !strings.Contains(clone.Inspect(), tc.want) {
+			t.Fatal(clone.Inspect(), tc.want)
 		}
 	}
 	original := Snapshot{Data: cfg.Some([]int{1})}
-	copy := CloneSnapshot(&original)
+	copy := original.Copy()
 	cfg.Items(copy.Data)[0] = 9
 	if cfg.Items(original.Data)[0] != 1 || Same(original, copy) {
 		t.Fatal("clone shares payload")

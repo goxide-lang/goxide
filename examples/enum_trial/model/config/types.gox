@@ -1,13 +1,14 @@
 package config
+use std;
 use serde;
 
-#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, PartialEq, Eq)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize, std::derive::Default, std::derive::Clone, std::derive::Debug, std::derive::PartialEq, std::derive::Eq)]
 pub enum Mode { #[default] Immediate, Batch(int), }
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize, std::derive::Clone, std::derive::Debug, std::derive::PartialEq, std::derive::Eq)]
 type Settings struct { Port int }
-#[derive(serde::Serialize, serde::Deserialize, Default, Clone, Debug, PartialEq, Eq)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize, std::derive::Default, std::derive::Clone, std::derive::Debug, std::derive::PartialEq, std::derive::Eq)]
 type Flags struct { Enabled bool }
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize, std::derive::Clone, std::derive::Debug, std::derive::PartialEq, std::derive::Eq)]
 #[serde(deny_unknown_fields)]
 type Request struct {
     Name string

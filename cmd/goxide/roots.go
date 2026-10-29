@@ -1,21 +1,16 @@
 package main
 
 import (
-	"github.com/hxsf/goxide/internal/paths"
-	"github.com/hxsf/goxide/internal/project"
-	"github.com/hxsf/goxide/internal/rootconfig"
+	"github.com/goxide-lang/goxide/internal/compile"
+	"github.com/goxide-lang/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/project"
+	"github.com/goxide-lang/goxide/internal/rootconfig"
 )
 
 // sourceRoots selects only explicitly declared roots. Module versions and
 // package availability still belong to the input's existing Go module graph.
 func sourceRoots(moduleRoot, sourceDirectory, explicit string) (paths.Roots, error) {
-	if explicit != "" {
-		return rootconfig.Read(explicit)
-	}
-	if moduleRoot != "" {
-		return rootconfig.Load(moduleRoot)
-	}
-	return rootconfig.Discover(sourceDirectory)
+	return compile.SourceRoots(moduleRoot, sourceDirectory, explicit)
 }
 
 // Host bootstrap sources receive only explicit toolchain names.

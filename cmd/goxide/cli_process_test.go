@@ -58,7 +58,7 @@ func TestCLIProcessContract(t *testing.T) {
 	}
 	fixture := func(t *testing.T) string {
 		t.Helper()
-		d := t.TempDir()
+		d := canonicalTempDir(t)
 		if runtime.GOOS != "windows" {
 			if err := os.Mkdir(filepath.Join(d, "fakebin"), 0700); err != nil {
 				t.Fatal(err)
@@ -205,114 +205,9 @@ func TestCLIProcessContract(t *testing.T) {
 		}
 		assertNoArtifacts(t, d)
 	})
-	t.Run("scripts-action-named-directories", func(t *testing.T) {
-		t.Skip("MVP-DEFERRED: MVP CLI build-script commands deferred by P6")
-		// The bare legacy form has no --go option. Put the actual toolchain
-		// ahead of any system command called go without creating a fake runner.
-		t.Setenv("PATH", filepath.Dir(goTool)+string(os.PathListSeparator)+os.Getenv("PATH"))
-		for _, name := range []string{"plan", "allow", "trust-project"} {
-			d := t.TempDir()
-			root := filepath.Join(d, name)
-			if err := os.Mkdir(root, 0700); err != nil {
-				t.Fatal(err)
-			}
-			for file, content := range map[string]string{
-				"goxide.toml": "[go_mod]\nmodule='example.org/routefixture'\ngo='1.27'\n[[bin]]\nname='app'\npath='main.gox'\n",
-				"main.gox":    "package main\nfunc main(){}\n",
-			} {
-				if err := os.WriteFile(filepath.Join(root, file), []byte(content), 0600); err != nil {
-					t.Fatal(err)
-				}
-			}
-			var first string
-			for _, args := range [][]string{{"scripts", name}, {"scripts", "--", name}} {
-				got := execute(t, d, args...)
-				if got.code != 0 || got.stderr != "" {
-					t.Fatalf("same-name path %q: %+v", args, got)
-				}
-				var plan struct {
-					Identity string `json:"root_identity"`
-					Trusted  bool   `json:"root_trusted"`
-				}
-				if err := json.Unmarshal([]byte(got.stdout), &plan); err != nil {
-					t.Fatalf("not a plan: %s: %v", got.stdout, err)
-				}
-				if plan.Identity == "" || plan.Trusted {
-					t.Fatalf("same-name path unexpectedly trusted: %+v", plan)
-				}
-				if first != "" && first != got.stdout {
-					t.Fatalf("delimiter changed default plan: %s / %s", first, got.stdout)
-				}
-				first = got.stdout
-			}
-		}
-	})
-
-	t.Run("scripts-canonical-legacy-identity", func(t *testing.T) {
-		t.Skip("MVP-DEFERRED: MVP CLI build-script commands deferred by P6")
-		d := t.TempDir()
-		projectRoot := filepath.Join(d, "project")
-		if err := os.Mkdir(projectRoot, 0700); err != nil {
-			t.Fatal(err)
-		}
-		for name, content := range map[string]string{
-			"goxide.toml": "[go_mod]\nmodule='example.org/scriptcli'\ngo='1.27'\n[[bin]]\nname='app'\npath='main.gox'\n",
-			"main.gox":    "package main\nfunc main(){}\n",
-		} {
-			if err := os.WriteFile(filepath.Join(projectRoot, name), []byte(content), 0600); err != nil {
-				t.Fatal(err)
-			}
-		}
-		call := func(action string, legacy bool) result {
-			args := []string{"scripts"}
-			if legacy {
-				args = append(args, "--action", action)
-			} else {
-				args = append(args, action)
-			}
-			args = append(args, "--go", goTool, "--offline", "project")
-			got := execute(t, d, args...)
-			if got.code != 0 || got.stderr != "" {
-				t.Fatalf("scripts %s legacy=%v: %+v", action, legacy, got)
-			}
-			return got
-		}
-		canonical, legacy := call("plan", false), call("plan", true)
-		if canonical.stdout != legacy.stdout {
-			t.Fatalf("canonical and legacy plan differ: %s / %s", canonical.stdout, legacy.stdout)
-		}
-		var initial struct {
-			Identity string `json:"root_identity"`
-			Trusted  bool   `json:"root_trusted"`
-		}
-		if err := json.Unmarshal([]byte(canonical.stdout), &initial); err != nil {
-			t.Fatal(err)
-		}
-		if initial.Identity == "" || initial.Trusted {
-			t.Fatalf("unexpected initial plan: %+v", initial)
-		}
-		for _, legacyGrant := range []bool{false, true} {
-			call("trust-project", legacyGrant)
-			var granted struct {
-				Identity string `json:"root_identity"`
-				Trusted  bool   `json:"root_trusted"`
-			}
-			if err := json.Unmarshal([]byte(call("plan", !legacyGrant).stdout), &granted); err != nil {
-				t.Fatal(err)
-			}
-			if !granted.Trusted || granted.Identity != initial.Identity {
-				t.Fatalf("grant identity mismatch: %+v", granted)
-			}
-			call("forget-project", !legacyGrant)
-			if got := call("plan", legacyGrant); got.stdout != canonical.stdout {
-				t.Fatalf("revocation did not restore same identity: %s", got.stdout)
-			}
-		}
-	})
-
 	for _, mode := range []string{"directory", "project"} {
 		t.Run("native-run-"+mode, func(t *testing.T) {
-			d := t.TempDir()
+			d := canonicalTempDir(t)
 			files := map[string]string{
 				"main.gox": "package main\nuse json;\nuse os;\nfunc main(){json::NewEncoder(os::Stdout).Encode(os::Args[1:])}\n",
 			}

@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 // Source formats n without consulting its original source text.
@@ -161,6 +161,9 @@ func (p *printer) stmts(ss []ast.Stmt) {
 }
 func (p *printer) items(is []ast.Item) {
 	for _, i := range is {
+		if use, ok := i.(*ast.UseDecl); ok && use.Implicit {
+			continue
+		}
 		p.node(i)
 		p.s(";\n")
 	}
@@ -281,7 +284,11 @@ func (p *printer) node(n ast.Node) {
 			p.node(n.Name)
 			p.s(" = ")
 		}
-		p.node(n.Type)
+		if n.Value != nil {
+			p.node(n.Value)
+		} else {
+			p.node(n.Type)
+		}
 	case *ast.GenericParams:
 		p.s("[")
 		for i, a := range n.Params {
@@ -295,6 +302,9 @@ func (p *printer) node(n ast.Node) {
 		}
 		p.s("]")
 	case *ast.GenericParam:
+		if n.Const {
+			p.s("const ")
+		}
 		p.identList(n.Names)
 		if n.Constraint != nil {
 			p.s(" ")
@@ -365,11 +375,18 @@ func (p *printer) node(n ast.Node) {
 		}
 	case *ast.UseTree:
 		p.node(n.Path)
+		prefix := n.Path != nil && len(n.Path.Segments) != 0
 		if n.Glob {
-			p.s("::*")
+			if prefix {
+				p.s("::")
+			}
+			p.s("*")
 		}
 		if n.Children != nil {
-			p.s("::{")
+			if prefix {
+				p.s("::")
+			}
+			p.s("{")
 			for i, c := range n.Children {
 				if i > 0 {
 					p.s(", ")
@@ -383,6 +400,9 @@ func (p *printer) node(n ast.Node) {
 			p.node(n.Alias)
 		}
 	case *ast.UseDecl:
+		if n.Implicit {
+			return
+		}
 		p.itemBase(n.ItemBase)
 		p.s("use ")
 		p.node(n.Tree)
@@ -742,7 +762,11 @@ func (p *printer) node(n ast.Node) {
 		p.node(n.Args)
 	case *ast.QualifiedSelectorExpr:
 		p.expression(n.X, 7)
-		p.s(".")
+		if n.Static {
+			p.s("::")
+		} else {
+			p.s(".")
+		}
 		p.node(n.Sel)
 		p.s("::<")
 		p.node(n.Trait)

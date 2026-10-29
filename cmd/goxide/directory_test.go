@@ -2,8 +2,11 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -74,5 +77,33 @@ package="example.org/app/dep"
 	var out bytes.Buffer
 	if err := run([]string{"run", "--go", tool, src}, &out, &out); err != nil || !strings.Contains(out.String(), "42 base") {
 		t.Fatalf("%v: %s", err, out.String())
+	}
+}
+
+func TestDirectoryTranspileKeepsSourcesAcrossLazyRoots(t *testing.T) {
+	base := t.TempDir()
+	for name, value := range map[string]int{"first": 40, "second": 2} {
+		singleFileWrite(t, base, name+"/go.mod", "module example.org/"+name+"\ngo 1.27\n")
+		singleFileWrite(t, base, name+"/goxide.toml", "[go_mod]\nmodule='example.org/"+name+"'\ngo='1.27'\n[lib]\nname='"+name+"'\npath='.'\n")
+		singleFileWrite(t, base, name+"/api.go", "package "+name+"\n")
+		singleFileWrite(t, base, name+"/lib.gox", fmt.Sprintf("package %s\npub macro_rules! value { () => { %d }; }\n", name, value))
+	}
+	singleFileWrite(t, base, "app/go.mod", "module example.org/app\ngo 1.27\nrequire (\nexample.org/first v0.0.0\nexample.org/second v0.0.0\n)\nreplace example.org/first => ../first\nreplace example.org/second => ../second\n")
+	singleFileWrite(t, base, "app/main.gox", "package main\nuse fmt;\nuse first;\nuse second;\nfunc main(){fmt::Println(first::value!()+second::value!(), Message)}\n")
+	singleFileWrite(t, base, "app/assets.go", "package main\nimport _ \"embed\"\n//go:embed data/message.txt\nvar Message string\n")
+	singleFileWrite(t, base, "app/data/message.txt", "inventory")
+	before := singleFileSnapshot(t, base)
+	output := filepath.Join(t.TempDir(), "generated")
+	var diagnostics bytes.Buffer
+	if err := run([]string{"transpile", "-o", output, filepath.Join(base, "app")}, &diagnostics, &diagnostics); err != nil {
+		t.Fatalf("directory generation: %v\n%s", err, &diagnostics)
+	}
+	command := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "run", ".")
+	command.Dir, command.Env = output, append(os.Environ(), "GOTOOLCHAIN=local", "GOWORK=off", "GOPROXY=off")
+	if got, err := command.CombinedOutput(); err != nil || string(got) != "42 inventory\n" {
+		t.Fatalf("generated native module: %v\n%s", err, got)
+	}
+	if !reflect.DeepEqual(before, singleFileSnapshot(t, base)) {
+		t.Fatal("lazy root activation changed authored modules")
 	}
 }

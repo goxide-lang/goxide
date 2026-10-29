@@ -1,7 +1,7 @@
 package main
 
-import sum "github.com/goxide-lang/std/sum"
 import fmt "fmt"
+import sum "github.com/goxide-lang/std/sum"
 
 func mark(name string, value int, trace *[]string) int {
 	*trace = append(*trace, name)
@@ -25,16 +25,15 @@ func readArray(ok bool, trace *[]string) sum.Result[int, string] {
 	values := [2]int{10, 20}
 	{
 		var gxArray1 *[2]int = &values
-		var gxTry2 sum.Result[int, string] = mutate(&values, ok, trace)
-		var gxOk3 int
+		gxTry2 := mutate(&values, ok, trace)
 		switch sum.TagResult(gxTry2) {
 		case 1:
-			gxOk3 = sum.ValueOk(gxTry2)
 		case 2:
 			return sum.NewErr[int, string](sum.ValueErr(gxTry2))
 		default:
 			panic("goxide: invalid Result at ?")
 		}
+		gxOk3 := sum.ValueOk(gxTry2)
 
 		return sum.NewOk[int, string](gxArray1[gxOk3])
 	}
@@ -43,16 +42,15 @@ func readArray(ok bool, trace *[]string) sum.Result[int, string] {
 func sliceArray(ok bool, trace *[]string) sum.Result[[]int, string] {
 	values := [3]int{1, 2, 3}
 	var gxArray4 *[3]int = &values
-	var gxTry5 sum.Result[int, string] = load("low", 1, ok, trace)
-	var gxOk6 int
+	gxTry5 := load("low", 1, ok, trace)
 	switch sum.TagResult(gxTry5) {
 	case 1:
-		gxOk6 = sum.ValueOk(gxTry5)
 	case 2:
 		return sum.NewErr[[]int, string](sum.ValueErr(gxTry5))
 	default:
 		panic("goxide: invalid Result at ?")
 	}
+	gxOk6 := sum.ValueOk(gxTry5)
 
 	part := gxArray4[gxOk6:]
 	part[0] = 9
@@ -62,27 +60,25 @@ func sliceArray(ok bool, trace *[]string) sum.Result[[]int, string] {
 func buildMap(keyOK, valueOK bool, trace *[]string) sum.Result[map[int]int, string] {
 	var gxValue7 int = mark("k1", 1, trace)
 	var gxValue8 int = mark("v1", 10, trace)
-	var gxTry9 sum.Result[int, string] = load("k2", 2, keyOK, trace)
-	var gxOk10 int
+	gxTry9 := load("k2", 2, keyOK, trace)
 	switch sum.TagResult(gxTry9) {
 	case 1:
-		gxOk10 = sum.ValueOk(gxTry9)
 	case 2:
 		return sum.NewErr[map[int]int, string](sum.ValueErr(gxTry9))
 	default:
 		panic("goxide: invalid Result at ?")
 	}
+	gxOk10 := sum.ValueOk(gxTry9)
 	var gxValue11 int = gxOk10
-	var gxTry12 sum.Result[int, string] = load("v2", 20, valueOK, trace)
-	var gxOk13 int
+	gxTry12 := load("v2", 20, valueOK, trace)
 	switch sum.TagResult(gxTry12) {
 	case 1:
-		gxOk13 = sum.ValueOk(gxTry12)
 	case 2:
 		return sum.NewErr[map[int]int, string](sum.ValueErr(gxTry12))
 	default:
 		panic("goxide: invalid Result at ?")
 	}
+	gxOk13 := sum.ValueOk(gxTry12)
 
 	value := map[int]int{gxValue7: gxValue8, gxValue11: gxOk13, mark("k3", 3, trace): mark("v3", 30, trace)}
 	return sum.NewOk[map[int]int, string](value)
@@ -93,16 +89,15 @@ type Record struct{ Value int }
 func nilPlace(value *Record, ok bool, trace *[]string) sum.Result[int, string] {
 	{
 		var gxValue14 *Record = value
-		var gxTry15 sum.Result[int, string] = load("rhs", 7, ok, trace)
-		var gxOk16 int
+		gxTry15 := load("rhs", 7, ok, trace)
 		switch sum.TagResult(gxTry15) {
 		case 1:
-			gxOk16 = sum.ValueOk(gxTry15)
 		case 2:
 			return sum.NewErr[int, string](sum.ValueErr(gxTry15))
 		default:
 			panic("goxide: invalid Result at ?")
 		}
+		gxOk16 := sum.ValueOk(gxTry15)
 		gxValue14.
 			Value = gxOk16
 	}
@@ -111,55 +106,51 @@ func nilPlace(value *Record, ok bool, trace *[]string) sum.Result[int, string] {
 
 func places() sum.Option[int] {
 	values := [1]int{1}
-	var gxTry17 sum.Option[int] = sum.NewSome[int](0)
-	var gxOk18 int
+	gxTry17 := sum.NewSome[int](0)
 	switch sum.TagOption(gxTry17) {
 	case 1:
-		gxOk18 = sum.ValueSome(gxTry17)
 	case 0:
 		return sum.None[int]()
 	default:
 		panic("goxide: invalid Option at ?")
 	}
+	gxOk18 := sum.ValueSome(gxTry17)
 	var gxValue19 int = gxOk18
 
 	ptr := &values[gxValue19]
 	*ptr = 2
 	{
-		var gxTry20 sum.Option[int] = sum.NewSome[int](values[0] + 3)
-		var gxOk21 int
+		gxTry20 := sum.NewSome[int](values[0] + 3)
 		switch sum.TagOption(gxTry20) {
 		case 1:
-			gxOk21 = sum.ValueSome(gxTry20)
 		case 0:
 			return sum.None[int]()
 		default:
 			panic("goxide: invalid Option at ?")
 		}
+		gxOk21 := sum.ValueSome(gxTry20)
 
 		values[0] = gxOk21
 	}
-	var gxTry22 sum.Option[int] = sum.NewSome[int](values[0])
-	var gxOk23 int
+	gxTry22 := sum.NewSome[int](values[0])
 	switch sum.TagOption(gxTry22) {
 	case 1:
-		gxOk23 = sum.ValueSome(gxTry22)
 	case 0:
 		return sum.None[int]()
 	default:
 		panic("goxide: invalid Option at ?")
 	}
+	gxOk23 := sum.ValueSome(gxTry22)
 	var first int = gxOk23
-	var gxTry24 sum.Option[int] = sum.NewSome[int](first + 1)
-	var gxOk25 int
+	gxTry24 := sum.NewSome[int](first + 1)
 	switch sum.TagOption(gxTry24) {
 	case 1:
-		gxOk25 = sum.ValueSome(gxTry24)
 	case 0:
 		return sum.None[int]()
 	default:
 		panic("goxide: invalid Option at ?")
 	}
+	gxOk25 := sum.ValueSome(gxTry24)
 	var second int = gxOk25
 
 	return sum.NewSome[int](second)

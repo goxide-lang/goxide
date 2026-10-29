@@ -1,0 +1,23 @@
+package main
+use serde;
+
+impl Request {
+    pub func encode(s serde::Serializer, value &Self) error { return serde::Write(s, value) }
+    pub func decode(d serde::Deserializer) (Self, error) { return serde::Read[Self](d) }
+}
+
+impl OutputOnly {
+    pub func encode(s serde::Serializer, value &Self) error { return serde::Write(s, value) }
+}
+
+impl InputOnly {
+    pub func decode(d serde::Deserializer) (Self, error) { return serde::Read[Self](d) }
+}
+
+impl DefaultEnvelope {
+    pub func decode(d serde::Deserializer) (Self, error) { return serde::Read[Self](d) }
+}
+
+impl ProtocolEnvelope {
+    pub func decode(d serde::Deserializer) (Self, error) { return serde::Read[Self](d) }
+}

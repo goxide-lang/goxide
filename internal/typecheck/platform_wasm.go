@@ -15,6 +15,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"sync"
 )
 
 // Built by website/build.py from this checkout's Go toolchain. No network,
@@ -30,9 +31,16 @@ type browserOrigin struct {
 }
 
 type browserImporter struct {
+	mu sync.Mutex
 	types.Importer
 	origins     map[string]browserOrigin
 	originError error
+}
+
+func (i *browserImporter) Import(path string) (*types.Package, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	return i.Importer.Import(path)
 }
 
 func (i *browserImporter) PackageIndex(source, module string) ([]string, error) {
@@ -64,10 +72,12 @@ func (i *browserImporter) PackageOrigin(path string) (string, bool, error) {
 }
 
 func (i *browserImporter) ImportFrom(path, dir string, mode types.ImportMode) (*types.Package, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
 	if imp, ok := i.Importer.(types.ImporterFrom); ok {
 		return imp.ImportFrom(path, dir, mode)
 	}
-	return i.Import(path)
+	return i.Importer.Import(path)
 }
 
 func platformImporter() types.Importer {

@@ -8,9 +8,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/config"
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/parser"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 // Configure selects complete source items before import or declaration discovery.
@@ -48,7 +49,7 @@ func Configure(file *ast.File, configuration config.Config) (used bool, err erro
 			dropItemComments(file, item)
 		}
 	}
-	file.Items = items
+	file.Items = parser.FlattenUses(items)
 	var id ast.NodeID
 	ast.Walk(file, func(n ast.Node) bool { id++; n.(interface{ SetID(ast.NodeID) }).SetID(id); return true })
 	return used, nil
@@ -107,13 +108,22 @@ func (s selection) origin(n ast.Node) Origin {
 	return Origin{s.file, n.Span()}
 }
 
+func (s selection) location(n ast.Node) Origin {
+	if s.engine != nil {
+		if location := s.engine.location(n); location != (Origin{}) {
+			return location
+		}
+	}
+	return s.origin(n)
+}
+
 func (s selection) fail(n ast.Node, message string) error {
 	o := s.origin(n)
 	call := o
 	if s.engine != nil && nodeExpn(n) != 0 {
 		call = s.engine.r.Expansions[nodeExpn(n)].Call
 	}
-	return &Diagnostic{Code: "cfg", Message: message, Definition: o, Call: call, Expn: nodeExpn(n)}
+	return &Diagnostic{Code: "cfg", Message: message, Location: s.location(n), Definition: o, Call: call, Expn: nodeExpn(n)}
 }
 
 func configName(a *ast.Attr) string {
@@ -135,7 +145,7 @@ func (s selection) item(item ast.Item) (bool, error) {
 	}
 	field.Set(reflect.ValueOf(selected))
 	switch item.(type) {
-	case *ast.MacroRulesDecl, *ast.MacroItem:
+	case *ast.MacroRulesDecl:
 		// These nodes disappear during expansion, so unsupported ordinary
 		// attributes must be diagnosed here instead of silently disappearing.
 		if len(selected) != 0 {
@@ -161,7 +171,7 @@ func (s selection) children(n ast.Node) error {
 			return false
 		case *ast.Attr:
 			if configName(child) != "" {
-				*s.used = true
+				s.usedConfiguration()
 				err = s.fail(child, "configuration attributes require a complete top-level item")
 			}
 			return false
@@ -180,7 +190,7 @@ func (s selection) attrs(attrs []*ast.Attr) ([]*ast.Attr, bool, error) {
 			out = append(out, attr)
 			continue
 		}
-		*s.used = true
+		s.usedConfiguration()
 		if attr.Inner || attr.Args == nil || attr.Args.Delim != ast.Paren {
 			return nil, false, s.fail(attr, name+" requires parenthesized arguments")
 		}
@@ -368,10 +378,15 @@ func (s selection) attribute(tokens []ast.TokenOrTree, parent *ast.Attr) (*ast.A
 		}
 		tok := tokens[i].Token
 		o := Origin{s.origin(parent).File, ast.Span{Start: tok.Start, End: tok.End}}
+		location := o
 		ctx := ast.SyntaxCtx(0)
 		if s.engine != nil {
 			if meta, ok := s.engine.r.TokenContexts[tok]; ok {
 				o, ctx = meta.Origin, meta.Ctx
+				location = meta.Location
+				if location == (Origin{}) {
+					location = o
+				}
 			}
 		}
 		id := &ast.Ident{Base: ast.Base{Loc: o.Span, Expn: parent.Expn}, Name: tok.Text, Raw: tok.Raw, Ctx: ctx}
@@ -381,10 +396,12 @@ func (s selection) attribute(tokens []ast.TokenOrTree, parent *ast.Attr) (*ast.A
 			a.Base.Loc, a.Path.Base = o.Span, id.Base
 			if s.engine != nil {
 				s.engine.r.Origins[a], s.engine.r.Origins[a.Path] = o, o
+				s.engine.r.Locations[a], s.engine.r.Locations[a.Path] = location, location
 			}
 		}
 		if s.engine != nil {
 			s.engine.r.Origins[id], s.engine.r.Origins[seg] = o, o
+			s.engine.r.Locations[id], s.engine.r.Locations[seg] = location, location
 			if meta, ok := s.engine.r.TokenContexts[tok]; ok {
 				s.engine.r.Scopes[id] = meta.Scope
 			}
@@ -399,6 +416,9 @@ func (s selection) attribute(tokens []ast.TokenOrTree, parent *ast.Attr) (*ast.A
 			a.Args = rest[0].Tree
 		} else if len(rest) == 2 && rest[0].Token != nil && rest[0].Token.Kind == token.ASSIGN && rest[1].Token != nil && rest[1].Token.Kind.IsLiteral() {
 			a.Args = &ast.TokenTree{Base: a.Base, Delim: ast.NoDelim, Tokens: rest}
+			if s.engine != nil {
+				s.engine.r.Locations[a.Args] = s.engine.r.Locations[a]
+			}
 		} else if len(rest) != 0 {
 			return nil, s.fail(parent, "malformed attribute in cfg_attr attribute list")
 		}
@@ -408,6 +428,21 @@ func (s selection) attribute(tokens []ast.TokenOrTree, parent *ast.Attr) (*ast.A
 
 func (e *engine) selection(file *ast.File) selection {
 	return selection{file: file, engine: e, config: func(file *ast.File) config.Config { return e.configs[file] }, used: &e.r.UsesConfiguration}
+}
+
+func (s selection) usedConfiguration() {
+	*s.used = true
+	if s.engine != nil {
+		s.engine.recordConfiguration(s.file)
+	}
+}
+
+func (e *engine) recordConfiguration(file *ast.File) {
+	e.r.UsesConfiguration = true
+	if e.r.ConfigurationFiles == nil {
+		e.r.ConfigurationFiles = map[*ast.File]bool{}
+	}
+	e.r.ConfigurationFiles[file] = true
 }
 
 func (s selection) predicate(tokens []ast.TokenOrTree, owner *ast.File) (bool, error) {
@@ -423,7 +458,7 @@ func (s selection) predicate(tokens []ast.TokenOrTree, owner *ast.File) (bool, e
 }
 
 func (e *engine) cfg(n ast.Node, args *ast.TokenTree, kind fragmentKind, file *ast.File, parent ast.ExpnID) (ast.Node, bool, error) {
-	e.r.UsesConfiguration = true
+	e.recordConfiguration(file)
 	s := e.selection(file)
 	if kind != exprKind {
 		return nil, true, s.fail(n, "cfg! requires an expression position")
@@ -448,5 +483,6 @@ func (e *engine) cfg(n ast.Node, args *ast.TokenTree, kind fragmentKind, file *a
 	}
 	out := &ast.BoolLit{Base: ast.Base{Loc: n.Span(), Expn: parent}, Value: value}
 	e.r.Origins[out] = o
+	e.r.Locations[out] = s.location(n)
 	return out, true, nil
 }

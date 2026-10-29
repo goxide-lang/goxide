@@ -6,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/check"
-	"github.com/hxsf/goxide/internal/expand"
-	"github.com/hxsf/goxide/internal/resolve"
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/parser"
+	"github.com/goxide-lang/goxide/internal/check"
+	"github.com/goxide-lang/goxide/internal/expand"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/parser"
 )
 
 func TestTraitStaticAndAssociatedEvidence(t *testing.T) {
@@ -128,10 +128,18 @@ func TestTraitAliasCanonicalImplementation(t *testing.T) {
 
 func TestTraitQualifiedSourcePackages(t *testing.T) {
 	sources := map[string]string{
-		"api/api.gox":         `package api;pub trait Source{type Item;func Get(self Self)Self::Item}`,
-		"other/api.gox":       `package other;pub trait Source{type Item;func Get(self Self)Self::Item}`,
-		"model/model.gox":     `package model;type Value struct{};func(self Value)Get()int{return 7}`,
-		"adapter/adapter.gox": `package adapter;use fixture::api;use fixture::other;use fixture::model;declare impl api::Source[Item=int] for model::Value;declare impl other::Source[Item=int] for model::Value;func Read[T api::Source](x T)T::api::Source::Item{return x.Get()};func F(x model::Value)int{return api::Source::Get(x)+x.Get::<other::Source>()};func V(x model::Value)api::Source[Item=int]{return x};func Project(x model::Value)model::Value::api::Source::Item{return x.Get()}`,
+		"api/api.gox":     `package api;pub trait Source{type Item;func Get(self Self)Self::Item}`,
+		"other/api.gox":   `package other;pub trait Source{type Item;func Get(self Self)Self::Item}`,
+		"model/model.gox": `package model;type Value struct{};func(self Value)Get()int{return 7}`,
+		"adapter/adapter.gox": `package adapter;use fixture::api;use fixture::other;use fixture::model;
+type Value struct{raw model::Value}
+func(self Value)Get()int{return self.raw.Get()}
+impl api::Source for Value{type Item=int;func Get(self Self)int{return self.raw.Get()}}
+impl other::Source for Value{type Item=int;func Get(self Self)int{return self.raw.Get()}}
+func Read[T api::Source](x T)T::api::Source::Item{return x.Get()}
+func F(x Value)int{return api::Source::Get(x)+x.Get::<other::Source>()}
+func V(x Value)api::Source[Item=int]{return x}
+func Project(x Value)Value::api::Source::Item{return x.Get::<api::Source>()}`,
 	}
 	root := t.TempDir()
 	files := map[string]*ast.File{}
@@ -218,8 +226,6 @@ func TestTraitRejectsMissingAndAmbiguousImplementations(t *testing.T) {
 		{"body", `trait P{func get(self Self)int};type S struct{};impl P for S{func get(self Self)int}`, "impl member requires a body"},
 		{"associated-cycle", `trait P{type A;type B;func get(self Self)Self::A};type S struct{};impl P for S{type A=Self::B;type B=Self::A;func get(self Self)Self::A{return 1}}`, "cyclic associated type"},
 		{"associated-constraint-permission", `type D struct{N int};trait P{type Item;func get(self Self)Self::Item};type S struct{p &D};impl P for S{type Item=&D;func get(self Self)Self::Item{return self.p}};func mutate[T P[Item=&mut D]](x T){x.get().N=1};func f(s S){mutate(s)}`, "associated reference permissions do not satisfy"},
-		{"pointer-carrier", `type D struct{};type Ptr *D;trait P{func get(self Self)int};impl P for Ptr{func get(self Self)int{return 1}};func read[T P](x T)int{return x.get()};func f(x Ptr)int{return read(x)}`, "no local static carrier"},
-		{"interface-carrier", `type I interface{};trait P{func get(self Self)int};impl P for I{func get(self Self)int{return 1}};func read[T P](x T)int{return x.get()};func f(x I)int{return read(x)}`, "no local static carrier"},
 		{"projection-binding", `trait P{type Item;func get(self Self)Self::Item};func read[T P[Item=int]](x T)T::P[Item=string]::Item{return x.get()}`, "projection binding conflicts"},
 		{"unknown-type-member", `enum E{A};func read(x E::Missing)int{return 0}`, "unknown associated type or member path"},
 		{"unknown-expression-member", `enum E{A};func read()int{return E::Missing()}`, "unknown associated type or member path"},
@@ -234,6 +240,27 @@ func TestTraitRejectsMissingAndAmbiguousImplementations(t *testing.T) {
 			}
 			t.Fatalf("wanted %s, got %v", tc.want, ds)
 		})
+	}
+}
+
+func TestTraitEvidenceDoesNotRequireTargetCarrier(t *testing.T) {
+	for _, source := range []string{
+		`type D struct{}; type Target *D`,
+		`type Target interface{}`,
+	} {
+		files, res := parse(t, "package p;"+source+`;trait P{func get(self Self)int};impl P for Target{func get(self Self)int{return 1}};func read[T P](x T)int{return x.get()};func f(x Target)int{return read(x)}`)
+		info, diagnostics := check.Check(files, res)
+		if len(diagnostics) != 0 {
+			t.Fatal(diagnostics)
+		}
+		if len(info.FunctionInstances) != 1 {
+			t.Fatalf("missing inferred call evidence: %v", info.FunctionInstances)
+		}
+		for _, instance := range info.FunctionInstances {
+			if len(instance.Evidence) != 1 || instance.Evidence[0].Impl == nil {
+				t.Fatalf("missing implementation: %+v", instance)
+			}
+		}
 	}
 }
 

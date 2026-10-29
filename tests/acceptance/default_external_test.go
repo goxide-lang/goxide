@@ -2,6 +2,7 @@ package acceptance_test
 
 import (
 	"fmt"
+
 	"os"
 	"path/filepath"
 	"runtime"
@@ -13,37 +14,41 @@ func TestExternalDefaultModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
-	mod := func(name, lib string) string {
-		s := fmt.Sprintf("module %s\ngo 1.27\n", name)
-		if lib != "" {
-			s += fmt.Sprintf("require defaults.example/lib v0.0.0\nreplace defaults.example/lib => %s\n", filepath.ToSlash(lib))
-		}
-		return s
-	}
-	src := t.TempDir()
-	packagesWrite(t, src, "go.mod", mod("defaults.example/lib", ""))
-	writeAcceptanceSerdeRoots(t, src, "")
-	packagesWrite(t, src, "lib.gox", "package library\npub mod model;\npub mod other;\npub mod relay;\npub mod fake;\n")
-	packagesWrite(t, src, "model/types.gox", `package model
+	cli := acceptanceCLI(t)
+	src := formalDependencyDir(t)
+	writeStdFormalManifest(t, src, "defaults.example/lib", "library", nil)
+
+	packagesWrite(t, src, "lib.gox", "package library; use std; use std::PartialEq;\npub mod model;\npub mod other;\npub mod relay;\npub mod fake;\n")
+	packagesWrite(t, src, "model/types.gox", `package model; use std; use std::PartialEq;
 type Manual struct{value int}
 var Calls int
 func Value(v Manual)int{return v.value}
-#[derive(Default)]
+#[derive(std::derive::Default)]
 pub enum E {
  #[default]
  Ready(Manual),
  Other([]int),
 }
 func Read(v E)int{return match v {E::Ready(n)=>Value(n),E::Other(_)=>-1,}}
+
+impl E {
+ pub func initial() Self { return std::default_value[Self]() }
+}
 `)
-	packagesWrite(t, src, "model/impl.gox", `package model
-impl Default for Manual {func default()Manual{Calls++;return Manual{value:7}}}
+	packagesWrite(t, src, "model/impl.gox", `package model; use std; use std::PartialEq;
+impl std::Default for Manual {func Default()Manual{Calls++;return Manual{value:7}}}
+
+impl Manual {
+ pub func initial() Self { return std::default_value[Self]() }
+}
 `)
-	packagesWrite(t, src, "other/model.gox", `package other
-#[derive(Default)]
+	packagesWrite(t, src, "other/model.gox", `package other; use std; use std::PartialEq;
+#[derive(std::derive::Default)]
 type Manual struct{N int}
+
+impl Manual {
+ pub func initial() Self { return std::default_value[Self]() }
+}
 `)
 	packagesWrite(t, src, "relay/relay.go", `package relay
 import m "defaults.example/lib/model"
@@ -56,43 +61,59 @@ type Value struct{N int}
 func DefaultValue()Value{return Value{N:99}}
 `)
 	lib := filepath.Join(t.TempDir(), "lib")
-	packagesCommand(t, root, cli, true, "transpile", "-o", lib, src)
+	lib = strings.TrimSpace(packagesCommand(t, root, cli, true, "transpile", "--lib", "-o", lib, src))
 	appsrc := t.TempDir()
-	packagesWrite(t, appsrc, "go.mod", mod("defaults.example/app", lib))
-	writeAcceptanceSerdeRoots(t, appsrc, "defaults.example/lib")
-	packagesWrite(t, appsrc, "app.gox", `package app
+	writeStdFormalManifest(t, appsrc, "defaults.example/app", "app", map[string]string{"library": src})
+
+	packagesWrite(t, appsrc, "app.gox", `package app; use std; use std::PartialEq;
 use library::relay as out; use library::model as m;
-#[derive(Default)]
+#[derive(std::derive::Default)]
 type Wrap struct{V out::E;M m::Manual}
 
+
+impl Wrap {
+ pub func initial() Self { return std::default_value[Self]() }
+}
 `)
-	packagesWrite(t, appsrc, "other.gox", `package app
+	packagesWrite(t, appsrc, "other.gox", `package app; use std; use std::PartialEq;
 use library::other as m;
-#[derive(Default)]
+#[derive(std::derive::Default)]
 type Other struct{V m::Manual}
+
+impl Other {
+ pub func initial() Self { return std::default_value[Self]() }
+}
 `)
-	packagesWrite(t, appsrc, "ops/macros.gox", `package ops
+	packagesWrite(t, appsrc, "ops/macros.gox", `package ops; use std; use std::PartialEq;
 pub macro_rules! size {($x:expr)=>{len($x)};}
 `)
-	packagesWrite(t, appsrc, "builtin.gox", `package app
+	packagesWrite(t, appsrc, "builtin.gox", `package app; use std; use std::PartialEq;
 use library::model as len;
 mod ops;
-#[derive(Default)]
+#[derive(std::derive::Default)]
 type Both struct{M len::Manual}
 func Count()int{return ops::size!("abc")}
+
+impl Both {
+ pub func initial() Self { return std::default_value[Self]() }
+}
 `)
-	packagesWrite(t, appsrc, "skip.gox", `package app; use serde;
+	packagesWrite(t, appsrc, "skip.gox", `package app; use std; use std::PartialEq; use serde;
 use library::model as m;
-#[derive(serde::Deserialize)]
+#[derive(serde::derive::Deserialize)]
 type Skipped struct {
  #[serde(skip)]
  V m::Manual
 }
+
+impl Skipped {
+ pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) }
+}
 `)
 	out := filepath.Join(t.TempDir(), "out")
-	compileAcceptanceGraph(t, true, appsrc, out, src)
+	compileStdFormalGraph(t, true, appsrc, out)
 	repeat := filepath.Join(t.TempDir(), "repeat")
-	compileAcceptanceGraph(t, true, appsrc, repeat, src)
+	compileStdFormalGraph(t, true, appsrc, repeat)
 	err := filepath.WalkDir(out, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -119,24 +140,24 @@ type Skipped struct {
 	}
 	packagesWrite(t, out, "app_test.go", `package app
 import("testing";m "defaults.example/lib/model";"github.com/goxide-lang/serde/json")
-func TestExternalDefaults(t *testing.T){m.Calls=0;v:=DefaultWrap();if m.Read(v.V)!=7||m.Value(v.M)!=7||m.Calls!=2{t.Fatal(v,m.Calls)};if DefaultOther().V.N!=0{t.Fatal("cross-file alias bound to wrong package")};s,e:=serdejson.Unmarshal([]byte("{}"),DeserializeSkipped);if e!=nil||m.Value(s.V)!=7||m.Calls!=3{t.Fatal(s,e,m.Calls)};b:=DefaultBoth();if m.Value(b.M)!=7||Count()!=3||m.Calls!=4{t.Fatal(b,m.Calls)}}
+func TestExternalDefaults(t *testing.T){m.Calls=0;v:=(WrapOps{}).Initial();if m.Read(v.V)!=7||m.Value(v.M)!=7||m.Calls!=2{t.Fatal(v,m.Calls)};if (OtherOps{}).Initial().V.N!=0{t.Fatal("cross-file alias bound to wrong package")};s,e:=serdejson.Unmarshal([]byte("{}"),(SkippedOps{}).Decode);if e!=nil||m.Value(s.V)!=7||m.Calls!=3{t.Fatal(s,e,m.Calls)};b:=(BothOps{}).Initial();if m.Value(b.M)!=7||Count()!=3||m.Calls!=4{t.Fatal(b,m.Calls)}}
 `)
 	plain := t.TempDir()
-	packagesWrite(t, plain, "go.mod", mod("defaults.example/plain", lib)+fmt.Sprintf("require defaults.example/app v0.0.0\nreplace defaults.example/app => %s\n", filepath.ToSlash(out)))
+	writeStdNativeConsumerManifest(t, plain, "defaults.example/plain", out)
 	packagesWrite(t, plain, "consumer_test.go", `package plain
 import("testing";a "defaults.example/app";m "defaults.example/lib/model")
-func TestGoConsumer(t *testing.T){v:=a.DefaultWrap();if m.Read(v.V)!=7||m.Value(v.M)!=7{t.Fatal(v)}}
+func TestGoConsumer(t *testing.T){v:=(a.WrapOps{}).Initial();if m.Read(v.V)!=7||m.Value(v.M)!=7{t.Fatal(v)}}
 `)
 	for _, dir := range []string{lib, out, plain} {
-		packagesCommand(t, dir, tool, true, "test", "-race", "-count=1", "-v", "./...")
+		packagesCommand(t, dir, tool, true, "test", "-mod=mod", "-race", "-count=1", "-v", "./...")
 		packagesCommand(t, dir, tool, true, "vet", "./...")
 	}
 	for _, tc := range []struct{ path, typ string }{{"fake", "Value"}, {"relay", "New"}} {
 		bad := t.TempDir()
-		packagesWrite(t, bad, "go.mod", mod("defaults.example/bad", lib))
-		writeAcceptanceSerdeRoots(t, bad, "defaults.example/lib")
-		packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad\nuse library::%s as m;\n#[derive(Default)]\ntype Wrap struct{V m::%s}\n", tc.path, tc.typ))
-		log := compileAcceptanceGraph(t, false, bad, filepath.Join(t.TempDir(), "bad"), src)
+		writeStdFormalManifest(t, bad, "defaults.example/bad", "bad", map[string]string{"library": src})
+
+		packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad; use std; use std::PartialEq;\nuse library::%s as m;\n#[derive(std::derive::Default)]\ntype Wrap struct{V m::%s}\n\nimpl Wrap {\n pub func initial() Self { return std::default_value[Self]() }\n}\n", tc.path, tc.typ))
+		log := compileStdFormalGraph(t, false, bad, filepath.Join(t.TempDir(), "bad"))
 		if !strings.Contains(log, "Default") {
 			t.Fatal(log)
 		}

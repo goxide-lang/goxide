@@ -1,20 +1,21 @@
 package main
 use serde;
+use std;
 
 use fmt;
 use serde::json as serdejson;
 
-#[derive(Default, Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(std::derive::Default, std::derive::Debug, std::derive::Clone, std::derive::PartialEq, std::derive::Eq, serde::derive::Serialize, serde::derive::Deserialize)]
 type Config struct {
     Name string
     Enabled bool
 }
 
 func main() {
-    config := DefaultConfig()
+    config := std::default_value[Config]()
     config.Name = "goxide"
-    copy := CloneConfig(&config)
-    fmt::Println(DebugConfig(&copy), config.equals(copy))
-    data, err := serdejson::Marshal(&config, SerializeConfig)
+    copy := std::Clone::clone(&config)
+    fmt::Println(std::Debug::debug(&copy), std::PartialEq::equals(config, copy))
+    data, err := serdejson::Marshal(&config, serde::Write[Config])
     fmt::Println(string(data), err)
 }

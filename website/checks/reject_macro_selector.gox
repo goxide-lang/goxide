@@ -1,7 +1,0 @@
-package p
-import "fmt"
-macro_rules! bad {()=>{
-fmt.Println(1)
-_=fmt.Println
-};}
-func Run(){bad!()}

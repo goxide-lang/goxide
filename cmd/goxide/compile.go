@@ -12,19 +12,19 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/check"
-	"github.com/hxsf/goxide/internal/compile"
-	"github.com/hxsf/goxide/internal/config"
-	"github.com/hxsf/goxide/internal/expand"
-	"github.com/hxsf/goxide/internal/lower"
-	"github.com/hxsf/goxide/internal/naming"
-	sourcepaths "github.com/hxsf/goxide/internal/paths"
-	"github.com/hxsf/goxide/internal/project"
-	"github.com/hxsf/goxide/internal/resolve"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/parser"
-	"github.com/hxsf/goxide/internal/syntax/printer"
-	"github.com/hxsf/goxide/internal/typecheck"
+	"github.com/goxide-lang/goxide/internal/check"
+	"github.com/goxide-lang/goxide/internal/compile"
+	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/expand"
+	"github.com/goxide-lang/goxide/internal/lower"
+	"github.com/goxide-lang/goxide/internal/naming"
+	sourcepaths "github.com/goxide-lang/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/project"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/parser"
+	"github.com/goxide-lang/goxide/internal/syntax/printer"
+	"github.com/goxide-lang/goxide/internal/typecheck"
 )
 
 // CompileRequest is the parser-independent input to compilation services.
@@ -38,7 +38,10 @@ type CompileRequest struct {
 	config                                                          config.Config
 	NoDefaultFeatures, Lib, Offline, Locked                         bool
 	FeaturesSet, TargetSet                                          bool
+	GoSugar                                                         *bool
 	ProgramArgs                                                     []string
+	PromptInput                                                     io.Reader
+	Interactive                                                     bool
 }
 
 type compiledFile struct {
@@ -79,7 +82,7 @@ func compileSourceFile(filename string, source []byte, packagePath string, goImp
 		return compiledFile{}, typecheck.SourceError(resolved.Diagnostics[0], sources, expanded)
 	}
 	files := map[string]*syntax.File{filename: resolvedFile.AST}
-	checked, problems := check.CheckWithImporter(files, resolved, goImports, cfg.Sizes())
+	checked, problems := check.CheckWithOptions(files, resolved, check.Options{Importer: goImports, Sizes: cfg.Sizes(), ConfigByFile: map[string]config.Config{filename: cfg}})
 	if len(problems) != 0 {
 		return compiledFile{}, typecheck.SourceError(problems[0], sources, expanded)
 	}
@@ -96,7 +99,38 @@ func compileSourceFile(filename string, source []byte, packagePath string, goImp
 	return compiledFile{Go: generated[filename], Expanded: []byte(printer.Source(resolvedFile.AST))}, nil
 }
 
-func executeCompile(req CompileRequest, out, stderr io.Writer) error {
+func compileModuleSourceFile(owner *singleFileModule, source []byte, roots sourcepaths.Roots, cfg config.Config, stderr io.Writer, automatic bool) (compiledFile, error) {
+	display := owner.input
+	if owner.displayInput != "" {
+		display = owner.displayInput
+	}
+	if err := naming.Source(display, source); err != nil {
+		return compiledFile{}, err
+	}
+	expanded := map[string][]byte{}
+	newImporter := func() types.Importer {
+		return typecheck.NewImporter(owner.input, typecheck.ImporterOptions{Config: cfg, ModFile: owner.modFile})
+	}
+	generated, err := compileNativePackage(owner, roots, cfg, nil, stderr, map[string][]byte{owner.input: source}, newImporter, lower.PackageOptions{Config: cfg, Expanded: expanded, StableGo: automatic}, automatic)
+	if err != nil {
+		return compiledFile{}, generationDependencyError(err, owner)
+	}
+	if generated == nil {
+		return compileSourceFile(display, source, owner.packagePath, newImporter(), roots, cfg)
+	}
+	imports := newImporter()
+	if err := typecheck.CheckPackage(owner.packagePath, generated, imports, cfg.Sizes()); err != nil {
+		return compiledFile{}, generationDependencyError(err, owner)
+	}
+	if automatic {
+		if err := reportGenerationTools(stderr, owner, map[string][]byte{owner.input: source}, generated, false, imports); err != nil {
+			return compiledFile{}, err
+		}
+	}
+	return compiledFile{Go: generated[display], Expanded: expanded[display]}, nil
+}
+
+func executeCompileOnce(req CompileRequest, out, stderr io.Writer) error {
 	switch req.Mode {
 	case "build", "run", "test", "transpile", "expand":
 	default:
@@ -145,12 +179,13 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	manifestRoot := ""
-	if info.IsDir() {
-		manifestRoot, err = generationProject(input)
-		if err != nil {
-			return err
-		}
+	projectDirectory := input
+	if !info.IsDir() {
+		projectDirectory = filepath.Dir(input)
+	}
+	manifestRoot, err := generationProject(projectDirectory)
+	if err != nil {
+		return err
 	}
 	nativeGeneration := mode == "transpile" && manifestRoot == ""
 	if nativeGeneration && (req.TargetSet || req.Target != "") {
@@ -164,13 +199,20 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
-	req.config = config.Config{Features: nativeFeatures(req.Features), Environment: environment, Reads: &config.Reads{}}
+	codegen, err := project.ModuleCodegen(environmentDir)
+	if err != nil {
+		return err
+	}
+	if req.GoSugar != nil {
+		codegen.GoSugar = req.GoSugar
+	}
+	req.config = config.Config{Features: nativeFeatures(req.Features), GoSugar: codegen.GoSugar, Environment: environment, Reads: &config.Reads{}}
 	req.GoTool = environment.GoTool
 	if (mode == "run" || mode == "test") && environment.Target != environment.Host {
 		return fmt.Errorf("%s requires the host target %s; selected %s", mode, environment.Host, environment.Target)
 	}
 	if nativeGeneration && (*dest == "" || *dest == "-") && (info.IsDir() || filepath.Ext(input) == ".gox") {
-		return generatePackage(req, out)
+		return generatePackage(req, out, stderr)
 	}
 	if (mode == "transpile" || mode == "expand") && *dest == "-" {
 		*dest = ""
@@ -195,7 +237,7 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 			if *tags != "" {
 				return errors.New("--tags is not supported for manifest projects by the new compiler pipeline")
 			}
-			prepared, err := compile.PrepareProject(input, compile.Options{Bin: *bin, Example: *example, Lib: *lib, GoTool: *goTool, TargetDir: *targetDir, Offline: *offline, Locked: *locked, Features: featureNames(*features), NoDefaultFeatures: *noDefault, Config: req.config, Race: mode == "test"})
+			prepared, err := prepareProject(input, compile.Options{Bin: *bin, Example: *example, Lib: *lib, StableGo: mode == "transpile" && *lib, GoTool: *goTool, TargetDir: *targetDir, Offline: *offline, Locked: *locked, Features: featureNames(*features), NoDefaultFeatures: *noDefault, GoSugar: req.GoSugar, Config: req.config, Race: mode == "test"}, stderr)
 			if err != nil {
 				return err
 			}
@@ -251,6 +293,7 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 		return err
 	}
 	var result compiledFile
+	var standalone *singleFileModule
 	var configuredTool string
 	moduleRoot := ""
 	if owner != nil {
@@ -291,17 +334,26 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 		if nativeGo {
 			result, err = compileNativeGoFile(input, src)
 		} else {
-			imp := typecheck.NewImporter(input, typecheck.ImporterOptions{Config: req.config, ModFile: owner.modFile})
-			result, err = compileSourceFile(input, src, owner.packagePath, imp, roots, req.config)
+			result, err = compileModuleSourceFile(owner, src, roots, req.config, stderr, nativeGeneration)
 		}
 	} else if nativeGo {
 		result, err = compileNativeGoFile(input, src)
 	} else {
-		importContext := input
-		if *runtimeRoot != "" {
-			importContext = filepath.Join(*runtimeRoot, "go.mod")
+		provider := *runtimeRoot
+		if provider == "" && (mode == "run" || mode == "build") {
+			cwd, _ := os.Getwd()
+			provider = findModule(cwd)
 		}
-		result, err = compileSourceFile(input, src, "goxide/generated", typecheck.NewImporter(importContext, typecheck.ImporterOptions{Config: req.config}), roots, req.config)
+		if provider != "" {
+			standalone, err = prepareStandaloneSourceModule(input, provider, req.config)
+			if err != nil {
+				return err
+			}
+			defer standalone.close()
+			result, err = compileModuleSourceFile(standalone, src, roots, req.config, stderr, false)
+		} else {
+			result, err = compileSourceFile(input, src, "goxide/generated", typecheck.NewImporter(input, typecheck.ImporterOptions{Config: req.config}), roots, req.config)
+		}
 	}
 	if err != nil {
 		return err
@@ -325,29 +377,34 @@ func executeCompile(req CompileRequest, out, stderr io.Writer) error {
 	if owner != nil {
 		return owner.run(req, result, configuredTool, out, stderr)
 	}
-	root := *runtimeRoot
-	if root == "" {
-		root = findModule(filepath.Dir(input))
-		if root == "" {
-			cwd, _ := os.Getwd()
-			root = findModule(cwd)
-		}
-	}
-	if root == "" {
-		return errors.New("standalone run/build requires --runtime pointing to a Go module manifest with pinned std/serde dependencies")
-	}
-	root, err = filepath.Abs(root)
-	if err != nil {
-		return err
-	}
 	tool := req.GoTool
-	tmp, err := os.MkdirTemp("", "goxide-run-")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(tmp)
-	if err = writeStandaloneSupportModule(tool, root, tmp, environment.ExecEnv()); err != nil {
-		return err
+	tmp := ""
+	if standalone != nil {
+		tmp = standalone.root
+	} else {
+		root := *runtimeRoot
+		if root == "" {
+			root = findModule(filepath.Dir(input))
+			if root == "" {
+				cwd, _ := os.Getwd()
+				root = findModule(cwd)
+			}
+		}
+		if root == "" {
+			return errors.New("standalone run/build requires --runtime pointing to a Go module manifest with pinned std/serde dependencies")
+		}
+		root, err = filepath.Abs(root)
+		if err != nil {
+			return err
+		}
+		tmp, err = os.MkdirTemp("", "goxide-run-")
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(tmp)
+		if err = writeStandaloneSupportModule(tool, root, tmp, environment.ExecEnv()); err != nil {
+			return err
+		}
 	}
 	if err = os.WriteFile(filepath.Join(tmp, "main.go"), result.Go, 0600); err != nil {
 		return err

@@ -10,11 +10,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/config"
-	"github.com/hxsf/goxide/internal/lower"
-	"github.com/hxsf/goxide/internal/paths"
-	"github.com/hxsf/goxide/internal/typecheck"
-	testdeps "github.com/hxsf/goxide/tests/testutil"
+	"github.com/goxide-lang/goxide/internal/analysis"
+	"github.com/goxide-lang/goxide/internal/compile"
+	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/typecheck"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
 func TestPackageUsesExplicitExportTargetAndEmptyEnvironment(t *testing.T) {
@@ -172,53 +173,28 @@ func TestPackageFilesScopeHelpersAndNativeBuild(t *testing.T) {
 	files := []File{
 		{"main.gox", `package p
 use fmt as native;
-func Value() string { native := Item{N: 6}; return native::Sprint(add!(native.N), ":", label()) }
+func Value()string {native:=Item{N:6};return native::Sprint(add!(native.N),":",label())}
 `},
 		{"model.gox", `package p
-
 // The public dependency keeps its source comment after namespace resolution.
+use std;
 use serde;
-#[derive(Clone,Debug,serde::Serialize)]
-type Item struct { N int }
-macro_rules! add { ($n:expr) => { $n + 1 }; }
+#[derive(std::derive::Clone,std::derive::Debug,serde::derive::Serialize)]
+type Item struct{N int}
+impl Item {
+ pub func copy(self &Self)Self{return std::Clone::clone(self)}
+ pub func inspect(self &Self)string{return std::Debug::debug(self)}
+}
+macro_rules! add {($n:expr)=>{$n+1};}
 `},
 		{"label.gox", `package p
-
 // This alias has a different target from the main file's native alias.
 use strings as native;
-func label() string { return native::ToUpper("ok") }
+func label()string{return native::ToUpper("ok")}
 `},
 	}
-	options := Options{Config: testdeps.Configuration(), Importer: typecheck.NewImporter("playground.gox", typecheck.ImporterOptions{Config: testdeps.Configuration()}), Roots: paths.Roots{
-		"fmt":     {PackagePath: "fmt", Source: "toolchain"},
-		"strings": {PackagePath: "strings", Source: "toolchain"},
-		"serde":   {PackagePath: "github.com/goxide-lang/serde", ModulePath: "github.com/goxide-lang/serde", Source: "module"},
-	}}
-	output, err := CompilePackage(files, options)
-	if err != nil {
-		t.Fatal(err)
-	}
-	dir := t.TempDir()
-	if err := testdeps.WriteFile(filepath.Join(dir, "go.mod"), []byte("module playground\ngo 1.27\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	var names []string
-	for _, file := range output {
-		names = append(names, file.Path)
-		if file.Path == "model.go" && !strings.Contains(file.Source, "func CloneItem") {
-			t.Fatal("derived clone source is missing")
-		}
-		if err := os.WriteFile(filepath.Join(dir, file.Path), []byte(file.Source), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if !reflect.DeepEqual(names, []string{"label.go", "main.go", "model.go"}) {
-		t.Fatalf("outputs: %v", names)
-	}
-	// Directory CLI and in-memory WASM consume the same explicit context. Compare
-	// every generated Go byte; declarations remain in their source files.
 	input := t.TempDir()
-	if err := testdeps.WriteFile(filepath.Join(input, "go.mod"), []byte("module playground\ngo 1.27\n"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(input, "goxide.toml"), []byte(testdeps.FormalManifest(t, PackagePath, "playground")), 0600); err != nil {
 		t.Fatal(err)
 	}
 	for _, file := range files {
@@ -226,52 +202,72 @@ func label() string { return native::ToUpper("ok") }
 			t.Fatal(err)
 		}
 	}
-	if err := lower.CompileModules([]lower.Module{{Path: PackagePath, Dir: input, Roots: options.Roots, Config: options.Config}}); err != nil {
-		t.Fatal(err)
-	}
-	entries, err := os.ReadDir(input)
+	var output []File
+	var options Options
+	project, calls, err := testdeps.PrepareFormal(t, input, compile.Options{
+		PrepareNativePackage: func(modules []analysis.Module) error {
+			module := modules[0]
+			options = Options{Config: module.Config, Importer: typecheck.NewImporter(filepath.Join(module.Dir, "model.gox"), typecheck.ImporterOptions{Config: module.Config})}
+			return nil
+		},
+		OnPreparedSources: func(sources compile.PreparedSources) error {
+			options.Roots, options.RuntimeRoots, options.SourcePackages = sources.Roots, sources.RuntimeRoots, sources.SourcePackages
+			for _, artifact := range sources.Macros {
+				options.ProcLibraries = append(options.ProcLibraries, artifact.Library)
+			}
+			var err error
+			output, err = CompilePackage(files, options)
+			if err != nil {
+				return err
+			}
+			// A failed edit cannot contaminate declarations or sibling import bindings.
+			bad := append([]File(nil), files...)
+			bad[2].Source = "package p\nfunc label()string{return native::Sprint(\"bad\")}\n"
+			if _, err := CompilePackage(bad, options); err == nil || !strings.Contains(err.Error(), "label.gox") || !strings.Contains(err.Error(), "unresolved name") {
+				t.Fatalf("import leaked from sibling: %v", err)
+			}
+			// A procedural derive and a handwritten implementation share the same
+			// ordinary coherence rules, including when they are in different files.
+			conflict := append([]File(nil), files...)
+			conflict[2].Source = "package p\nuse std;\nfunc label()string{return \"ok\"}\nimpl std::Clone for Item {func clone(self &Self)Self{return *self}}\n"
+			if _, err := CompilePackage(conflict, options); err == nil || !strings.Contains(err.Error(), "overlapping") {
+				t.Fatalf("cross-file derive/impl conflict accepted: %v", err)
+			}
+			again, err := CompilePackage(files, options)
+			if err != nil || !reflect.DeepEqual(output, again) {
+				t.Fatalf("recovery changed outputs: %v", err)
+			}
+			return nil
+		},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	var moduleFiles []File
-	for _, entry := range entries {
-		if strings.HasSuffix(entry.Name(), ".go") {
-			data, err := os.ReadFile(filepath.Join(input, entry.Name()))
-			if err != nil {
-				t.Fatal(err)
-			}
-			moduleFiles = append(moduleFiles, File{Path: entry.Name(), Source: string(data)})
+	if calls == 0 {
+		t.Fatal("formal procedural macros did not execute")
+	}
+	var names []string
+	for _, file := range output {
+		names = append(names, file.Path)
+		actual, err := os.ReadFile(filepath.Join(project.Root, file.Path))
+		if err != nil || string(actual) != file.Source {
+			t.Fatalf("directory and in-memory output differ for %s: %v", file.Path, err)
 		}
 	}
-	if !reflect.DeepEqual(moduleFiles, output) {
-		t.Fatal("directory and in-memory package outputs differ")
+	if !reflect.DeepEqual(names, []string{"label.go", "main.go", "model.go"}) {
+		t.Fatalf("outputs: %v", names)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "output_test.go"), []byte(`package p
+	if err := os.WriteFile(filepath.Join(project.Root, "output_test.go"), []byte(`package p
 import "testing"
-func TestOutput(t *testing.T) {
- if Value() != "7:OK" { t.Fatal(Value()) }
- v := Item{N: 8}; c := CloneItem(&v)
- if c.N != 8 || DebugItem(&c) != "Item { N: 8 }" { t.Fatal(c) }
+func TestOutput(t *testing.T){
+ if Value()!="7:OK"{t.Fatal(Value())}
+ v:=Item{N:8};c:=v.Copy()
+ if c.N!=8||c.Inspect()!="Item { N: 8 }"{t.Fatal(c)}
 }
 `), 0600); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command(filepath.Join(runtime.GOROOT(), "bin", "go"), "test", "-mod=readonly", "-count=1", "./...")
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GOWORK=off", "GOPROXY=off", "GOTOOLCHAIN=local")
-	if log, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("generated package: %v\n%s", err, log)
-	}
-	// A failed edit cannot contaminate declarations or import bindings in the next call.
-	bad := append([]File(nil), files...)
-	bad[2].Source = "package p\nfunc label()string{return native::Sprint(\"bad\")}\n"
-	if _, err := CompilePackage(bad, options); err == nil || !strings.Contains(err.Error(), "label.gox") || !strings.Contains(err.Error(), "unresolved name") {
-		t.Fatalf("import leaked from sibling: %v", err)
-	}
-	again, err := CompilePackage(files, options)
-	if err != nil || !reflect.DeepEqual(output, again) {
-		t.Fatalf("recovery changed outputs: %v", err)
-	}
+	testdeps.RunFormalGo(t, project, "test", "-mod=readonly", "-count=1", "./...")
 }
 
 func TestPackageRejectsInvalidCollections(t *testing.T) {
@@ -310,7 +306,6 @@ func TestPackageConflictsAndRecovery(t *testing.T) {
 	cases := []struct{ name, first, second, want string }{
 		{"declaration", "func F(){}", "func F(){}", "duplicate declaration"},
 		{"macro", "macro_rules! item {()=>{1};}", "macro_rules! item {()=>{2};}", "duplicate macro"},
-		{"derive", "#[derive(Clone)]\ntype Item struct{N int}", "func CloneItem(){}", "CloneItem"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

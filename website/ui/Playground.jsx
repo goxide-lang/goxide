@@ -1,7 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { useLocation } from "preact-iso/router";
 import FileView from "./FileView";
-import { compiler, diagnostics } from "./compiler";
+import { compiler, compileTimeoutMs, diagnostics } from "./compiler";
+const layouts = [
+  { value: "horizontal", label: "左右并排", icon: "split-horizontal" },
+  { value: "vertical", label: "上下排列", icon: "split-vertical" },
+  { value: "source", label: "仅源码", icon: "layout-sidebar-right-off" },
+  { value: "result", label: "仅结果", icon: "layout-sidebar-left-off" },
+];
 export default function Playground({ manifest, visible }) {
   const examples = [...manifest.examples, ...(manifest.packageExamples || [])];
   const first = examples[0];
@@ -19,14 +25,33 @@ export default function Playground({ manifest, visible }) {
     }),
     [generated, setGenerated] = useState(""),
     [layout, setLayout] = useState("horizontal"),
+    [openMenu, setOpenMenu] = useState(""),
     [newName, setNewName] = useState(""),
+    [creating, setCreating] = useState(false),
+    [position, setPosition] = useState(null),
     [fileError, setFileError] = useState(""),
     [generation, setGeneration] = useState(0);
   const service = useRef(null),
+    actions = useRef(null),
     filename = useRef(null),
     location = useLocation();
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
+  useLayoutEffect(() => {
+    if (!openMenu) return;
+    function dismiss(event) {
+      if (event.type === "keydown" && event.key === "Escape") {
+        actions.current?.querySelector('[aria-expanded="true"]')?.focus();
+        setOpenMenu("");
+      } else if (event.type === "pointerdown" && !actions.current?.contains(event.target)) setOpenMenu("");
+    }
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", dismiss);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", dismiss);
+    };
+  }, [openMenu]);
   useLayoutEffect(() => {
     service.current = compiler(manifest, setResult);
     return () => service.current.dispose();
@@ -50,6 +75,8 @@ export default function Playground({ manifest, visible }) {
     setPackage(!!example.files);
     setGenerated("");
     setFileError("");
+    setCreating(false);
+    setPosition(null);
     setGeneration((value) => value + 1);
   }
   const requested = location.query.example;
@@ -95,7 +122,9 @@ export default function Playground({ manifest, visible }) {
     setActive(newName);
     setPackage(true);
     setNewName("");
+    setCreating(false);
   }
+  const diagnosticText = [result.messages, result.error].filter(Boolean).join("\n");
   const outputPath = result.files.some((file) => file.path === generated)
     ? generated
     : result.files[0]?.path || "";
@@ -113,165 +142,99 @@ export default function Playground({ manifest, visible }) {
         source: file.source,
         provenance: `${dependency.staticPaths.join(", ")} → ${dependency.package} @ ${dependency.version} · ${dependency.source} · SHA-256 ${file.sha256}`,
       });
-  const [dependencyPath, setDependencyPath] = useState(dependencyFiles[0].path);
+  const example = examples.find((example) => example.id === selected);
+  const sourceFiles = [
+    ...files,
+    ...(example.macroSources || []).map((file) => ({ ...file, readonly: true, group: "随附宏源码 · 只读" })),
+    ...dependencyFiles.map((file) => ({ ...file, readonly: true, group: "依赖源码 · 只读" })),
+  ];
+  const markers = diagnostics(diagnosticText, files);
+  function showImplementation() {
+    setActive(example.macroEntryPath || example.macroSources[0].path);
+    if (layout === "result") setLayout("horizontal");
+  }
+  function jump(marker) {
+    setActive(marker.path);
+    setPosition({ ...marker });
+    if (layout === "result") setLayout("source");
+  }
   return (
     <section id="playground" hidden={!visible}>
       {!valid && <p role="alert">找不到此示例，请选择下列示例。</p>}
-      <p className="eyebrow">真实编译器 · 在你的浏览器中</p>
-      <h1>改一行，看 Go 如何生成。</h1>
-      <p>同一用户包的源码在本地 WASM 中转译，不上传、不执行生成 Go。</p>
-      <div className="toolbar">
-        <label>
-          示例
-          <select
-            id="examples"
-            value={selected}
-            onChange={(event) => {
-              choose(event.target.value);
-              location.route(
-                "/playground.html?example=" +
-                  encodeURIComponent(event.target.value),
-                true,
-              );
-            }}
-          >
-            {examples.map((example) => (
-              <option key={example.id} value={example.id}>
-                {example.title}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button id="compile" onClick={() => service.current.compile()}>
-          转译 <kbd>Ctrl / ⌘ Enter</kbd>
-        </button>
-        <button id="reset" onClick={() => choose(selected)}>
-          重置示例
-        </button>
-        <button id="stop" onClick={() => service.current.stop()}>
-          中断
-        </button>
-      </div>
-      <p>{examples.find((example) => example.id === selected).description}</p>
-      <div className="toolbar">
-        <label hidden={layout === "result"}>
-          新文件名
-          <input
-            ref={filename}
-            id="new-file-name"
-            value={newName}
-            onInput={(event) => setNewName(event.currentTarget.value)}
-            placeholder="types.gox"
-            maxLength={128}
-          />
-        </label>
-        <span>
-          {packageMode ? "同包" : "单文件"} · {files.length} 文件 · UTF-8 总计
-          ≤32KiB
-        </span>
-      </div>
-      {fileError && (
-        <p id="file-error" role="alert">
-          {fileError}
-        </p>
-      )}
-      <div className="toolbar layouts" aria-label="编辑器布局">
-        {[
-          ["source", "仅源码"],
-          ["result", "仅结果"],
-          ["horizontal", "左右"],
-          ["vertical", "上下"],
-        ].map(([value, label]) => (
-          <button
-            key={value}
-            data-layout={value}
-            aria-pressed={layout === value}
-            onClick={() => setLayout(value)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-      <div className="dual-editor" data-layout={layout}>
-        <div className="source-panel">
-          <FileView
-            key={generation}
-            label="源码"
-            files={files}
-            activePath={active}
-            readonly={false}
-            onSelect={setActive}
-            onCreate={create}
-            onDelete={(path) => {
-              const next = files.filter((file) => file.path !== path);
-              updateFiles(next);
-              setActive(
-                next[
-                  Math.min(
-                    files.findIndex((file) => file.path === path),
-                    next.length - 1,
-                  )
-                ].path,
-              );
-            }}
-            onChange={(path, source) =>
-              updateFiles((current) =>
-                current.map((file) =>
-                  file.path === path ? { ...file, source } : file,
-                ),
-              )
-            }
-            onCompile={() => service.current.compile()}
-            markers={diagnostics(result.error, files)}
-          />
+      <header className="playground-heading">
+        <h1>{example.macroSources ? "过程宏，一次看懂调用与实现。" : "改一行，看 Go 如何生成。"}</h1>
+        <p>编辑多文件源码，独立浏览生成 Go。转译在浏览器中完成，不上传源码。</p>
+      </header>
+      <div className="ide-workspace">
+        <div className="ide-toolbar">
+          <label>示例<select id="examples" value={selected} onChange={(event) => {
+            choose(event.target.value);
+            location.route("/playground.html?example=" + encodeURIComponent(event.target.value), true);
+          }}>{examples.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
+          <button className="primary" id="compile" onClick={() => service.current.compile()}><span aria-hidden="true" className="codicon codicon-play" />转译 <kbd>⌘ / Ctrl Enter</kbd></button>
+          {example.macroSources && <button onClick={showImplementation}><span aria-hidden="true" className="codicon codicon-code" />查看宏实现</button>}
+          {example.macroDownload && <a className="button" href={"/" + example.macroDownload.path} download><span aria-hidden="true" className="codicon codicon-desktop-download" />下载完整项目</a>}
+          <div className="workspace-actions" ref={actions}>
+            <div className="workspace-menu">
+              <button className="icon-button layout-button" aria-label="编辑器布局" title={"编辑器布局：" + layouts.find((item) => item.value === layout).label} aria-expanded={openMenu === "layout"} aria-controls="layout-options" onClick={() => setOpenMenu(openMenu === "layout" ? "" : "layout")}>
+                <span aria-hidden="true" className={"codicon codicon-" + layouts.find((item) => item.value === layout).icon} /><span aria-hidden="true" className="codicon codicon-chevron-down" />
+              </button>
+              {openMenu === "layout" && <div id="layout-options" className="workspace-popover" role="group" aria-label="选择编辑器布局">
+                {layouts.map((item) => <button key={item.value} aria-pressed={layout === item.value} onClick={() => { setLayout(item.value); setOpenMenu(""); actions.current.querySelector('.layout-button').focus(); }}><span aria-hidden="true" className={"codicon codicon-" + item.icon} />{item.label}</button>)}
+              </div>}
+            </div>
+            <div className="workspace-menu">
+              <button className="icon-button more-button" aria-label="更多操作" title="更多操作" aria-expanded={openMenu === "more"} aria-controls="workspace-options" onClick={() => setOpenMenu(openMenu === "more" ? "" : "more")}><span aria-hidden="true" className="codicon codicon-ellipsis" /></button>
+              {openMenu === "more" && <div id="workspace-options" className="workspace-popover" role="group" aria-label="工作区操作">
+                <button id="reset" onClick={() => { choose(selected); setOpenMenu(""); actions.current.querySelector('.more-button').focus(); }}><span aria-hidden="true" className="codicon codicon-refresh" />重置</button>
+                <button id="stop" onClick={() => { service.current.stop(); setOpenMenu(""); actions.current.querySelector('.more-button').focus(); }}><span aria-hidden="true" className="codicon codicon-debug-stop" />中断</button>
+              </div>}
+            </div>
+          </div>
         </div>
-        <div className="result-panel">
-          <FileView
-            label="生成结果"
-            files={result.files}
-            activePath={outputPath}
-            onSelect={setGenerated}
-          />
+        <div className="dual-editor" data-layout={layout}>
+          <div className="source-panel">
+            <FileView key={generation} label="源码" files={sourceFiles} activePath={active} readonly={false}
+              onSelect={(path) => { setActive(path); setPosition(null); }} onCreate={() => { setCreating(true); requestAnimationFrame(() => filename.current?.focus()); }}
+              onDelete={(path) => {
+                const next = files.filter((file) => file.path !== path);
+                updateFiles(next);
+                setActive(next[Math.min(files.findIndex((file) => file.path === path), next.length - 1)].path);
+              }}
+              onChange={(path, source) => updateFiles((current) => current.map((file) => file.path === path ? { ...file, source } : file))}
+              onCompile={() => service.current.compile()} markers={markers} position={position}>
+              {creating && <form className="new-file-form" onSubmit={(event) => { event.preventDefault(); create(); }}>
+                <label htmlFor="new-file-name">新文件名</label>
+                <input ref={filename} id="new-file-name" value={newName} onInput={(event) => setNewName(event.currentTarget.value)} placeholder="types.gox" maxLength={128} />
+                <div><button type="submit">创建</button><button type="button" onClick={() => { setCreating(false); setFileError(""); }}>取消</button></div>
+                {fileError && <p id="file-error" role="alert">{fileError}</p>}
+              </form>}
+            </FileView>
+          </div>
+          <div className="result-panel">
+            <div className="result-heading"><strong>生成 Go</strong><span>只读</span></div>
+            <FileView label="生成结果" files={result.files} activePath={outputPath} onSelect={setGenerated} />
+          </div>
         </div>
+        <div className="example-note">
+          <p>{example.description}</p>
+          {example.macroSources && <><button onClick={showImplementation}>查看实现</button><a href={example.macroDocumentation}>学习编写过程宏</a><span>宏源码只读，下载后可在本地修改。</span></>}
+        </div>
+        <div className="ide-statusbar">
+          <p id="status" role="status" aria-live="polite" data-state={result.error ? "error" : ""}>{result.status}</p>
+          <span>诊断 {markers.length || (diagnosticText ? 1 : 0)}</span>
+          <span>{files.length} 个源文件</span><span>{result.files.length} 个生成文件</span>
+          <span className="target-context">目标 {manifest.exportTarget.GOOS}/{manifest.exportTarget.GOARCH} · feature: 无</span>
+        </div>
+        {diagnosticText && <div className="diagnostics-panel" aria-label="转译诊断">
+          {markers.length > 0 && <div className="diagnostic-links">{markers.map((marker, index) => <button key={index} onClick={() => jump(marker)}>{marker.path}:{marker.startLineNumber}:{marker.startColumn} — {marker.message}</button>)}</div>}
+          <pre id="diagnostic" tabIndex={0}>{diagnosticText}</pre>
+        </div>}
+        {!diagnosticText && <pre id="diagnostic" hidden />}
       </div>
-      <p
-        id="status"
-        role="status"
-        aria-live="polite"
-        data-state={result.error ? "error" : ""}
-      >
-        {result.status}
-      </p>
-      <pre id="diagnostic" tabIndex={0} hidden={!result.error}>
-        {result.error || ""}
-      </pre>
-      <p className="caption">
-        Ctrl / ⌘ Enter 转译；Monaco 提供编辑、撤销和查找。这里仅提供 Go
-        基础着色与 WASM 诊断，不具备完整 Go/Goxide
-        语言服务。单次转译10秒，最多一个编译器Worker。Tab按编辑器默认方式缩进；Ctrl
-        M（macOS为Ctrl Shift M）切换Tab导航。
-      </p>
-      <h2>依赖源码（只读）</h2>
-      <p>
-        构建随附的固定包源码，不属于可编辑输入；配置只读展示，不能在此加载任意项目。
-      </p>
+      <p className="caption editor-help">Ctrl / ⌘ Enter 转译 · 最多 16 个同包 .gox 文件，总计 32 KiB · 单次转译 {compileTimeoutMs(manifest) / 1000} 秒 · 生成 Go 不在浏览器运行。<br />Monaco 提供撤销、查找和基础着色；点击诊断可定位源码。Ctrl M（macOS 为 Ctrl Shift M）切换 Tab 导航。</p>
       <p className="provenance">
-        {
-          dependencyFiles.find((file) => file.path === dependencyPath)
-            ?.provenance
-        }
-      </p>
-      <FileView
-        label="只读依赖"
-        files={dependencyFiles}
-        activePath={dependencyPath}
-        onSelect={setDependencyPath}
-      />
-      <p className="provenance">
-        {manifest.compilerSource.kind === "worktree"
-          ? `工作树 · 基线 ${manifest.compilerSource.baseCommit} · SHA-256 ${manifest.compilerSource.digest}`
-          : `编译器 ${manifest.compilerSource.commit}`} · {manifest.toolchain} ·{" "}
-        <a href="/examples.json">完整构建清单</a>
+        {manifest.compilerSource.kind === "worktree" ? `工作树 · 基线 ${manifest.compilerSource.baseCommit} · SHA-256 ${manifest.compilerSource.digest}` : `编译器 ${manifest.compilerSource.commit}`} · {manifest.toolchain} · <a href="/examples.json">完整构建清单</a>
       </p>
     </section>
   );

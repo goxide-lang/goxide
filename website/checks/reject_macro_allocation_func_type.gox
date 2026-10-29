@@ -1,3 +1,0 @@
-package p
-macro_rules! allocate {()=>{new(func())};}
-func run(){_=allocate!()}

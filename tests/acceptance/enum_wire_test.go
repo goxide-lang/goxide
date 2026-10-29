@@ -6,19 +6,20 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
 func TestEnumWireInstalledBusinessRace(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
-	bin := t.TempDir()
-	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/goxide")
-	cli := filepath.Join(bin, "goxide")
-	source := filepath.Join(root, "examples/enum_wire")
+	cli := acceptanceCLI(t)
+	source := t.TempDir()
+	singleExternalCopyTree(t, filepath.Join(root, "examples/enum_wire/project"), source, "target")
 	outside := t.TempDir()
 	generated := filepath.Join(t.TempDir(), "module")
-	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, source)
+	generated = strings.TrimSpace(deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, source))
 	packagesWrite(t, generated, "business_test.go", enumWireAssertions)
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", "./...")
 	binary := filepath.Join(t.TempDir(), "dispatch")
@@ -46,17 +47,17 @@ func TestEnumWireExplicitBoundaries(t *testing.T) {
 	cases := []struct{ name, source, want string }{
 		{"open-string-enum-withdrawn", `enum State string { A="a", }`, "enum"},
 		{"open-integer-enum-withdrawn", `enum State int { A=1, }`, "enum"},
-		{"field-default-missing", "type Socket struct { C chan int }\n#[derive(Default)]\ntype Config struct { Value Socket }", "default"},
-		{"channel-default-missing", "#[derive(Default)]\ntype Config struct { Value chan int }", "default"},
-		{"enum-default-not-selected", "#[derive(Default)]\nenum E { A, B, }", "default"},
-		{"two-default-variants", "#[derive(Default)]\nenum E {\n#[default]\nA,\n#[default]\nB,\n}", "default"},
-		{"duplicate-string-mapping", "#[derive(serde::Serialize,serde::Deserialize)]\nenum E {\n#[serde(rename=\"wire\")]\nA,\n#[serde(rename=\"wire\")]\nB,\n}", "duplicate"},
-		{"duplicate-number-mapping", "#[derive(serde::Serialize,serde::Deserialize)]\nenum E {\n#[serde(value=1)]\nA,\n#[serde(value=1)]\nB,\n}", "duplicate"},
+		{"field-default-missing", "type Socket struct { C chan int }\n#[derive(std::derive::Default)]\ntype Config struct { Value Socket }", "default"},
+		{"channel-default-missing", "#[derive(std::derive::Default)]\ntype Config struct { Value chan int }", "default"},
+		{"enum-default-not-selected", "#[derive(std::derive::Default)]\nenum E { A, B, }", "default"},
+		{"two-default-variants", "#[derive(std::derive::Default)]\nenum E {\n#[default]\nA,\n#[default]\nB,\n}", "default"},
+		{"duplicate-string-mapping", "#[derive(serde::derive::Serialize,serde::derive::Deserialize)]\nenum E {\n#[serde(rename=\"wire\")]\nA,\n#[serde(rename=\"wire\")]\nB,\n}", "duplicate"},
+		{"duplicate-number-mapping", "#[derive(serde::derive::Serialize,serde::derive::Deserialize)]\nenum E {\n#[serde(value=1)]\nA,\n#[serde(value=1)]\nB,\n}", "duplicate"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			filename := filepath.Join(t.TempDir(), tc.name+".gox")
-			_, err := compileAcceptanceLanguageFixture(filename, []byte("package rejected\n"+tc.source+"\n"))
+			_, err := testdeps.FormalSource(t, filename, []byte("package rejected; use std; use serde;\n"+tc.source+"\n"))
 			if err == nil || !strings.Contains(strings.ToLower(err.Error()), tc.want) || !strings.Contains(err.Error(), filepath.Base(filename)+":") {
 				t.Fatalf("want located %s rejection, got %v", tc.want, err)
 			}
@@ -66,7 +67,7 @@ func TestEnumWireExplicitBoundaries(t *testing.T) {
 
 const enumWireAssertions = `package main
 import("errors";"reflect";"strings";"testing";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
-func encodeTicket(v Ticket)([]byte,error){return serdejson.Encode(func(s serde.Serializer)error{return SerializeTicket(s,&v)})}
+func encodeTicket(v Ticket)([]byte,error){return serdejson.Encode(func(s serde.Serializer)error{return (TicketOps{}).Encode(s,&v)})}
 func TestKnownWireRoundTripAndNativeConstructors(t *testing.T){
  for _,tc:=range []struct{status Delivery;urgency Urgency;wire string}{
   {&Waiting{},&Normal{},"{\"Delivery\":\"queued\",\"Urgency\":2,\"Note\":\"native\"}"},
@@ -95,18 +96,18 @@ func TestUnknownWireFailsBeforeBusiness(t *testing.T){
  }
 }
 func TestDefaultAndDebugAreNotWireMapping(t *testing.T){
- v:=DefaultTicket()
+ v:=(TicketOps{}).Initial()
  if Describe(v.Delivery)!="waiting"||IsRush(v.Urgency)||v.Note!=""{t.Fatalf("wrong explicit field defaults: %#v",v)}
  // Urgency's default is the second declaration; a nil enum is not a default value.
  var zero Ticket;if zero.Delivery!=nil||zero.Urgency!=nil{t.Fatal("Go zero changed")}
  v.Note="private business text"
- debug:=DebugTicket(&v)
+ debug:=(TicketOps{}).Describe(&v)
  for _,part:=range []string{"Waiting","Normal","private business text"}{if !strings.Contains(debug,part){t.Fatalf("debug omitted declared content %q: %s",part,debug)}}
  wire,err:=encodeTicket(v);if err!=nil{t.Fatal(err)}
  if debug==string(wire)||!strings.Contains(string(wire),"queued")||!strings.Contains(string(wire),":2"){t.Fatalf("Debug and wire confused: %s / %s",debug,wire)}
- cloned:=CloneTicket(&v);cloned.Note="changed";if v.Note!="private business text"{t.Fatal("value Clone changed source")}
+ cloned:=(TicketOps{}).Copy(&v);cloned.Note="changed";if v.Note!="private business text"{t.Fatal("value Clone changed source")}
  if _,err:=encodeTicket(zero);err==nil{t.Fatal("invalid Go enum zero serialized")}
- for _,action:=range []func(){func(){_=DebugTicket(&zero)},func(){_=CloneTicket(&zero)}}{
+ for _,action:=range []func(){func(){_=(TicketOps{}).Describe(&zero)},func(){_=(TicketOps{}).Copy(&zero)}}{
   panicked:=false;func(){defer func(){panicked=recover()!=nil}();action()}();if !panicked{t.Fatal("invalid Go value passed derived operation")}
  }
 }

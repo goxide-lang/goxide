@@ -10,16 +10,18 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/check"
-	"github.com/hxsf/goxide/internal/expand"
-	"github.com/hxsf/goxide/internal/lower"
-	"github.com/hxsf/goxide/internal/resolve"
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	syntaxparser "github.com/hxsf/goxide/internal/syntax/parser"
-	testdeps "github.com/hxsf/goxide/tests/testutil"
+	"github.com/goxide-lang/goxide/internal/check"
+	"github.com/goxide-lang/goxide/internal/expand"
+	"github.com/goxide-lang/goxide/internal/lower"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	syntaxparser "github.com/goxide-lang/goxide/internal/syntax/parser"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
 func TestCoreEnumMatch(t *testing.T) {
@@ -153,7 +155,7 @@ func TestCorePropagationPreservesValues(t *testing.T) {
 }
 
 func TestCorePropagationSingleStepConversion(t *testing.T) {
-	runCoreFixture(t, "propagation_conversion", "1 0 true true false\n", 0, 1, "FromWrapped", "FromAssignable")
+	runCoreFixture(t, "propagation_conversion", "1 0 true true false\n", 0, 1)
 }
 
 func TestCorePropagationLoopsSwitchesAndAssignments(t *testing.T) {
@@ -168,14 +170,19 @@ func TestCorePropagationTypeSwitchAndSelect(t *testing.T) {
 	runCoreFixture(t, "propagation_select", "14\n-1 [channel value load] 0\n7 [channel value load] 0\n-1 0\n9 0\n", 1, 1)
 }
 
-func runCoreFixture(t *testing.T, fixture, wantOutput string, wantTypeSwitches, wantTagSwitches int, helpers ...string) {
+func runCoreFixture(t *testing.T, fixture, wantOutput string, wantTypeSwitches, wantTagSwitches int) {
 	t.Helper()
 	directory := filepath.Join("testdata", "core", fixture)
 	source, err := os.ReadFile(filepath.Join(directory, "main.gox"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	const name = "corefixture/main.gox"
+	name := "corefixture/main.gox"
+	if fixture == "propagation_conversion" {
+		// This isolated lowering fixture declares its protocol in the canonical
+		// source package. The module integration tests load the actual std source.
+		name = "github.com/goxide-lang/std/convert/main.gox"
+	}
 	file, diagnostics := syntaxparser.ParseFile(name, source)
 	if len(diagnostics) != 0 {
 		t.Fatalf("parse: %v", diagnostics)
@@ -189,20 +196,7 @@ func runCoreFixture(t *testing.T, fixture, wantOutput string, wantTypeSwitches, 
 	if len(resolved.Diagnostics) != 0 {
 		t.Fatalf("resolve: %v", resolved.Diagnostics)
 	}
-	var conversions []resolve.Ref
-	for _, helper := range helpers {
-		found := false
-		for _, item := range expanded.Files[0].Items {
-			if function, ok := item.(*ast.FuncDecl); ok && function.Name.Name == helper {
-				conversions = append(conversions, resolve.Ref{File: name, ID: function.ID()})
-				found = true
-			}
-		}
-		if !found {
-			t.Fatalf("missing conversion helper %s", helper)
-		}
-	}
-	info, checked := check.CheckWithConversions(files, resolved, conversions)
+	info, checked := check.Check(files, resolved)
 	if len(checked) != 0 {
 		t.Fatalf("check: %v", checked)
 	}
@@ -229,6 +223,23 @@ func runCoreFixture(t *testing.T, fixture, wantOutput string, wantTypeSwitches, 
 	}
 	if !bytes.Equal(output[name], golden) {
 		t.Fatalf("generated code differs from %s/main.golden.go:\n%s", directory, output[name])
+	}
+	locations := regexp.MustCompile(`\bat ([^"\s]+):([0-9]+)\b`).FindAllStringSubmatch(string(output[name]), -1)
+	if fixture == "nil_match" && len(locations) == 0 {
+		t.Fatal("nil match lost its panic source location")
+	}
+	lines := bytes.Count(source, []byte{'\n'})
+	if len(source) > 0 && source[len(source)-1] != '\n' {
+		lines++
+	}
+	for _, location := range locations {
+		if location[1] != name {
+			t.Errorf("panic source = %s, want %s", location[1], name)
+		}
+		line, err := strconv.Atoi(location[2])
+		if err != nil || line < 1 || line > lines {
+			t.Errorf("panic location %s:%s is outside source lines 1..%d", location[1], location[2], lines)
+		}
 	}
 	generatedAST, err := parser.ParseFile(token.NewFileSet(), "generated.go", output[name], 0)
 	if err != nil {

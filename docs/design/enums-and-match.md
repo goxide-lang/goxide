@@ -1,6 +1,6 @@
 # 变体枚举、Option / Result 与模式匹配
 
-2026-10-09 更新：本轮直接切换至内联独立 payload 槽、`ref` / `ref mut` 模式和 `&mut` 引用拼写，详见[当前原位 payload 合同](enum-payload-borrows.md)。下文旧 interface/case、旧 Go case API 和布局待定的章节记录历史阶段，不是当前接口或兼容承诺；完整 Rust 模式规则不由本轮实现。
+当前 enum 表示、不可变 payload 槽与引用语义分别见[密封接口表示](enum-representation.md)和[payload 合同](enum-payload-borrows.md)。下文保留旧管线与早期 ABI 讨论；其中内联槽、可写投影、旧 metadata 和未实现阶段描述均不作为当前用户 enum 规则。
 
 交付边界（D20）：本文涉及的别名/借用风险 warning 是未来独立长期分析，不属于 MVP 验收；当前语言语法、类型、明确操作与真实 Go 行为照常设计。不得为未实现分析器强制复杂效果注解。
 
@@ -61,7 +61,7 @@ func decodeStateText(text string) (State, error) {
 
 ### 0.2 Default、Clone、Debug 边界
 
-struct 自动 Default 要求每个字段类型具有 Default，否则不能派生，应手写实现。当前手动入口为 `impl Default for T { func default() T { ... } }`，限同包本地非泛型 struct；不能仅取名 DefaultX 就认领协议。enum 必须指定唯一 `#[default]` 变体，允许 payload，按声明顺序递归调用选中变体各字段的 Default；非默认变体不要求 Default。跨包手动协议消费和通用 trait 后端仍未实现。
+struct 自动 Default 要求每个字段类型具有 Default，否则不能派生，应手写实现。当前手动入口为 `impl Default for T { func Default() T { ... } }`，限同包本地非泛型 struct；不能仅取名 DefaultX 就认领协议。enum 必须指定唯一 `#[default]` 变体，允许 payload，按声明顺序递归调用选中变体各字段的 Default；非默认变体不要求 Default。跨包手动协议消费和通用 trait 后端仍未实现。
 
 Clone 复制当前合法变体及有协议的 payload。Debug 显示源 enum/变体名及 payload，struct 显示字段名和内容，包括私有业务字段；serde rename/value 不改 Debug，不自动脱敏，也不是稳定 wire 格式。缺少字段 Debug/Clone 协议仍拒绝，不反射、不调用任意 Stringer/error 兜底。
 

@@ -83,7 +83,7 @@ func (g *Graph) bindNativeLocal(module string, pin Selection, replacements []Mod
 	if Digest(data) != record.Input {
 		return pin, fmt.Errorf("copied lock local module metadata changed for %s", module)
 	}
-	m, e := ReadMod(g.Tool, location, g.Environment)
+	m, e := ReadModContext(g.context(), g.Tool, location, g.Environment)
 	if e != nil {
 		return pin, e
 	}
@@ -101,7 +101,7 @@ func (g *Graph) portablePlan(root string, selections map[string]Selection, nodes
 	out := portableSelections(root, selections)
 	for _, n := range nodes {
 		module := n.Module
-		if n.CheckoutRoot == "" || !contained(g.Cache, n.CheckoutRoot) {
+		if n.CheckoutRoot == "" || !(contained(g.Cache, n.CheckoutRoot) || g.readCache != "" && contained(g.readCache, n.CheckoutRoot)) {
 			continue
 		}
 		s, ok := out[module]

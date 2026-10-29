@@ -9,7 +9,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 // Declarations are collected before any body is visited, so files and source
@@ -179,7 +179,9 @@ func (r *resolver) declareNamed(scope *Scope, owner ast.Node, name *ast.Ident, k
 		if !ok {
 			r.diag(name, "go-name", fmt.Sprintf("public name %q has no uppercase initial", name.Name))
 		}
-		r.checkGoName(scope, name, sym)
+		if kind != Macro {
+			r.checkGoName(scope, name, sym)
+		}
 	}
 	r.recordDeclaration(name, sym)
 	if owner != nil {
@@ -212,7 +214,7 @@ func (r *resolver) recordDeclaration(node ast.Node, sym *Symbol) {
 func (r *resolver) checkGoName(scope *Scope, name *ast.Ident, sym *Symbol) {
 	var others []*Symbol
 	for _, other := range scope.Bindings {
-		if other != sym && other.Name.Ctx == sym.Name.Ctx && other.Name.Name != sym.Name.Name {
+		if other != sym && other.Name.Namespace == sym.Name.Namespace && other.Name.Ctx == sym.Name.Ctx && other.Name.Name != sym.Name.Name {
 			others = append(others, other)
 		}
 	}

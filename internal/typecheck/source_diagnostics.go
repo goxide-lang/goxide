@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/hxsf/goxide/internal/expand"
-	"github.com/hxsf/goxide/internal/lower"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/parser"
+	"github.com/goxide-lang/goxide/internal/analysis"
+	"github.com/goxide-lang/goxide/internal/expand"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/parser"
 )
 
 // DiagnosticSource associates a logical compiler key with the original input.
@@ -40,5 +40,5 @@ func SourceError(err error, sources map[string]DiagnosticSource, expanded *expan
 	for name, source := range sources {
 		files[name], names[name] = source.AST, source.Name
 	}
-	return lower.FormatSourceDiagnostic(err, files, names, expanded)
+	return analysis.FormatSourceDiagnostic(err, files, names, expanded)
 }

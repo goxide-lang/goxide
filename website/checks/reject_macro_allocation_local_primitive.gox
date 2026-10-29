@@ -1,3 +1,0 @@
-package p
-macro_rules! allocate {()=>{func()*int{int:=7;return new(int)}()};}
-func run(){_=allocate!()}

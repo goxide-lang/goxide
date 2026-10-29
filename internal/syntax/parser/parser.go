@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/lexer"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/lexer"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 type Severity uint8
@@ -30,6 +30,7 @@ func (d Diagnostic) Error() string {
 type parser struct {
 	tokens      []token.Token
 	pos         int
+	end         uint32
 	nextID      ast.NodeID
 	diagnostics []Diagnostic
 	noComposite int
@@ -56,7 +57,7 @@ func newParser(src []byte) *parser {
 // ParseFile returns a recovered tree even when diagnostics contain errors.
 func ParseFile(filename string, src []byte) (*ast.File, []Diagnostic) {
 	p := newParser(src)
-	f := &ast.File{LineStarts: []uint32{0}}
+	f := &ast.File{LineStarts: []uint32{0}, Tokens: p.tokens}
 	for i, b := range src {
 		if b == '\n' && i+1 < len(src) {
 			f.LineStarts = append(f.LineStarts, uint32(i+1))
@@ -68,18 +69,7 @@ func ParseFile(filename string, src []byte) (*ast.File, []Diagnostic) {
 	if p.errorCount() > 0 {
 		f.Items = append(f.Items, &ast.BadItem{ItemBase: ast.ItemBase{Base: p.base(0)}, Text: "invalid package or token"})
 	}
-	for !p.at(token.EOF) {
-		p.semis()
-		if p.at(token.EOF) {
-			break
-		}
-		before := p.pos
-		f.Items = append(f.Items, p.item())
-		if !p.endStmt() {
-			f.Items = append(f.Items, &ast.BadItem{ItemBase: ast.ItemBase{Base: p.base(p.tok().Start)}, Text: "missing semicolon"})
-		}
-		p.progress(before)
-	}
+	f.Items = append(f.Items, p.items()...)
 	f.Base = p.base(0)
 	f.Comments = p.comments
 	f.Directives = p.directives
@@ -88,8 +78,32 @@ func ParseFile(filename string, src []byte) (*ast.File, []Diagnostic) {
 	return f, p.diagnostics
 }
 
+func (p *parser) items() []ast.Item {
+	return p.itemList(p.item)
+}
+
+func (p *parser) itemList(parse func() ast.Item) []ast.Item {
+	var items []ast.Item
+	for !p.at(token.EOF) {
+		p.semis()
+		if p.at(token.EOF) {
+			break
+		}
+		before := p.pos
+		items = append(items, parse())
+		if !p.endStmt() {
+			items = append(items, &ast.BadItem{ItemBase: ast.ItemBase{Base: p.base(p.tok().Start)}, Text: "missing semicolon"})
+		}
+		p.progress(before)
+	}
+	return items
+}
+
 func ParseExpr(src []byte) (ast.Expr, []Diagnostic) {
-	p := newParser(src)
+	return parseExpr(newParser(src))
+}
+
+func parseExpr(p *parser) (ast.Expr, []Diagnostic) {
 	n := p.expr()
 	p.finish()
 	if p.errorCount() > 0 && !hasBad(n) {
@@ -99,7 +113,10 @@ func ParseExpr(src []byte) (ast.Expr, []Diagnostic) {
 	return n, p.diagnostics
 }
 func ParseType(src []byte) (ast.Type, []Diagnostic) {
-	p := newParser(src)
+	return parseType(newParser(src))
+}
+
+func parseType(p *parser) (ast.Type, []Diagnostic) {
 	n := p.typ()
 	p.finish()
 	if p.errorCount() > 0 && !hasBad(n) {
@@ -119,7 +136,10 @@ func ParsePattern(src []byte) (ast.Pat, []Diagnostic) {
 	return n, p.diagnostics
 }
 func ParseStmt(src []byte) (ast.Stmt, []Diagnostic) {
-	p := newParser(src)
+	return parseStmt(newParser(src))
+}
+
+func parseStmt(p *parser) (ast.Stmt, []Diagnostic) {
 	n := p.stmt()
 	p.finish()
 	if p.errorCount() > 0 && !hasBad(n) {
@@ -129,7 +149,10 @@ func ParseStmt(src []byte) (ast.Stmt, []Diagnostic) {
 	return n, p.diagnostics
 }
 func ParseItem(src []byte) (ast.Item, []Diagnostic) {
-	p := newParser(src)
+	return parseItem(newParser(src))
+}
+
+func parseItem(p *parser) (ast.Item, []Diagnostic) {
 	n := p.item()
 	p.finish()
 	if p.errorCount() > 0 && !hasBad(n) {
@@ -159,6 +182,7 @@ func (p *parser) peek(n int) token.Token {
 func (p *parser) at(k token.Kind) bool { return p.tok().Kind == k }
 func (p *parser) next() token.Token {
 	t := p.tok()
+	p.end = t.End
 	if t.Kind != token.EOF {
 		p.pos++
 	}
@@ -175,7 +199,7 @@ func (p *parser) expect(k token.Kind) token.Token {
 	if p.at(k) {
 		return p.next()
 	}
-	p.error("expected " + k.String() + ", found " + p.tok().Kind.String())
+	p.missing("expected " + k.String() + ", found " + p.tok().Kind.String())
 	t := p.tok()
 	t.Kind = k
 	t.Text = k.String()
@@ -186,11 +210,13 @@ func (p *parser) error(msg string) {
 	t := p.tok()
 	p.diagnostics = append(p.diagnostics, Diagnostic{Severity: Error, Span: ast.Span{Start: t.Start, End: t.End}, Message: msg})
 }
+func (p *parser) missing(msg string) {
+	start := p.tok().Start
+	p.end = start
+	p.diagnostics = append(p.diagnostics, Diagnostic{Severity: Error, Span: ast.Span{Start: start, End: start}, Message: msg})
+}
 func (p *parser) base(start uint32) ast.Base {
-	end := start
-	if p.pos > 0 {
-		end = p.tokens[p.pos-1].End
-	}
+	end := p.end
 	if end < start {
 		end = start
 	}
@@ -200,11 +226,16 @@ func (p *parser) base(start uint32) ast.Base {
 func (p *parser) ident() *ast.Ident {
 	t := p.tok()
 	if !p.at(token.IDENT) {
-		p.error("expected identifier (reserved words require r#)")
-		if !p.at(token.EOF) {
+		const message = "expected identifier (reserved words require r#)"
+		if p.recoveryBoundary() {
+			p.missing(message)
+		} else {
+			p.error(message)
 			p.next()
 		}
-		return &ast.Ident{Base: p.base(t.Start), Name: "_"}
+		base := p.base(t.Start)
+		base.Loc.End = t.Start
+		return &ast.Ident{Base: base, Missing: true}
 	}
 	p.next()
 	if !t.Raw && token.IsFutureReserved(t.Text) {
@@ -219,6 +250,9 @@ func (p *parser) semis() {
 func (p *parser) endStmt() bool {
 	if p.accept(token.SEMICOLON) || p.at(token.RBRACE) || p.at(token.EOF) {
 		return true
+	}
+	if p.declarationStart() && p.pos > 0 && p.tokens[p.pos-1].Kind == token.SEMICOLON {
+		return true // A recovered block already consumed the preceding newline.
 	}
 	p.error("expected semicolon or newline")
 	return false
@@ -236,13 +270,35 @@ func (p *parser) errorCount() int {
 func hasBad(n ast.Node) bool {
 	bad := false
 	ast.Walk(n, func(n ast.Node) bool {
-		switch n.(type) {
+		switch n := n.(type) {
 		case *ast.BadItem, *ast.BadStmt, *ast.BadExpr, *ast.BadType, *ast.BadPat:
 			bad = true
+		case *ast.Ident:
+			bad = bad || n.Missing
+		case *ast.TokenTree:
+			bad = bad || n.Missing
 		}
 		return !bad
 	})
 	return bad
+}
+func (p *parser) recoveryBoundary() bool {
+	switch p.tok().Kind {
+	case token.EOF, token.SEMICOLON, token.COMMA, token.RBRACE, token.RPAREN, token.RBRACK, token.LBRACE, token.FATARROW:
+		return true
+	}
+	return p.declarationStart()
+}
+
+// Named functions and package-only items cannot begin a block statement.
+func (p *parser) declarationStart() bool {
+	switch p.tok().Kind {
+	case token.FUNC:
+		return p.peek(1).Kind == token.IDENT
+	case token.PACKAGE, token.PUB, token.USE, token.MOD, token.ENUM, token.TRAIT, token.IMPL, token.DECLARE:
+		return true
+	}
+	return p.context("macro_rules") && p.peek(1).Kind == token.NOT && p.peek(2).Kind == token.IDENT
 }
 func (p *parser) progress(before int) {
 	if p.pos == before && !p.at(token.EOF) {

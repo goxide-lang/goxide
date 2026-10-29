@@ -9,8 +9,12 @@ func TestMatchExpressionBusinessRace(t *testing.T) {
 	source := `package fixture
 use serde;
 macro_rules! twice {($x:expr)=>{$x+$x};}
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
 pub enum Response { Empty, Number(int), Text(string), }
+impl Response {
+ pub func encode(s serde::Serializer, value &Self) error { return serde::Write(s,value) }
+ pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) }
+}
 pub enum E { A, B }
 var value int = match E::A { E::A => 1, E::B => 2 }
 func originalTemporary(x E)int{__goxide_match_result_1:=9;return match x{E::A=>__goxide_match_result_1,E::B=>0}}
@@ -43,11 +47,11 @@ func outerClosure() int {
  return f(Response::Number(8))+3
 }
 `
-	enumGeneratedModule(t, source, `package fixture
+	enumFormalStdModule(t, source, `package fixture
 import("testing";"reflect";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
 func TestScopeEffectsAndGuards(t *testing.T){calls:=0;trace:=[]int{};got:=business(func()Response{calls++;return number(4)},&trace);if got!=18||calls!=1||!reflect.DeepEqual(trace,[]int{1,2}){t.Fatalf("got %d calls %d trace %v",got,calls,trace)}}
 func TestReturnClosureAndHygiene(t *testing.T){done:=false;if returning(number(2),&done)!=3||!done{t.Fatal("defer or return changed")};if outerClosure()!=13||shadowBuiltins()!=7||value!=1||originalTemporary(&A{})!=9||originalTemporary(&B{})!=0{t.Fatal("closure target or generated hygiene changed")}}
-func TestSerdeMacroMatchIntegration(t *testing.T){v:=number(11);data,e:=serdejson.Encode(func(s serde.Serializer)error{return SerializeResponse(s,&v)});if e!=nil{t.Fatal(e)};decoded,e:=serdejson.Unmarshal(data,DeserializeResponse);if e!=nil{t.Fatal(e)};done:=false;if returning(decoded,&done)!=12||!done{t.Fatal("integration changed value")}}
+func TestSerdeMacroMatchIntegration(t *testing.T){v:=number(11);data,e:=serdejson.Encode(func(s serde.Serializer)error{return (ResponseOps{}).Encode(s,&v)});if e!=nil{t.Fatal(e)};decoded,e:=serdejson.Unmarshal(data,(ResponseOps{}).Decode);if e!=nil{t.Fatal(e)};done:=false;if returning(decoded,&done)!=12||!done{t.Fatal("integration changed value")}}
 `, false)
 }
 

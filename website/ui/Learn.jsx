@@ -20,7 +20,7 @@ function Stage({ stage, previous, next }) {
   const views = [{ id: "source", title: "源码" }, { id: "generated", title: "生成 Go" }, { id: "output", title: "CLI 输出" }];
   return (
     <article className="tutorial-content">
-      <div className="page-kicker"><span className="eyebrow">订单状态 CLI · 循序渐进</span><a href="/docs/?page=start">查阅文档 <span aria-hidden="true">↗</span></a></div>
+      <div className="page-kicker"><span className="eyebrow">{stage.id === "procedural" ? "过程宏 · 从源码到展开" : "订单状态 CLI · 循序渐进"}</span><a href="/docs/?page=start">查阅文档 <span aria-hidden="true">↗</span></a></div>
       <h1>{stage.title}</h1>
       <p className="page-intro">{stage.description}</p>
       <div className="tutorial-actions">
@@ -48,10 +48,10 @@ function Stage({ stage, previous, next }) {
         </div>
       </div>
       {view !== "output" && <section className="run-preview"><div><h2>运行结果</h2><span>CLI 验证输出</span></div><Code source={preset?.stdout ?? stage.stdout} label="此配置的运行结果" /><button type="button" onClick={() => setView("output")}>查看完整命令与输出 <span aria-hidden="true">→</span></button></section>}
-      <div className="tutorial-next-steps"><div><h2>在本地继续</h2><p>下载项目后，在项目目录执行「CLI 输出」中的命令。完整项目的包管理与配置说明可以随时在文档中查阅。</p></div><a href={`/docs/?page=${stage.id === "go" || stage.id === "mixed" ? "go-gen" : "manifest"}`}>阅读对应工作流 <span aria-hidden="true">→</span></a></div>
+      <div className="tutorial-next-steps"><div><h2>在本地继续</h2><p>下载项目后，在项目目录执行「CLI 输出」中的命令。完整项目的包管理与配置说明可以随时在文档中查阅。</p></div><a href={`/docs/?page=${stage.id === "procedural" ? "procedural-macros" : stage.id === "go" || stage.id === "mixed" ? "go-gen" : "manifest"}`}>阅读对应工作流 <span aria-hidden="true">→</span></a></div>
       <nav className="step-pagination" aria-label="快速开始翻页">
         {previous ? <a href={`/learn/?stage=${previous.id}`}><small>上一步</small><strong>← {previous.title}</strong></a> : <span />}
-        {next ? <a href={`/learn/?stage=${next.id}`}><small>下一步</small><strong>{next.title} →</strong></a> : <a href="/docs/?page=features"><small>继续查阅</small><strong>feature 完整规则 →</strong></a>}
+        {next ? <a href={`/learn/?stage=${next.id}`}><small>下一步</small><strong>{next.title} →</strong></a> : <a href={`/docs/?page=${stage.id === "procedural" ? "procedural-macros" : "features"}`}><small>继续查阅</small><strong>{stage.id === "procedural" ? "过程宏完整参考" : "feature 完整规则"} →</strong></a>}
       </nav>
     </article>
   );
@@ -66,7 +66,7 @@ export default function Learn({ manifest }) {
     <section className="learn-page">
       <aside className="section-sidebar tutorial-sidebar" data-open={navigationOpen}>
         <button className="sidebar-toggle" type="button" aria-expanded={navigationOpen} aria-controls="tutorial-navigation" onClick={() => setNavigationOpen(!navigationOpen)}>快速开始步骤 <span aria-hidden="true">{navigationOpen ? "−" : "+"}</span></button>
-        <div className="sidebar-content" id="tutorial-navigation"><p className="sidebar-title">从 Go 到 Goxide</p><p className="sidebar-caption">一个案例，四个阶段。</p><nav aria-label="快速开始步骤">{stages.map((item, position) => <a key={item.id} href={`/learn/?stage=${item.id}`} aria-current={item.id === requested ? "step" : undefined} onClick={() => setNavigationOpen(false)}><span className="step-number">{String(position + 1).padStart(2, "0")}</span><span>{item.title}</span></a>)}</nav><div className="sidebar-help"><span>第一次接触 Goxide？</span><a href="/docs/?page=install">先准备本地环境 →</a></div></div>
+        <div className="sidebar-content" id="tutorial-navigation"><p className="sidebar-title">从 Go 到 Goxide</p><p className="sidebar-caption">订单项目逐步接入，再编写过程宏。</p><nav aria-label="快速开始步骤">{stages.map((item, position) => <a key={item.id} href={`/learn/?stage=${item.id}`} aria-current={item.id === requested ? "step" : undefined} onClick={() => setNavigationOpen(false)}><span className="step-number">{String(position + 1).padStart(2, "0")}</span><span>{item.title}</span></a>)}</nav><div className="sidebar-help"><span>第一次接触 Goxide？</span><a href="/docs/?page=install">先准备本地环境 →</a></div></div>
       </aside>
       {!stages.length ? <p className="content-loading" role="status">正在载入经过验证的快速开始项目…</p> : stage ? <Stage key={stage.id} stage={stage} previous={stages[index - 1]} next={stages[index + 1]} /> : <div className="missing-content" role="alert"><h1>找不到此快速开始阶段。</h1><p>请选择左侧的快速开始步骤。</p><a href="/learn/">从第一步开始 →</a></div>}
     </section>

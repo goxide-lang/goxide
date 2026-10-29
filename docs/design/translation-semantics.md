@@ -78,19 +78,19 @@ Emit(S, C) = G  仅当上述阶段均 success，且入口要求的 Go 检查通�
 
 ### 3.1 绑定先于 Go 名字
 
-源级键是 `(Name, SyntaxCtx)`，符号身份还包含声明所在文件与节点。普通词法查找从当前作用域向外进行；宏产生的名字按第 5 节的上下文选取查找链。
+源级键是 `(Name, SyntaxCtx, Namespace)`，符号身份还包含声明所在文件与节点。普通项与宏分别占用普通名字空间和宏名字空间；宏调用只在末段选择宏空间，路径前缀仍在普通空间选择模块。普通词法查找从当前作用域向外进行；宏产生的名字按第 5 节的上下文选取查找链。
 
 ```text
-Γ(scope)[(name, ctx)] = s
+Γ(scope)[(name, ctx, ns)] = s
 ────────────────────────── [Name]
-Γ; H ⊢ name@ctx ⇝ s
+Γ; H; ns ⊢ name@ctx ⇝ s
 
 Γ; H ⊢ x ⇝ s       Type(s) = T
 ────────────────────────────── [Variable]
 Γ; Δ ⊢ x : T
 ```
 
-路径中的 `::` 查询模块、类型或 trait 成员；`.` 处理值的字段/成员。`use` 引入的是目标符号或命名空间绑定，不复制一套新类型。透明 alias 复用原类型身份；新 defined 类型拥有新身份。enum 的名义身份为：
+路径中的 `::` 查询模块、类型或 trait 成员；`.` 处理值的字段/成员。单个 `use` 可同时引入目标路径在两个空间中的同名公开符号，两者独立保留规范目标和覆盖顺序；宏别名不遮蔽普通依赖根。`use` 不复制一套新类型。透明 alias 复用原类型身份；新 defined 类型拥有新身份。enum 的名义身份为：
 
 ```text
 Identity(E[T1, ..., Tn]) = (定义包, enum 声明, T1, ..., Tn)
@@ -249,7 +249,7 @@ func main() {
 
 模板中的 `twice` 仍绑定包函数，捕获的 `saved` 仍绑定调用者的局部变量；模板局部 `saved` 得到独立符号。`saved2` 等拼写是当前输出，语言合同要求的是绑定关系而非临时名。
 
-跨模块宏由源码提供，展开有递归深度、调用次数、节点、token 与匹配步数预算；超限或真实依赖环产生带定义点和调用点的诊断。宏展开不执行任意用户程序。具体规则见 [RFC 0011](../rfcs/0011-macros.md)与 [expand 数据结构](../../internal/expand/expand.go)。
+跨模块宏由源码提供，展开有递归深度、调用次数、节点、token 与匹配步数预算；超限或真实依赖环产生带定义点和调用点的诊断。声明宏不执行用户程序；过程宏在受限 WASI 中执行语法变换，输出仍进入相同检查管线。具体规则见 [RFC 0011](../rfcs/0011-macros.md)、[RFC 0030](../rfcs/0030-procedural-macros.md)与 [expand 数据结构](../../internal/expand/expand.go)。
 
 ## 6. Enum 的值与存储
 
@@ -297,12 +297,12 @@ ValidDispatchE(v)
 Match(_, v, ℓ, Σ)             = {}
 Match(x, v, ℓ, Σ)             = {x ↦ copy(v)}
 Match(ref x, v, ℓ, Σ)         = {x ↦ read-reference(ℓ)}
-Match(ref mut x, v, ℓ, Σ)     = {x ↦ write-reference(ℓ)}
+Match(ref mut x, v, ℓ, Σ)     静态拒绝：enum payload 槽不可变
 Match(c, v, ℓ, Σ)             成功当且仅当 v == c
 Match(E::V(p1, ...), v, ℓ, Σ) 先检验 V，再递归匹配对应载荷
 ```
 
-引用模式还要求静态可寻址性与权限成立。`match &e` / `match &mut e` 将普通 payload 绑定的默认模式改为只读/可写引用。绑定本身不增加一次 scrutinee 求值。
+只读引用模式要求真实可寻址位置。`match &e` 将普通 payload 绑定改为只读引用；`match &mut e` 拒绝。普通值模式中的容器按自身权限使用，不能因此替换 enum payload 槽。绑定本身不增加一次 scrutinee 求值。
 
 设 arm 为 `(pi, gi, bi)`，缺省 guard 为 `true`。运行时选择最先满足模式和 guard 的 arm：
 
@@ -420,42 +420,43 @@ func main() { fmt.Println(score(&_Number{Value: -3})) }
 ⟦payload reference⟧ = sum.Project*(owner)  当前 Option/Result
 ```
 
-以下片段来自完整可运行例子；外围 `main` 把 `Counter::Count(1)` 复制到 `before`，调用 `bump(&mut counter)` 后读取 `before`，输出 `2`：
+下面只读投影保留原变体槽位身份；调用方可重新绑定 enum 变量，但不能写入 payload 槽：
 
 ```goxide
 enum Counter { Count(int), Empty }
-func bump(counter &mut Counter) {
-    match &mut *counter {
-        Counter::Count(value) => { *value += 1 },
-        Counter::Empty => {},
+func read(counter &Counter) int {
+    return match *counter {
+        Counter::Count(ref value) => *value,
+        Counter::Empty => 0,
     }
 }
 ```
 
-对应函数中的核心 Go 分支如下；`_Counter`、`_Count` 和 `_Empty` 按第 6 节生成，外围 nil 检查与 default panic 按第 7 节生成：
+对应核心 Go 形状如下；假设 `_Counter`、`_Count` 和 `_Empty` 为第 6 节生成的类型：
 
 ```go
-gxOwner1 := &*counter
-var gxMatch2 _Counter = *gxOwner1
-// 此处检查 gxMatch2 != nil。
-switch gxVar3 := gxMatch2.(type) {
-case *_Count:
-    // 此处检查 gxVar3 != nil。
-    gxPayloadRef4 := &gxVar3.Value
-    value := gxPayloadRef4
-    *value += 1
-case *_Empty:
-    // 此处同样检查 gxVar3 != nil。
-default:
-    panic("goxide: invalid enum Counter")
+func read(counter *_Counter) int {
+    saved := *counter
+    if saved == nil { panic("goxide: match on nil Counter") }
+    switch variant := saved.(type) {
+    case *_Count:
+        if variant == nil { panic("goxide: match on nil Counter") }
+        value := &variant.Value
+        return *value
+    case *_Empty:
+        if variant == nil { panic("goxide: match on nil Counter") }
+        return 0
+    default:
+        panic("goxide: invalid enum Counter")
+    }
 }
 ```
 
-关键等式是 `address(value 的目标) = address(原变体.Value)`。当前检查实现类型与读写资格，不执行 Rust 式生命周期或独占借用证明。原生 Go 调用生成函数时遵循 Go 指针规则，Goxide 的只读资格不进入 Go 类型系统。完整存储合同见[原位 payload 与引用](enum-payload-borrows.md)。
+关键等式是 `address(value 的目标) = address(原变体.Value)`。权限检查在降低前完成，生成 Go 的指针不授予源程序写权限。完整存储合同与容器例子见[payload 与引用](enum-payload-borrows.md)。
 
 ## 9. Trait：名义实现、运行时视图与静态操作
 
-trait 检查先登记实现身份，再选择成员。结构上恰好有同名 Go 方法不会自动成为 Goxide 的 trait 实现；`declare` 用于显式声明符合合同的原生方法适配。
+trait 检查先登记实现身份，再选择成员。结构上恰好有同名 Go 方法不会自动成为 Goxide 的 trait 实现；原生类型需要显式 Goxide 协议时，按归属规则使用普通有体 impl 或本地包装类型。
 
 ```text
 Δ 中存在 impl R for T，且全部成员与关联类型匹配
@@ -538,7 +539,7 @@ func (gxOps1 goxideUserOps) Make() User {
 }
 ```
 
-类型锚签名让 Go 推导 carrier 类型；`typeinfo.Of[T]()` 取得其零值，不调用目标类型的锚方法。关联类型 witness 同样只为 Go 类型推导提供证据，不执行。运行的只是选定操作。当前接受非泛型 trait、具体类型 impl、关联类型、静态方法和每类型参数单 trait 约束；泛型 trait/impl、多 trait 约束、GAT 与默认方法按状态表延期。成员优先级、视图能力与 Go 适配细节见 [trait 合同](traits.md)。
+类型锚签名让 Go 推导 carrier 类型；`typeinfo.Of[T]()` 取得其零值，不调用目标类型的锚方法。关联类型 witness 同样只为 Go 类型推导提供证据，不执行。运行的只是选定操作。当前接受参数化 trait、条件 impl、关联类型、静态方法及多 trait 约束；带待定协议条件的实例按 D38 需求展开，普通 Go 泛型保留。GAT 与默认方法按状态表延期。成员优先级、视图能力与 Go 适配细节见 [trait 合同](traits.md)。
 
 ## 10. 错误传播与控制流
 

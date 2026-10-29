@@ -1,7 +1,0 @@
-[roots.os]
-source = "toolchain"
-package = "os"
-
-[roots.serde]
-module = "github.com/goxide-lang/serde"
-package = "github.com/goxide-lang/serde"

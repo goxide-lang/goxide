@@ -1,0 +1,9 @@
+[go_mod]
+module="manualdefault.example/service"
+go="1.27"
+[[bin]]
+name="manual_default"
+path="."
+[dependencies.std]
+go="github.com/goxide-lang/std"
+version="v0.0.2"

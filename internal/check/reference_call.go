@@ -3,8 +3,8 @@ package check
 import (
 	"go/types"
 
-	"github.com/hxsf/goxide/internal/resolve"
-	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 func (p *permissionChecker) call(n *ast.CallExpr, want *permission, asynchronous bool) *permission {
@@ -22,13 +22,6 @@ func (p *permissionChecker) call(n *ast.CallExpr, want *permission, asynchronous
 			got := p.expr(arg, field)
 			p.require(arg, got, field)
 			q.fields[permissionFieldKey(con.Variant, i)] = p.adapt(got, field)
-		}
-		return q
-	}
-	_, print := p.c.out.Resolve.Prints[n]
-	if print {
-		for _, arg := range n.Args {
-			p.expr(arg, nil)
 		}
 		return q
 	}
@@ -50,9 +43,6 @@ func (p *permissionChecker) call(n *ast.CallExpr, want *permission, asynchronous
 		q.fields = map[string]*permission{"Ok.0": value, "Err.0": payload}
 		return q
 	}
-	if result, handled := p.protocolCall(n, want); handled {
-		return result
-	}
 	if p.c.isTypeExpr(n.Fun) {
 		target := p.exprType(n.Fun)
 		for _, arg := range n.Args {
@@ -73,13 +63,24 @@ func (p *permissionChecker) call(n *ast.CallExpr, want *permission, asynchronous
 		p.require(n.Fun, fun, p.fromGo(fun.typ))
 	}
 	sub := map[*types.TypeParam]*permission{}
-	args := make([]*permission, len(n.Args))
+	args := make([]*permission, 0, len(n.Args))
+	var argumentNodes []ast.Expr
 	for i, arg := range n.Args {
-		formal := p.callParam(fun, i, n.Ellipsis)
-		args[i] = p.expr(arg, formal)
-		p.inferPermission(formal, args[i], sub)
+		actual := p.expr(arg, p.callParam(fun, i, n.Ellipsis))
+		values := []*permission{actual}
+		_, call := referenceScrutinee(arg).(*ast.CallExpr)
+		if tuple, ok := p.c.out.Types[arg].(*types.Tuple); ok && tuple.Len() > 1 && call && len(n.Args) == 1 && !n.Ellipsis {
+			values = actual.results
+		}
+		for _, value := range values {
+			formal := p.callParam(fun, len(args), n.Ellipsis)
+			args = append(args, value)
+			argumentNodes = append(argumentNodes, arg)
+			p.inferPermission(formal, value, sub)
+		}
 	}
-	for i, arg := range n.Args {
+	p.functionEvidence(n, p.c.out.FunctionInstances[n], sub)
+	for i, arg := range argumentNodes {
 		formal := p.substitutePermission(p.callParam(fun, i, n.Ellipsis), sub)
 		actual := args[i]
 		if p.nativeScalarArgument(fun, actual, formal) {
@@ -202,12 +203,14 @@ func (p *permissionChecker) checkGenericCall(fun *permission, args []*permission
 	}
 	q := p.substitutePermission(f.typ, inst)
 	oldFile, oldPkg := p.c.file, p.c.pkg
+	oldImpl, oldTrait, oldSelf, oldBounds := p.c.currentImpl, p.c.currentTrait, p.c.currentSelf, p.c.activeBounds
 	oldEnv, oldDeclared, oldResults := p.env, p.declared, p.results
 	oldObserved, oldCaptured, oldEffects := p.observed, p.captured, p.effects
 	oldInstance := p.instance
 	oldAsyncEffects := p.asyncEffects
 	defer func() {
 		p.c.file, p.c.pkg = oldFile, oldPkg
+		p.c.currentImpl, p.c.currentTrait, p.c.currentSelf, p.c.activeBounds = oldImpl, oldTrait, oldSelf, oldBounds
 		p.env, p.declared, p.results = oldEnv, oldDeclared, oldResults
 		p.observed, p.captured, p.effects = oldObserved, oldCaptured, oldEffects
 		p.instance = oldInstance
@@ -216,6 +219,11 @@ func (p *permissionChecker) checkGenericCall(fun *permission, args []*permission
 	p.activeCalls[f.decl] = true
 	defer delete(p.activeCalls, f.decl)
 	p.c.file = f.file
+	p.c.currentImpl, p.c.currentTrait, p.c.currentSelf = nil, nil, nil
+	if member := p.c.memberSymbols[p.c.symbol(f.decl.Name)]; member != nil && member.Impl != nil {
+		p.c.enterImpl(member.Impl)
+	}
+	p.c.activeBounds = p.c.out.GenericBounds[f.decl]
 	for _, pkg := range p.c.out.Resolve.Packages {
 		for _, file := range pkg.Files {
 			if file == f.file {
@@ -282,17 +290,22 @@ func (p *permissionChecker) exprType(node ast.Expr) *permission {
 	return p.fromGo(p.c.out.Types[node])
 }
 
-func (p *permissionChecker) instantiateFunction(fun *permission, args []ast.Expr, t types.Type) *permission {
+func (p *permissionChecker) instantiateFunction(fun *permission, args []ast.Expr, t types.Type, node ast.Node) *permission {
 	sig, ok := fun.typ.(*types.Signature)
-	if !ok || sig.TypeParams().Len() == 0 {
+	if !ok || !p.c.functionGeneric(sig) {
 		return fun
 	}
 	sub := map[*types.TypeParam]*permission{}
-	for i, arg := range args {
-		if i < sig.TypeParams().Len() {
-			sub[sig.TypeParams().At(i)] = p.exprType(arg)
+	for index, position := range p.c.typeArgumentPositions(sig, len(args)) {
+		if index < sig.TypeParams().Len() {
+			sub[sig.TypeParams().At(index)] = p.exprType(args[position])
 		}
 	}
+	return p.instantiatedFunction(fun, t, node, sub)
+}
+
+func (p *permissionChecker) instantiatedFunction(fun *permission, t types.Type, node ast.Node, sub map[*types.TypeParam]*permission) *permission {
+	p.functionEvidence(node, p.c.out.FunctionInstances[node], sub)
 	q := p.substitutePermission(fun, sub)
 	q.typ = t
 	q.instantiated = true
@@ -300,11 +313,58 @@ func (p *permissionChecker) instantiateFunction(fun *permission, args []ast.Expr
 	return q
 }
 
+func (p *permissionChecker) functionEvidence(node ast.Node, instance *FunctionInstance, sub map[*types.TypeParam]*permission) {
+	if instance == nil {
+		return
+	}
+	for i, bound := range p.c.functionBounds[instance.Signature] {
+		if i >= len(instance.Evidence) {
+			continue
+		}
+		witness := instance.Evidence[i]
+		target := p.substitutePermission(p.fromGo(bound.Target), sub)
+		for _, associated := range bound.Trait.Associated {
+			actual := p.evidenceAssociated(witness, associated.Name, target, sub)
+			if actual == nil {
+				continue
+			}
+			if projected := projectedBinding(bound, associated.Name); projected != nil {
+				sub[projected] = actual
+			} else if !p.sameSourcePermissions(actual, p.boundAssociated(bound, associated.Name, sub), map[[2]types.Type]bool{}) {
+				p.c.diag(node, GenericConstraint, "associated reference permissions do not satisfy constraint: "+associated.Name)
+			}
+		}
+	}
+}
+
+func (p *permissionChecker) evidenceAssociated(witness Evidence, name string, target *permission, input map[*types.TypeParam]*permission) *permission {
+	if witness.Impl != nil {
+		sub := map[*types.TypeParam]*permission{}
+		for param, value := range input {
+			sub[param] = value
+		}
+		if witness.Impl.Template != nil && target != nil {
+			p.inferPermission(p.fromGo(witness.Impl.Template.Target), target, sub)
+		}
+		return p.implAssociated(witness.Impl, name, sub)
+	}
+	if witness.Bound != nil {
+		return p.boundAssociated(witness.Bound, name, input)
+	}
+	return nil
+}
+
 func (p *permissionChecker) inferPermission(formal, actual *permission, sub map[*types.TypeParam]*permission) {
 	if formal == nil || actual == nil {
 		return
 	}
-	if tp, ok := formal.typ.(*types.TypeParam); ok {
+	if tp, ok := formal.typ.(*types.TypeParam); ok && !p.c.out.isArray(formal.typ) {
+		// A free parameter in an impl or a constrained method is already fixed.
+		// Borrowing a value of that same parameter does not redefine the type's
+		// capabilities (and must not taint a distinct value returned as Self).
+		if types.Identical(tp, actual.typ) {
+			return
+		}
 		sub[tp] = p.merge(sub[tp], actual)
 		return
 	}
@@ -328,11 +388,18 @@ func (p *permissionChecker) inferPermission(formal, actual *permission, sub map[
 }
 
 func (p *permissionChecker) substitutePermission(q *permission, sub map[*types.TypeParam]*permission) *permission {
+	return p.substitutePermissionActive(q, sub, map[*types.TypeParam]bool{})
+}
+
+func (p *permissionChecker) substitutePermissionActive(q *permission, sub map[*types.TypeParam]*permission, active map[*types.TypeParam]bool) *permission {
 	if q == nil {
 		return nil
 	}
-	if tp, ok := q.typ.(*types.TypeParam); ok && sub[tp] != nil {
-		return sub[tp]
+	if tp, ok := q.typ.(*types.TypeParam); ok && !p.c.out.isArray(q.typ) && q.ref == ValueRef && sub[tp] != nil && sub[tp] != q && !active[tp] {
+		active[tp] = true
+		result := p.substitutePermissionActive(sub[tp], sub, active)
+		delete(active, tp)
+		return result
 	}
 	r := *q
 	typesub := map[*types.TypeParam]types.Type{}
@@ -341,22 +408,22 @@ func (p *permissionChecker) substitutePermission(q *permission, sub map[*types.T
 			typesub[tp] = q.typ
 		}
 	}
-	r.typ = substitute(q.typ, typesub)
-	r.elem, r.key = p.substitutePermission(q.elem, sub), p.substitutePermission(q.key, sub)
-	r.receiver = p.substitutePermission(q.receiver, sub)
+	r.typ = substitute(q.typ, typesub, p.c.out)
+	r.elem, r.key = p.substitutePermissionActive(q.elem, sub, active), p.substitutePermissionActive(q.key, sub, active)
+	r.receiver = p.substitutePermissionActive(q.receiver, sub, active)
 	r.args, r.params, r.results = nil, nil, nil
 	for _, v := range q.args {
-		r.args = append(r.args, p.substitutePermission(v, sub))
+		r.args = append(r.args, p.substitutePermissionActive(v, sub, active))
 	}
 	for _, v := range q.params {
-		r.params = append(r.params, p.substitutePermission(v, sub))
+		r.params = append(r.params, p.substitutePermissionActive(v, sub, active))
 	}
 	for _, v := range q.results {
-		r.results = append(r.results, p.substitutePermission(v, sub))
+		r.results = append(r.results, p.substitutePermissionActive(v, sub, active))
 	}
 	r.fields = map[string]*permission{}
 	for name, v := range q.fields {
-		r.fields[name] = p.substitutePermission(v, sub)
+		r.fields[name] = p.substitutePermissionActive(v, sub, active)
 	}
 	return &r
 }

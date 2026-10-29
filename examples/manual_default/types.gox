@@ -1,4 +1,4 @@
-package main
+package main; use std; use std::PartialEq;
 
 // A channel has no derived Default. The explicit implementation owns it.
 type Settings struct { Port int; Ready chan int }

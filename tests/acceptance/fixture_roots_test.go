@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/paths"
-	testdeps "github.com/hxsf/goxide/tests/testutil"
+	"github.com/goxide-lang/goxide/internal/paths"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
 // These roots are explicit fixture data. Source files still declare every use;
@@ -19,10 +19,6 @@ func acceptanceSerdeRoots() paths.Roots {
 		"fmt":   {PackagePath: "fmt", Source: "toolchain"},
 		"time":  {PackagePath: "time", Source: "toolchain"},
 	}
-}
-
-func compileAcceptanceSerdeFixture(filename string, source []byte) (testdeps.SourceResult, error) {
-	return testdeps.Source(filename, source, acceptanceSerdeRoots())
 }
 
 func writeAcceptanceSerdeRoots(t *testing.T, dir, libraryModule string) {

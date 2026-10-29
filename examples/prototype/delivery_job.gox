@@ -1,4 +1,5 @@
 package main
+use std;
 use serde;
 
 use errors;
@@ -13,14 +14,14 @@ macro_rules! job_event {
     };
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize, std::derive::Clone, std::derive::Debug)]
 enum mode { Immediate, Batch(int), }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::derive::Serialize, serde::derive::Deserialize, std::derive::Clone, std::derive::Debug)]
 #[serde(deny_unknown_fields)]
 type Job struct { Name string; Mode mode; Labels []string }
 
-#[derive(Error)]
+#[derive(std::derive::Error)]
 #[error("job rejected")]
 type JobFailure struct {
     #[from]
@@ -32,7 +33,7 @@ var missingName = errors::New("name is required")
 var exceededLimit = errors::New("batch exceeds available capacity")
 
 func decodeJob(input []byte) Result[Job,error] {
-    job,err:=serdejson::Unmarshal(input,DeserializeJob)
+    job,err:=serdejson::Unmarshal(input,Job::decode)
     if err!=nil { return Result[Job,error]::Err(err) }
     return Result[Job,error]::Ok(job)
 }
@@ -58,10 +59,10 @@ func unitsFor(job Job, limit &int) Result[int,error] {
     panic("unreachable")
 }
 func prepareJob(input []byte, limit &int, enabled bool) Result[Receipt,JobFailure] {
-    job:=decodeJob(input)?
-    name:=requireName(job)?
-    units:=unitsFor(job,limit)?
-    snapshot:=CloneJob(&job)
+    job:=match decodeJob(input) { Result[Job,error]::Ok(value) => value, Result[Job,error]::Err(cause) => { return Result[Receipt,JobFailure]::Err(JobFailure::wrap(cause)) }, }
+    name:=match requireName(job) { Result[string,error]::Ok(value) => value, Result[string,error]::Err(cause) => { return Result[Receipt,JobFailure]::Err(JobFailure::wrap(cause)) }, }
+    units:=match unitsFor(job,limit) { Result[int,error]::Ok(value) => value, Result[int,error]::Err(cause) => { return Result[Receipt,JobFailure]::Err(JobFailure::wrap(cause)) }, }
+    snapshot:=Job::copy(&job)
     job_event!(enabled,snapshot.Name,units)
     return Result[Receipt,JobFailure]::Ok(Receipt{Name:name,Units:units})
 }
@@ -80,4 +81,13 @@ func main() {
     receipt,err:=RunJob([]byte(input),4,true)
     if err!=nil { fmt::Fprintln(os::Stderr,err);os::Exit(1) }
     fmt::Printf("scheduled %s: %d units\n",receipt.Name,receipt.Units)
+}
+
+impl Job {
+    pub func copy(value &Self) Self { return std::Clone::clone(value) }
+    pub func encode(s serde::Serializer, value &Self) error { return serde::Write(s, value) }
+    pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) }
+}
+impl JobFailure {
+    pub func wrap(cause error) Self { return JobFailure::from::<std::From[error]>(cause) }
 }

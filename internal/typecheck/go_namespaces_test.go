@@ -1,14 +1,63 @@
 package typecheck
 
 import (
+	"errors"
+	"fmt"
+	"go/types"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/paths"
-	"github.com/hxsf/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/resolve"
 )
+
+type namespaceLookupImporter struct {
+	pkg *types.Package
+	err error
+}
+
+func (i *namespaceLookupImporter) Import(name string) (*types.Package, error) {
+	if name != i.pkg.Path() {
+		return nil, fmt.Errorf("not a package: %s", name)
+	}
+	return i.pkg, i.err
+}
+
+func (i *namespaceLookupImporter) PackageIndex(string, string) ([]string, error) {
+	return []string{i.pkg.Path()}, nil
+}
+
+func (i *namespaceLookupImporter) PackageOrigin(string) (string, bool, error) {
+	return i.pkg.Path(), false, nil
+}
+
+func TestNamespaceLookupPreservesSelectedPackageError(t *testing.T) {
+	pkg := types.NewPackage("example.test/dependency", "dependency")
+	pkg.Scope().Insert(types.NewVar(0, pkg, "Value", types.Typ[types.Int]))
+	goImports := &namespaceLookupImporter{pkg: pkg}
+	imports := NewNamespaceImporter(goImports, paths.Roots{"dependency": {
+		Source: "module", ModulePath: pkg.Path(), GoPrefix: pkg.Path(),
+	}})
+	root := []string{namespaceRootPrefix, "dependency"}
+	if got := imports.Lookup(root, resolve.Key{Name: "Missing"}); len(got) != 0 || imports.Err() != nil {
+		t.Fatalf("missing member became an import failure: %v, %v", got, imports.Err())
+	}
+	if got := imports.Lookup(append(root, "Missing"), resolve.Key{Name: "Value"}); len(got) != 0 || imports.Err() != nil {
+		t.Fatalf("member path probe became an import failure: %v, %v", got, imports.Err())
+	}
+	want := errors.New("corrupt export data")
+	goImports.err = want
+	if got := imports.Lookup(root, resolve.Key{Name: "Value"}); len(got) != 0 || !errors.Is(imports.Err(), want) {
+		t.Fatalf("selected package lost its import error: %v, %v", got, imports.Err())
+	}
+	goImports.err = errors.New("later import failure")
+	imports.Lookup(root, resolve.Key{Name: "Value"})
+	if !errors.Is(imports.Err(), want) {
+		t.Fatalf("later lookup replaced the first error: %v", imports.Err())
+	}
+}
 
 func TestToolchainPackageTreesAndMembers(t *testing.T) {
 	importer := NewImporter("input.gox", ImporterOptions{Config: testConfig(t, nil)})

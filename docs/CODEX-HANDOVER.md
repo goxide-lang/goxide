@@ -10,17 +10,17 @@ Goxide 是把 `.gox` 转译成普通 Go 的语言：卫生宏、闭合 enum 与 
 
 ## 二、当前进度
 
-已完成：新前端的 `syntax`（token/lexer/ast/parser/printer）、`expand`（宏展开与卫生）、`resolve`（名字解析含卫生上下文）、`check`（穷尽性等六项检查）、`lower`（纯 Go 子集 + enum/match/`?`）。
+当前能力与验证入口统一见[状态表](mvp-gap-audit.md)。新前端、项目/原生 Go 入口、普通 trait 与条件 impl、过程宏执行及正式 std/serde 库接线已实现。本轮 enum 不可变 payload 和固有成员映射已接入；验证状态统一见状态表。
 
 管线：`parser.ParseFile → expand.Expand → resolve.ResolveExpanded → check.Check → lower.Lower`。
 
-分支状态：工作都在 `feat/syntax-frontend` 上，链式包含 `docs/org-transfer-links`、`chore/gate-simplification`。都还没 push。
+分支和工作区状态以接手时的 Git 检查为准，不在交接文档维护提交或分支快照。
 
-剩余阶段见 `docs/pre-mvp-plan.md`：P2 宏接入与派生、P3 引用与投影、P4 trait/impl、P5 最小项目工具链、P6 CLI 切换与删除旧管线、P7 收口。P6 之后再按 `docs/development-plan.md` 的 MVP 阶段重启 workspace、`import-go`、vendor、构建脚本、LSP。
+阶段顺序见 `docs/pre-mvp-plan.md`，先核对当前代码与状态表，保留已完成工作。MVP 顺序为 workspace、import-go、vendor、构建脚本授权、LSP、safe std；未验收部分按当前任务范围完成。
 
 ## 三、怎么工作
 
-每个阶段固定四步：**改规范 → 写提示词 → 一次做完 → 验收提交**。
+每个阶段先核对已确认规范与实际进度，再明确范围、实现并验收；已有决定直接执行。
 
 - **先改规范**。涉及语言语义或表示的，先写进 `docs/design/` 或 RFC。没有规范不要开始写代码，否则你会在实现里发明语义，而语义是这个项目唯一不能自己发明的东西。
 - **一次给足范围**。不要拆成"里程碑交付"。上一个阶段我一度把语言核心拆成三个里程碑，被用户否掉了，理由正当：拆分交付是为了降低模型能力的风险，而这不是风险所在。
@@ -41,6 +41,8 @@ Goxide 是把 `.gox` 转译成普通 Go 的语言：卫生宏、闭合 enum 与 
 
 ## 五、几个已经定死的技术决定
 
+- **enum 槽位与固有方法**：payload 槽不可变，match 仅提供值复制与只读投影；容器按自身权限使用，变量可重绑定。固有值/只读方法在 enum 接口与各变体直接承载原业务体，方法值绑定旧对象；可写固有 self 拒绝。静态成员放 TypeOps carrier，条件成员按 D38 实际需求扁平化。
+- **普通库协议**：std/serde 派生及打印使用正式 proc-macro 库与普通 impl；Default 无专用禁环，Eq 普通 marker，NativeKey 独立承诺原生键语义，Debug 支持 complex。
 - **enum 表示**：密封接口 + 每变体一个指针结构体，标记方法未导出（`is<Enum>`）。跨包闭合靠 Go 自己的规则，**不需要任何元数据**——旧管线那 960 行的 `enum_artifact.go` 和 `enumMetadataVersion = 9` 在新管线里完全不产生、不读取，P6 删掉。详见 `docs/design/enum-representation.md`。
 - **nil 不是合法 enum 值**。每个 `match` 在分派前检查接口，命中即 panic；用户写的 `_` **不兜 nil**。穷尽性由 `check` 保证，不指望 Go 编译器。
 - **match 一次分派**。外层 `case` 一个变体，同一变体内多条 arm 在内层按源码顺序落成 `if / else if / else`。不要回到"先取标签、再分支、再投影"的多段式。

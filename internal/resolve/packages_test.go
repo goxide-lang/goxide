@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/resolve"
 )
 
 type sourceImporter struct {

@@ -82,9 +82,19 @@ func TestSharedIdentity(t *testing.T) {
 				return strings.TrimSpace(output.String())
 			}
 			generated := invoke("transpile")
-			contents, err := os.ReadFile(filepath.Join(generated, "src/lib.go"))
+			libraryFile := "src/lib.go"
+			if choice.kind == "lib" {
+				libraryFile = "src/lib_gox.go"
+			}
+			contents, err := os.ReadFile(filepath.Join(generated, libraryFile))
 			if err != nil {
 				t.Fatal(err)
+			}
+			if choice.kind == "lib" {
+				if !bytes.HasPrefix(contents, []byte(generatedHeader)) {
+					t.Fatal("library export lacks generated marker")
+				}
+				contents = bytes.TrimPrefix(contents, []byte(generatedHeader))
 			}
 			if libraryBytes == nil {
 				libraryBytes = contents

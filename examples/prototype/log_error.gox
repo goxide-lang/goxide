@@ -1,4 +1,4 @@
-package main
+package main; use std; use std::PartialEq;
 
 use errors;
 use fmt;
@@ -9,7 +9,7 @@ macro_rules! event {
     ($message:expr, $($field:expr),*) => { slog::Info($message, $($field),*) };
 }
 
-#[derive(Error)]
+#[derive(std::derive::Error)]
 #[error("request failed")]
 type RequestError struct {
     #[from]
@@ -24,7 +24,11 @@ func main() {
         },
     })))
     cause := errors::New("connection reset")
-    err := FromRequestError(cause)
+    err := RequestError::wrap(cause)
     event!("request", "request_id", 7, "error", err.Error())
     fmt::Println("cause preserved:", errors::Is(err, cause))
+}
+
+impl RequestError {
+ pub func wrap(cause error) Self { return RequestError::from::<std::From[error]>(cause) }
 }

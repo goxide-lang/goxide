@@ -15,7 +15,7 @@ Identity(E[T]) = (定义包, enum 声明, T)
 ⟦E[T]::V(values)⟧ = &V[T]{对应字段: values}
 ```
 
-Go 输出中 `E[T]` 是含未导出标记方法的接口；`*V[T]` 实现该方法并携带 enum 的全部类型参数。普通赋值复制接口并共享变体对象；整体替换 owner 后，旧 payload 引用继续指向旧对象。
+Go 输出中 `E[T]` 是含未导出标记方法的接口；`*V[T]` 实现该方法并携带 enum 的全部类型参数。普通赋值复制接口并共享变体对象；payload 槽位不可变，整体替换 owner 后，旧只读投影与固有方法值继续指向旧对象。容器 payload 按自身权限使用，详见[引用合同](../design/enum-payload-borrows.md)。
 
 ```text
 ValidDispatchE(v) = 非 nil 接口 ∧ 动态类型为合法 *V ∧ 变体指针非 nil
@@ -24,6 +24,8 @@ nil 字面量进入 enum 类型位置 → check 诊断
 ```
 
 合法性检查局限于正在分派的 enum；嵌套变体模式触发内层分派，单纯绑定 payload 不递归验证。当前 `Option` / `Result` 仍使用已发布 `std/sum` 的 tagged struct 与原位槽 API；`None` 和 `Some(nil)` 不同，Option 不做指针特化。两种实际表示及未来统一阶段见[能力状态表](../mvp-gap-audit.md)。
+
+比较使用普通 `std::PartialEq` / `std::Eq` trait 和 impl；`Eq` 是依赖 `PartialEq` 的显式语义承诺，不产生方法或编译器专用资格记录。`std::NativeKey` 另行承诺原生 Go map 查找与该类型的相等语义一致，不能从 `Eq` 自动推出。导入具名类型按可达的普通 impl 求解；当前编译器不产生或读取 enum/equality metadata。派生、容器比较及键约束见 [RFC 0031](0031-generic-protocol-impls.md)。
 
 ## 历史方案与讨论
 
@@ -149,7 +151,7 @@ Go 调用生成包时仍使用普通 Go 类型与工具链；goxide 不向第三
 
 ### 验收与未定项
 
-当前真实验收：[enum_wire业务](../../examples/enum_wire/main.gox)与[独立测试](../../tests/acceptance/enum_wire_test.go)，包含安装CLI、Go双向调用、known往返、unknown错误先于业务。旧raw语法是前端拒绝例；数值映射不是任意Go强转。下列未实现的完整范围仍需独立验证。
+当前真实验收：[enum_wire业务](../../examples/enum_wire/project/main.gox)与[独立测试](../../tests/acceptance/enum_wire_test.go)，包含安装CLI、Go双向调用、known往返、unknown错误先于业务。旧raw语法是前端拒绝例；数值映射不是任意Go强转。下列未实现的完整范围仍需独立验证。
 
 1. 正例 E01、E02 保留类型参数、变体及嵌套层级；E03 在 goxide 阶段拒绝。
 2. E04 对规范标量 case 通过，对 nil、指针 case 和嵌入伪造值拒绝。
@@ -196,7 +198,7 @@ PartialEq 按字段/元素递归比较；enum 先验证左参数、再验证右�
 
 goxide 中两个已知 enum 的直接 `==`/`!=` 给出使用显式 equals 的诊断；现有 enum 与 nil 比较保留。已知包含不可比 enum 载荷的 struct/array、混合 interface 比较、switch tag/case 和原生 map 键使用也在编译期拒绝，含 map[any] 的已知 enum key 及 builtin delete。只按实际类型处理已知 enum，不做全程序 interface/alias 风险分析；普通原生 Go 文件与无 enum 的 Go 比较不受此检查影响。安全载荷的既有 Go map key、expression switch 规则未扩大新许可，Eq 不自动赋予 Go map key 资格；对 nil 与其他隐式比较的最终协议边界仍单列。
 
-enum metadata **v3** 记录 Equality：真实目标身份、helper 与 Eq 标记；存在记录即明确 PartialEq。equality-only 包也生成产物，透明 alias 核对定义包记录与 `(T,T) bool` 实际签名，防止 relay 伪升 Eq。支持跨模块调用与消费者派生组合已登记字段；这是 equality 专用能力，不表示其他 derive 均已跨包实现。当前导出以公开 canonical 类型为界，私有 canonical 的公开 alias 尚未复出 equality 协议。
+历史 enum metadata **v3** 曾记录 Equality：真实目标身份、helper 与 Eq 标记；当时的 equality-only 包也生成产物，透明 alias 核对定义包记录与 `(T,T) bool` 实际签名，导出范围限于公开 canonical 类型。该记录属于已删除的旧管线；当前跨包比较和派生按本文开头的普通 trait/impl 合同处理，不恢复此 metadata 协议或其公开 alias 限制。
 
 [真实模块验收](../../tests/acceptance/equality_test.go)验证 NaN、变体/递归字段、array、上下文大整数、`?`、全局初始化、调用遮蔽、参数求值及左右非法值顺序、别名与普通 Go helper 消费。blank/embedded 字段的 struct 派生、builtin Option/Result 的条件泛型比较协议、slice/map 内容相等及 nil/空规则、pointer/chan/interface 自动协议、手写权限入口、Hash/HashMap 均未实现，不由本片自动延期。
 
@@ -206,7 +208,7 @@ enum metadata **v3** 记录 Equality：真实目标身份、helper 与 Eq 标记
 
 按 D33/D34 扩展显式派生到 slice/map 及其有限嵌套：先区分 nil 与非 nil，再比较长度、元素或键对应的值。两个 nil 相等；非 nil 空值相等；nil 与非 nil 空值不相等。数组仍没有 nil。递归调用已登记元素/值协议，float/complex 仅允许 PartialEq，不使用 reflect.DeepEqual，也不按相同容器地址跳过内容（否则 NaN 语义会被改变）。map 查找必须同时检查键是否存在，缺失键不能与零值混淆。
 
-map 首片键需静态证明原生 Go 查找与比较语义一致：基础 bool/integer/string、其透明 alias，以及可递归证明的有限结构/数组；本地显式派生具名键还需验证其结构。导入 equality metadata 目前只有 helper 签名/Eq 资格，未携带原生键一致性证明；导入具名键暂拒绝，透明 builtin alias 不受此限制。float/complex、interface、pointer/chan、enum 或只有未知语义 helper 的键不能通过。Eq 仍不赋予任意类型原生 map key 资格；不实现 HashMap 或手写键适配。
+旧管线首片 map 键证明限于基础 bool/integer/string、透明 alias、有限结构/数组和本地派生具名键；当时 equality metadata 不携带原生键一致性证据，因而拒绝导入具名键。当前这一限制已由普通 `NativeKey` trait/impl 合同替代：基础及组合类型按库 impl 求解，导入具名键可提供显式实现；`Eq` 本身仍不赋予原生 map key 资格。此处的旧白名单不再作为当前编译器规则，也不代表已实现 HashMap。
 
 struct 依字段顺序、slice/array 依索引短路；map 依 Go 未指定的迭代顺序逐键查找并短路，不承诺不同键之间的校验顺序。两个用户实参先求值，再进入 helper。访问到 enum 值时沿现有 validator 左后右；不为普通 struct/container 增加全值预扫描。外层 enum 则仍先校验两侧，再比较活跃载荷；为容器载荷补全有限 array/slice/map 的递归 enum validator，非法 nil/typed-nil/伪造值不会参与原生 interface 内容比较。
 

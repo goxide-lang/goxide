@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/hxsf/goxide/internal/project"
+	"github.com/goxide-lang/goxide/internal/project"
 	"github.com/pelletier/go-toml/v2"
 	"os"
 	"os/exec"
@@ -41,18 +41,6 @@ func manifestJSON(s string) string {
 		panic(e)
 	}
 	return string(b)
-}
-func decodeManifestFixture(b []byte, m *map[string]any) error {
-	if e := toml.Unmarshal(b, m); e != nil {
-		return e
-	}
-	for a, b := range map[string]string{"bin": "bins", "example": "examples"} {
-		if v, ok := (*m)[a]; ok {
-			(*m)[b] = v
-			delete(*m, a)
-		}
-	}
-	return nil
 }
 
 // Fixture builders combine native module identity with the project fields.

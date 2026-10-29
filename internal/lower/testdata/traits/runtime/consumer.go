@@ -10,7 +10,7 @@ func main() {
 	fmt.Println(model.Selection())
 	fmt.Println(model.Conversions())
 	fmt.Println(model.ReceiverOnce(), model.QualifiedFlow(), model.BuildTransformed[model.Cell]().Value)
-	value := model.NewCounter(4)
+	value := (model.CounterOps{}).New(4)
 	copyView := model.AsCounterScore(value)
 	readView := model.AsCounterInspect(&value)
 	writeView := value.AsAdjust()

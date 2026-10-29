@@ -1,4 +1,0 @@
-package p
-var copy=func([]int,[]int)int{return 9}
-macro_rules! transfer {($dst:expr,$src:expr)=>{copy($dst,$src)};}
-func run(){_=transfer!([]int{},[]int{})}

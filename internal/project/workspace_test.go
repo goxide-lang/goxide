@@ -18,7 +18,7 @@ func wsWrite(t *testing.T, root, path, body string) {
 	}
 }
 func TestWorkspaceExplicitInheritance(t *testing.T) {
-	root := t.TempDir()
+	root := sourceTempDir(t)
 	wsWrite(t, root, "goxide.toml", `[workspace]
 members=["app"]
 [workspace.go_mod]
@@ -55,7 +55,7 @@ lib={workspace=true,features=["extra"]}
 	}
 }
 func TestWorkspaceNoImplicitInheritance(t *testing.T) {
-	root := t.TempDir()
+	root := sourceTempDir(t)
 	wsWrite(t, root, "goxide.toml", `[workspace]
 members=["app"]
 [workspace.dependencies]
@@ -84,7 +84,7 @@ func TestWorkspaceStrictBoundaries(t *testing.T) {
 		{"nested", "[workspace]\nmembers=[\"nested/app\"]\n", "", "nested", "another workspace"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			root := t.TempDir()
+			root := sourceTempDir(t)
 			wsWrite(t, root, "goxide.toml", tc.root)
 			manifest := "[go_mod]\nmodule=\"example.org/app\"\ngo=\"1.27\"\n" + tc.member
 			wsWrite(t, root, "app/goxide.toml", manifest)
@@ -97,7 +97,7 @@ func TestWorkspaceStrictBoundaries(t *testing.T) {
 			}
 		})
 	}
-	root := t.TempDir()
+	root := sourceTempDir(t)
 	wsWrite(t, root, "goxide.toml", "[workspace]\nmembers=[\"app\"]\n")
 	wsWrite(t, root, "app/goxide.toml", "[go_mod]\nmodule=\"example.org/app\"\ngo=\"1.27\"\n")
 	w, e := DiscoverWorkspace(root)
@@ -117,7 +117,7 @@ func TestWorkspaceStrictBoundaries(t *testing.T) {
 }
 
 func TestWorkspaceMembersShareLease(t *testing.T) {
-	root := t.TempDir()
+	root := sourceTempDir(t)
 	wsWrite(t, root, "goxide.toml", "[workspace]\nmembers=[\"a\",\"b\"]\n")
 	for _, name := range []string{"a", "b"} {
 		wsWrite(t, root, name+"/goxide.toml", "[go_mod]\nmodule=\"example.org/"+name+"\"\ngo=\"1.27\"\n")
@@ -159,7 +159,7 @@ func TestWorkspaceOwnerCannotCollideWithModule(t *testing.T) {
 }
 
 func TestWorkspaceSourceIdentityPrecedesGoProjection(t *testing.T) {
-	root := t.TempDir()
+	root := sourceTempDir(t)
 	wsWrite(t, root, "goxide.toml", "[workspace]\nmembers=[\"app\",\"other\"]\n")
 	for _, dir := range []string{"app", "other"} {
 		wsWrite(t, root, dir+"/goxide.toml", "[go_mod]\nmodule=\"example.org/shared\"\ngo=\"1.27\"\n")

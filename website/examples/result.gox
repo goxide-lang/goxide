@@ -3,8 +3,9 @@ package main
 use errors;
 use fmt;
 use strconv;
+use std;
 
-#[derive(Error)]
+#[derive(std::derive::Error)]
 #[error("invalid port")]
 type PortError struct {
     #[from]
@@ -18,10 +19,13 @@ func parsePort(text string) Result[int,error] {
     return Result::Ok(n)
 }
 
-// The registered error -> PortError conversion runs only on Err.
+// The explicit From protocol call runs only on Err.
 // The success type changes from int to string.
 func nextPort(text string) Result[string,PortError] {
-    n := parsePort(text)?
+    n := match parsePort(text) {
+        Result::Ok(value) => value,
+        Result::Err(cause) => { return Result::Err(PortError::from::<std::From[error]>(cause)) },
+    }
     return Result::Ok(strconv::Itoa(n + 1))
 }
 

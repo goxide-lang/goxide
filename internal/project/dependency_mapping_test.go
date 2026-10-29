@@ -127,7 +127,7 @@ missing = ["dep:missing"]
 func TestDependencyRootsWorkspaceInheritance(t *testing.T) {
 	for _, override := range []string{"", "module='example.org/other'", "go = 'fmt'"} {
 		t.Run(override, func(t *testing.T) {
-			root := t.TempDir()
+			root := sourceTempDir(t)
 			wsWrite(t, root, ManifestName, `[workspace]
 members=["app"]
 [workspace.dependencies.serde]

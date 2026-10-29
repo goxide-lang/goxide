@@ -3,15 +3,17 @@ package main
 use fmt;
 use strconv as util;
 use serde::json as serdejson;
+use serde;
+use std;
 
 func main() {
     item := Item{Value: 21}
-    data, err := serdejson::Marshal(&item, SerializeItem)
+    data, err := serdejson::Marshal(&item, serde::Write[Item])
     if err != nil { panic(err) }
-    item, err = serdejson::Unmarshal(data, DeserializeItem)
+    item, err = serdejson::Unmarshal(data, serde::Read[Item])
     if err != nil { panic(err) }
-    copy := CloneItem(&item)
-    fmt::Println(util::Itoa(twice!(copy.Value)), title(), DebugItem(&copy))
+    copy := std::Clone::clone(&item)
+    fmt::Println(util::Itoa(twice!(copy.Value)), title(), std::Debug::debug(&copy))
     direct := User::Abc()
     generic := Make[User]()
     fmt::Println(direct.Name, generic.Name)

@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/hxsf/goxide/internal/naming"
+	"github.com/goxide-lang/goxide/internal/naming"
 	"io"
 	"io/fs"
 	"os"
@@ -16,8 +16,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/paths"
-	"github.com/hxsf/goxide/internal/project"
+	"github.com/goxide-lang/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/project"
 )
 
 func digest(v any) string {

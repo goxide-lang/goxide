@@ -2,13 +2,11 @@ package check
 
 import (
 	"fmt"
-	"go/token"
 	"go/types"
-	"strconv"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/resolve"
-	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 var anyType = types.NewInterfaceType(nil, nil).Complete()
@@ -41,23 +39,73 @@ func (c *checker) enumNames() {
 	}
 }
 
-func (c *checker) builtinEnums() {
-	p := types.NewPackage("github.com/goxide-lang/std/sum", "sum")
+func (c *checker) builtinEnums(standalone bool) {
+	const path = "github.com/goxide-lang/std/sum"
+	var p *types.Package
+	var importErr error
+	if standalone {
+		// Check without an importer is the isolated, in-memory checking mode.
+		p = types.NewPackage(path, "sum")
+	} else {
+		p, importErr = c.importer.Import(path)
+	}
+	c.builtinErrors = make(map[string]error)
 	for _, name := range []string{"Option", "Result"} {
-		n := types.NewNamed(types.NewTypeName(0, p, name, nil), types.NewStruct(nil, nil), nil)
-		params := []*types.TypeParam{types.NewTypeParam(types.NewTypeName(0, p, "T", nil), anyType)}
-		if name == "Result" {
-			params = append(params, types.NewTypeParam(types.NewTypeName(0, p, "E", nil), anyType))
+		if importErr != nil {
+			c.builtinErrors[name] = fmt.Errorf("import %q: %w", path, importErr)
+			continue
 		}
-		n.SetTypeParams(params)
-		e := &Enum{Name: name, GoName: name, Type: n, Builtin: true}
+		count := 1
+		if name == "Result" {
+			count = 2
+		}
+		var n *types.Named
+		if standalone {
+			n = types.NewNamed(types.NewTypeName(0, p, name, nil), types.NewStruct(nil, nil), nil)
+			params := []*types.TypeParam{types.NewTypeParam(types.NewTypeName(0, p, "T", nil), anyType)}
+			if count == 2 {
+				params = append(params, types.NewTypeParam(types.NewTypeName(0, p, "E", nil), anyType))
+			}
+			n.SetTypeParams(params)
+		} else if object, ok := p.Scope().Lookup(name).(*types.TypeName); ok {
+			n, _ = types.Unalias(object.Type()).(*types.Named)
+		}
+		if n == nil || n.TypeParams().Len() != count {
+			c.builtinErrors[name] = fmt.Errorf("%s.%s must be a named type with %d type parameters", path, name, count)
+			continue
+		}
+		params := n.TypeParams()
+		e := &Enum{info: c.out, Name: name, GoName: name, Type: n, Builtin: true}
 		if name == "Option" {
-			e.Variants = []*Variant{{Name: "None", GoName: "None"}, {Name: "Some", GoName: "Some", Fields: []Field{{Name: "Value", GoName: "Value", Type: params[0]}}}}
+			e.Variants = []*Variant{{Name: "None", GoName: "None"}, {Name: "Some", GoName: "Some", Fields: []Field{{Name: "Value", GoName: "Value", Type: params.At(0)}}}}
 		} else {
-			e.Variants = []*Variant{{Name: "Ok", GoName: "Ok", Fields: []Field{{Name: "Value", GoName: "Value", Type: params[0]}}}, {Name: "Err", GoName: "Err", Fields: []Field{{Name: "Value", GoName: "Value", Type: params[1]}}}}
+			e.Variants = []*Variant{{Name: "Ok", GoName: "Ok", Fields: []Field{{Name: "Value", GoName: "Value", Type: params.At(0)}}}, {Name: "Err", GoName: "Err", Fields: []Field{{Name: "Value", GoName: "Value", Type: params.At(1)}}}}
 		}
 		c.builtins[name], c.out.enums[n] = e, e
 	}
+}
+
+func (c *checker) builtinEnum(name string) *Enum {
+	if name != "Option" && name != "Result" {
+		return nil
+	}
+	if c.builtinErrors == nil {
+		c.builtinEnums(c.standalone)
+	}
+	if err := c.builtinErrors[name]; err != nil {
+		c.diag(c.file.AST, "go-import", err.Error())
+	}
+	return c.builtins[name]
+}
+
+// Native signatures may introduce Option/Result without a source type name.
+func (c *checker) enumOf(t types.Type) *Instance {
+	if t != nil {
+		if named, ok := types.Unalias(t).(*types.Named); ok && named.Obj().Pkg() != nil && named.Obj().Pkg().Path() == "github.com/goxide-lang/std/sum" {
+			c.builtinEnum(named.Obj().Name())
+		}
+	}
+	return c.out.EnumOf(t)
 }
 
 func (c *checker) collect(items []ast.Item) {
@@ -71,15 +119,26 @@ func (c *checker) collect(items []ast.Item) {
 			marker := types.NewFunc(0, c.pkg, "is"+n.Name.Name, types.NewSignatureType(nil, nil, nil, nil, nil, false))
 			t := types.NewNamed(types.NewTypeName(0, c.pkg, s.GoName, nil), types.NewInterfaceType([]*types.Func{marker}, nil).Complete(), nil)
 			c.named[s], c.out.Symbols[s] = t, t
-			e := &Enum{Name: n.Name.Name, GoName: s.GoName, Decl: n, Type: t}
+			e := &Enum{info: c.out, Name: n.Name.Name, GoName: s.GoName, Decl: n, Type: t}
 			c.out.Enums[n], c.out.enums[t] = e, e
 		case *ast.TypeDecl:
 			if n.Grouped {
 				for _, s := range n.Specs {
-					c.collectType(s.Name, s.Type, s.Alias)
+					c.collectType(s.Name, s.Type, s.Generics, s.Alias)
 				}
 			} else {
-				c.collectType(n.Name, n.Type, n.Alias)
+				c.collectType(n.Name, n.Type, n.Generics, n.Alias)
+			}
+		case *ast.ConstDecl:
+			for _, spec := range n.Specs {
+				for index, name := range spec.Names {
+					if symbol := c.symbol(name); symbol != nil && index < len(spec.Values) {
+						c.sourceValues[symbol] = sourceExpression{file: c.file, node: spec.Values[index]}
+						if spec.Type != nil {
+							c.sourceTypes[symbol] = permissionDeclaration{c.file, spec.Type}
+						}
+					}
+				}
 			}
 		case *ast.TraitDecl:
 			c.collectTrait(n)
@@ -94,17 +153,18 @@ func (c *checker) collect(items []ast.Item) {
 type typeDeclaration struct {
 	file                     *resolve.File
 	node                     ast.Type
+	generics                 *ast.GenericParams
 	alias, defining, defined bool
 }
 
-func (c *checker) collectType(id *ast.Ident, t ast.Type, alias bool) {
+func (c *checker) collectType(id *ast.Ident, t ast.Type, generics *ast.GenericParams, alias bool) {
 	s := c.symbol(id)
 	if s == nil {
 		return
 	}
 	n := types.NewNamed(types.NewTypeName(0, c.pkg, s.GoName, nil), types.Typ[types.Invalid], nil)
 	c.named[s], c.out.Symbols[s] = n, n
-	c.declarations[s] = &typeDeclaration{file: c.file, node: t, alias: alias}
+	c.declarations[s] = &typeDeclaration{file: c.file, node: t, generics: generics, alias: alias}
 }
 
 func (c *checker) params(g *ast.GenericParams) []*types.TypeParam {
@@ -113,6 +173,10 @@ func (c *checker) params(g *ast.GenericParams) []*types.TypeParam {
 	}
 	var out []*types.TypeParam
 	for _, p := range g.Params {
+		if p.Const {
+			c.diag(p, GenericConstraint, "const parameters are only supported on functions and impls")
+			continue
+		}
 		for _, name := range p.Names {
 			t := types.NewTypeParam(types.NewTypeName(0, c.pkg, name.Name, nil), anyType)
 			if s := c.symbol(name); s != nil {
@@ -123,8 +187,11 @@ func (c *checker) params(g *ast.GenericParams) []*types.TypeParam {
 	}
 	i := 0
 	for _, p := range g.Params {
+		if p.Const {
+			continue
+		}
 		for range p.Names {
-			if p.Constraint != nil {
+			if p.Constraint != nil && c.declarationEvidenceReady(p.Constraint) {
 				out[i].SetConstraint(c.typ(p.Constraint))
 			}
 			i++
@@ -167,8 +234,28 @@ func (c *checker) prepareGenerics(items []ast.Item) {
 
 func (c *checker) signatures(items []ast.Item) {
 	for _, item := range items {
+		if function, ok := item.(*ast.FuncDecl); ok {
+			if c.signaturePhase == 1 && len(function.Recv) == 0 || c.signaturePhase == 2 && len(function.Recv) != 0 {
+				continue
+			}
+		}
+		if c.signaturePhase == 2 {
+			if _, enum := item.(*ast.EnumDecl); enum {
+				continue
+			}
+		}
+		if c.signaturePhase == 1 {
+			switch item.(type) {
+			case *ast.TypeDecl, *ast.EnumDecl, *ast.FuncDecl:
+				if c.signatureNeedsEvidence(item, map[*resolve.Symbol]bool{}) {
+					c.pendingDeclarations = append(c.pendingDeclarations, pendingDeclaration{item, c.file, c.pkg})
+					continue
+				}
+			}
+		}
 		switch n := item.(type) {
 		case *ast.EnumDecl:
+			c.completeGenericConstraints(n.Generics)
 			e := c.out.Enums[n]
 			if e == nil {
 				continue
@@ -201,7 +288,7 @@ func (c *checker) signatures(items []ast.Item) {
 				}
 				e.Variants = append(e.Variants, variant)
 				if s := c.symbol(v.Name); s != nil {
-					c.variants[s] = &Constructor{Enum: c.out.EnumOf(e.Type), Variant: variant}
+					c.variants[s] = &Constructor{Enum: c.enumOf(e.Type), Variant: variant}
 				}
 			}
 		case *ast.TypeDecl:
@@ -213,10 +300,21 @@ func (c *checker) signatures(items []ast.Item) {
 				c.typeSignature(n.Name, n.Type, n.Generics, n.Alias)
 			}
 		case *ast.FuncDecl:
+			previousState := c.caseState
+			state := &bodyCaseState{}
+			c.caseState = state
 			c.receiverParams(n.Recv)
 			params := c.functionParams(n)
+			oldBounds := c.activeBounds
+			c.activeBounds = c.out.GenericBounds[n]
 			sig := types.NewSignatureType(nil, nil, params, c.tuple(n.Params), c.tuple(n.Results), len(n.Params) > 0 && n.Params[len(n.Params)-1].Variadic)
 			c.functionBounds[sig] = c.out.GenericBounds[n]
+			if c.caseFunctions == nil {
+				c.caseFunctions = map[*types.Signature]caseFunction{}
+			}
+			c.caseFunctions[sig] = caseFunction{declaration: n, file: c.file, pkg: c.pkg}
+			c.out.FunctionConstParams[sig] = c.constParameters(n.Generics)
+			c.out.FunctionGenerics[sig] = n.Generics
 			if s := c.symbol(n.Name); s != nil {
 				c.out.Symbols[s] = sig
 			}
@@ -228,8 +326,18 @@ func (c *checker) signatures(items []ast.Item) {
 				}
 				if named, ok := base.(*types.Named); ok {
 					method := types.NewSignatureType(types.NewVar(0, c.pkg, "", recv), nil, nil, sig.Params(), sig.Results(), sig.Variadic())
-					named.Origin().AddMethod(types.NewFunc(0, c.pkg, n.Name.Name, method))
+					object := types.NewFunc(0, c.pkg, n.Name.Name, method)
+					c.declareGoMember(object, n.Name)
+					named.Origin().AddMethod(object)
 				}
+			}
+			c.activeBounds = oldBounds
+			c.caseState = previousState
+			if len(state.choices) != 0 {
+				if c.signatureCases == nil {
+					c.signatureCases = map[*ast.FuncDecl]*bodyCaseState{}
+				}
+				c.signatureCases[n] = state
 			}
 		case *ast.ModDecl:
 			c.signatures(n.Items)
@@ -272,6 +380,7 @@ func (c *checker) receiverParams(params []*ast.Param) {
 }
 
 func (c *checker) typeSignature(name *ast.Ident, t ast.Type, g *ast.GenericParams, alias bool) {
+	c.completeGenericConstraints(g)
 	s := c.symbol(name)
 	c.defineType(s)
 }
@@ -281,9 +390,13 @@ func (c *checker) defineType(s *resolve.Symbol) {
 	if decl == nil || decl.defined || decl.defining {
 		return
 	}
-	decl.defining = true
 	oldFile, oldPkg := c.file, c.pkg
 	c.file = decl.file
+	if !c.declarationEvidenceReady(decl.node) || decl.generics != nil && !c.declarationEvidenceReady(decl.generics) {
+		c.file = oldFile
+		return
+	}
+	decl.defining = true
 	n := c.named[s]
 	if n == nil {
 		return
@@ -300,9 +413,9 @@ func (c *checker) defineType(s *resolve.Symbol) {
 			sub[old] = param
 		}
 		for i, param := range params {
-			param.SetConstraint(substitute(n.TypeParams().At(i).Constraint(), sub))
+			param.SetConstraint(substitute(n.TypeParams().At(i).Constraint(), sub, c.out))
 		}
-		alias := types.NewAlias(types.NewTypeName(0, c.pkg, s.GoName, nil), substitute(underlying, sub))
+		alias := types.NewAlias(types.NewTypeName(0, c.pkg, s.GoName, nil), substitute(underlying, sub, c.out))
 		alias.SetTypeParams(params)
 		c.out.Symbols[s] = alias
 	} else if valid(underlying) {
@@ -333,12 +446,19 @@ func (c *checker) tuple(params []*ast.Param) *types.Tuple {
 	return types.NewTuple(vars...)
 }
 
-func (c *checker) typ(node ast.Type) types.Type {
+func (c *checker) typ(node ast.Type) (result types.Type) {
 	if node == nil {
 		return types.Typ[types.Invalid]
 	}
+	defer func() {
+		if c.currentImpl == nil || c.currentImpl.Template == nil {
+			c.out.typeNodes[node] = result
+		}
+	}()
 	if t, ok := c.traitType(node); ok {
-		c.out.TypeOverrides[node] = t
+		if c.currentImpl == nil || c.currentImpl.Template == nil {
+			c.out.TypeOverrides[node] = t
+		}
 		return t
 	}
 	switch n := node.(type) {
@@ -351,11 +471,18 @@ func (c *checker) typ(node ast.Type) types.Type {
 	case *ast.SliceType:
 		return types.NewSlice(c.typ(n.Elem))
 	case *ast.ArrayType:
-		var size int64
-		if lit, ok := n.Len.(*ast.BasicLit); ok {
-			size, _ = strconv.ParseInt(lit.Value, 0, 64)
+		if n.Ellipsis {
+			if known := c.out.typeNodes[n]; valid(known) {
+				return known
+			}
+			c.diag(n, GenericConstraint, "an inferred array length requires a composite literal")
+			return types.Typ[types.Invalid]
 		}
-		return types.NewArray(c.typ(n.Elem), size)
+		length, ok := c.constantLength(n.Len, true)
+		if !ok {
+			return types.Typ[types.Invalid]
+		}
+		return c.out.ArrayType(c.typ(n.Elem), length)
 	case *ast.MapType:
 		return types.NewMap(c.typ(n.Key), c.typ(n.Value))
 	case *ast.ChanType:
@@ -369,16 +496,16 @@ func (c *checker) typ(node ast.Type) types.Type {
 		for _, f := range n.Fields {
 			t := c.typ(f.Type)
 			if len(f.Names) == 0 {
-				base := types.Unalias(t)
-				if pointer, ok := base.(*types.Pointer); ok {
-					base = types.Unalias(pointer.Elem())
-				}
-				if named, ok := base.(*types.Named); ok {
-					fields = append(fields, types.NewField(0, c.pkg, named.Obj().Name(), t, true))
+				if id := embeddedMemberIdent(f.Type); id != nil {
+					field := types.NewField(0, c.pkg, id.Name, t, true)
+					c.declareGoMember(field, id)
+					fields = append(fields, field)
 				}
 			}
 			for _, id := range f.Names {
-				fields = append(fields, types.NewField(0, c.pkg, id.Name, t, false))
+				field := types.NewField(0, c.pkg, id.Name, t, false)
+				c.declareGoMember(field, id)
+				fields = append(fields, field)
 			}
 		}
 		return types.NewStruct(fields, nil)
@@ -387,11 +514,14 @@ func (c *checker) typ(node ast.Type) types.Type {
 		var embeds []types.Type
 		for _, m := range n.Methods {
 			if m.Name != nil {
-				methods = append(methods, types.NewFunc(0, c.pkg, m.Name.Name, types.NewSignatureType(nil, nil, nil, c.tuple(m.Params), c.tuple(m.Results), false)))
+				method := types.NewFunc(0, c.pkg, m.Name.Name, types.NewSignatureType(nil, nil, nil, c.tuple(m.Params), c.tuple(m.Results), false))
+				c.declareGoMember(method, m.Name)
+				methods = append(methods, method)
 			} else if m.Type != nil {
 				embeds = append(embeds, c.typ(m.Type))
 			}
 		}
+		c.validateSymbolicInterface(n, methods, embeds)
 		return types.NewInterfaceType(methods, embeds).Complete()
 	case *ast.UnionType:
 		var terms []*types.Term
@@ -425,15 +555,15 @@ func (c *checker) symbolType(s *resolve.Symbol) types.Type {
 		return t
 	}
 	if s.Decl.File == "" && len(s.Target) == 0 {
-		if e := c.builtins[s.Name.Name]; e != nil {
+		if e := c.builtinEnum(s.Name.Name); e != nil {
 			return e.Type
 		}
 		if obj := types.Universe.Lookup(s.GoName); obj != nil {
 			return obj.Type()
 		}
 	}
-	if len(s.Target) >= 2 {
-		return c.importedType(s.Target, s.GoName)
+	if len(s.Target) >= 2 && s.Kind != resolve.Import && s.Kind != resolve.Module {
+		return c.importedType(s.Target, s.GoName, true)
 	}
 	return types.Typ[types.Invalid]
 }
@@ -470,7 +600,7 @@ type genericInstance struct {
 }
 
 func (c *checker) validateInstance(i genericInstance) {
-	_, err := types.Instantiate(nil, i.typ, i.actual, true)
+	_, err := c.instantiateGo(i.typ, i.actual)
 	if err == nil {
 		return
 	}
@@ -485,12 +615,12 @@ func (c *checker) validateInstance(i genericInstance) {
 }
 
 func (c *checker) instantiate(t types.Type, args *ast.GenericArgs) types.Type {
+	if sig, ok := t.(*types.Signature); ok {
+		return c.explicitFunctionArguments(sig, args)
+	}
 	actual := make([]types.Type, 0, len(args.Args))
 	for _, a := range args.Args {
-		actual = append(actual, c.typ(a.Type))
-	}
-	if sig, ok := t.(*types.Signature); ok {
-		return c.instantiateFunctionType(sig, actual, args)
+		actual = append(actual, c.genericArgType(a))
 	}
 	if !valid(t) {
 		return t
@@ -539,10 +669,11 @@ func (c *checker) importType(path *ast.Path) types.Type {
 	if res.Symbol != nil && res.Symbol.Kind != resolve.Import && res.Symbol.Kind != resolve.Module {
 		name = res.Symbol.GoName
 	}
-	return c.importedType(parts, name)
+	required := !res.Deferred && res.Symbol != nil && len(res.Symbol.Target) >= 2 && res.Symbol.Kind != resolve.Import && res.Symbol.Kind != resolve.Module
+	return c.importedType(parts, name, required)
 }
 
-func (c *checker) importedType(parts []string, name string) types.Type {
+func (c *checker) importedType(parts []string, name string, required bool) types.Type {
 	if len(parts) < 2 {
 		return types.Typ[types.Invalid]
 	}
@@ -551,68 +682,39 @@ func (c *checker) importedType(parts []string, name string) types.Type {
 	}
 	prefix := strings.Join(parts[:len(parts)-1], "/")
 	if prefix == "std/sum" || prefix == "github.com/goxide-lang/std/sum" {
-		if e := c.builtins[name]; e != nil {
+		if e := c.builtinEnum(name); e != nil {
 			return e.Type
 		}
 	}
-	p := c.imported[prefix]
-	if p == nil {
-		var err error
-		p, err = c.importer.Import(prefix)
-		if err != nil {
-			return types.Typ[types.Invalid]
-		}
-		c.imported[prefix] = p
-	}
-	if obj := p.Scope().Lookup(name); obj != nil {
+	if obj := c.importedObject(parts, name, required); obj != nil {
 		return obj.Type()
 	}
 	return types.Typ[types.Invalid]
 }
 
-func substitute(t types.Type, sub map[*types.TypeParam]types.Type) types.Type {
-	switch t := t.(type) {
-	case *types.TypeParam:
-		if a := sub[t]; a != nil {
-			return a
-		}
-		return t
-	case *types.Pointer:
-		return types.NewPointer(substitute(t.Elem(), sub))
-	case *types.Slice:
-		return types.NewSlice(substitute(t.Elem(), sub))
-	case *types.Array:
-		return types.NewArray(substitute(t.Elem(), sub), t.Len())
-	case *types.Map:
-		return types.NewMap(substitute(t.Key(), sub), substitute(t.Elem(), sub))
-	case *types.Chan:
-		return types.NewChan(t.Dir(), substitute(t.Elem(), sub))
-	case *types.Signature:
-		return substituteSignature(t, sub)
-	case *types.Tuple:
-		return substituteTuple(t, sub)
-	case *types.Named:
-		if t.TypeArgs().Len() == 0 {
-			return t
-		}
-		args := make([]types.Type, t.TypeArgs().Len())
-		for i := range args {
-			args[i] = substitute(t.TypeArgs().At(i), sub)
-		}
-		v, err := types.Instantiate(nil, t.Origin(), args, false)
-		if err == nil {
-			return v
-		}
-		return t
-	case *types.Struct:
-		var fields []*types.Var
-		var tags []string
-		for i := 0; i < t.NumFields(); i++ {
-			f := t.Field(i)
-			fields = append(fields, types.NewField(token.NoPos, f.Pkg(), f.Name(), substitute(f.Type(), sub), f.Embedded()))
-			tags = append(tags, t.Tag(i))
-		}
-		return types.NewStruct(fields, tags)
+func (c *checker) importedObject(parts []string, name string, required bool) types.Object {
+	if len(parts) < 2 {
+		return nil
 	}
-	return t
+	if name == "" {
+		name = parts[len(parts)-1]
+	}
+	prefix := strings.Join(parts[:len(parts)-1], "/")
+	p := c.imported[prefix]
+	if p == nil {
+		var err error
+		p, err = c.importer.Import(prefix)
+		if err != nil {
+			if required {
+				c.diag(c.file.AST, "go-import", fmt.Sprintf("import %q: %v", prefix, err))
+			}
+			return nil
+		}
+		c.imported[prefix] = p
+	}
+	return p.Scope().Lookup(name)
+}
+
+func substitute(t types.Type, sub map[*types.TypeParam]types.Type, info *Info) types.Type {
+	return info.Substitute(t, sub, nil)
 }

@@ -1,0 +1,4 @@
+package main
+enum State { Count(int) }
+func change(value State) { match value { State::Count(ref mut payload) => { *payload = 2 } } }
+func main() {}

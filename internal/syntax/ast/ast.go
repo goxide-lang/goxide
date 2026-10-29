@@ -2,7 +2,7 @@
 package ast
 
 import (
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 	"reflect"
 )
 
@@ -127,13 +127,15 @@ type File struct {
 	Items      []Item
 	Comments   []*CommentGroup
 	Directives []*Directive
-	LineStarts []uint32 // Source line byte offsets, for preserving comment placement.
+	LineStarts []uint32      // Source line byte offsets, for preserving comment placement.
+	Tokens     []token.Token // Original lexical units without comments, including EOF.
 }
 type Ident struct {
 	Base
-	Name string
-	Raw  bool
-	Ctx  SyntaxCtx
+	Name    string
+	Raw     bool
+	Missing bool // Recovery placeholder, never the source identifier _.
+	Ctx     SyntaxCtx
 }
 type Comment struct {
 	Base
@@ -155,8 +157,9 @@ type Attr struct {
 }
 type TokenTree struct {
 	Base
-	Delim  Delim
-	Tokens []TokenOrTree
+	Delim   Delim
+	Missing bool // An opening or closing delimiter is missing.
+	Tokens  []TokenOrTree
 }
 type TokenOrTree struct {
 	Token *token.Token
@@ -178,8 +181,9 @@ type GenericArgs struct {
 }
 type GenericArg struct {
 	Base
-	Name *Ident
-	Type Type
+	Name  *Ident
+	Type  Type // Bare names remain ambiguous until the parameter kind is known.
+	Value Expr // Value arguments are mutually exclusive with Type.
 }
 type GenericParams struct {
 	Base
@@ -189,6 +193,7 @@ type GenericParam struct {
 	Base
 	Names      []*Ident
 	Constraint Type
+	Const      bool
 }
 type WhereClause struct {
 	Base
@@ -228,12 +233,14 @@ type UseTree struct {
 	Path     *Path
 	Alias    *Ident
 	Glob     bool
-	Children []*UseTree
+	Children []*UseTree // nil for a leaf; non-nil for a group, including {}.
 }
 
 type UseDecl struct {
 	ItemBase
-	Tree *UseTree
+	Tree         *UseTree
+	Implicit     bool     // Compiler-provided prelude; explicit bindings take precedence.
+	RootFallback []string // Compiler-provided route used only without a lexical root binding.
 }
 type ModDecl struct {
 	ItemBase
@@ -535,9 +542,10 @@ type MacroExpr struct {
 }
 type QualifiedSelectorExpr struct {
 	Base
-	X     Expr
-	Sel   *Ident
-	Trait Type
+	X      Expr
+	Sel    *Ident
+	Trait  Type
+	Static bool
 }
 type AwaitExpr struct {
 	Base
@@ -810,6 +818,7 @@ func (*RangePat) patNode()               {}
 func (*BadPat) patNode()                 {}
 func (*FuncDecl) traitItemNode()         {}
 func (*TypeDecl) traitItemNode()         {}
+func (*MacroItem) traitItemNode()        {}
 
 // Walk visits nodes in field order. Returning false skips a node's children.
 func Walk(n Node, visit func(Node) bool) {

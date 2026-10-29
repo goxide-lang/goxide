@@ -9,7 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/lower"
+	"github.com/goxide-lang/goxide/internal/lower"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
 func TestP4RuntimeViewsAndQualifiedMethods(t *testing.T) {
@@ -22,12 +23,12 @@ func TestP4RuntimeViewsAndQualifiedMethods(t *testing.T) {
 	runGo(t, module, "vet", "./...")
 }
 
-func TestP4DeclareNativeMethodsAndRestrictedWrapperMethodSet(t *testing.T) {
-	module := prepareP4RuntimeFixture(t, "declare", "traitdeclare")
+func TestP4ExplicitWrappersShareNativeStateAndRestrictMethodSet(t *testing.T) {
+	module := prepareP4RuntimeFixture(t, "wrappers", "traitwrappers")
 	runGo(t, module, "build", "./...")
 	const want = "true false false 6\n6 source <nil> 0\n2 pa <nil> 2\n2 ir <nil> 0\nother <nil>\nagain <nil>\nview <nil> true true\n"
 	if got := runGo(t, module, "run", "."); got != want {
-		t.Fatalf("native wrapper = %q, want %q", got, want)
+		t.Fatalf("explicit wrapper = %q, want %q", got, want)
 	}
 	runGo(t, module, "vet", "./...")
 }
@@ -35,12 +36,27 @@ func TestP4DeclareNativeMethodsAndRestrictedWrapperMethodSet(t *testing.T) {
 func prepareP4RuntimeFixture(t *testing.T, fixtureName, modulePath string) string {
 	t.Helper()
 	fixture := filepath.Join("testdata", "traits", fixtureName)
-	module, err := lower.PrepareModule([]string{fixture}, modulePath, testConfig(t))
+	input := t.TempDir()
+	if err := os.CopyFS(input, os.DirFS(fixture)); err != nil {
+		t.Fatal(err)
+	}
+	if err := testdeps.WriteFile(filepath.Join(input, "go.mod"), []byte("module "+modulePath+"\n\ngo 1.27\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	fixture = input
+	configuration := testConfig(t)
+	if fixtureName == "runtime" {
+		// This fixture deliberately gives several traits the same Read method.
+		// It exercises qualified views, with short Go member sugar disabled.
+		disabled := false
+		configuration.GoSugar = &disabled
+	}
+	module, err := lower.PrepareModule([]string{fixture}, modulePath, configuration)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.RemoveAll(module) })
-	again, err := lower.PrepareModule([]string{fixture}, modulePath, testConfig(t))
+	again, err := lower.PrepareModule([]string{fixture}, modulePath, configuration)
 	if err != nil {
 		t.Fatal(err)
 	}

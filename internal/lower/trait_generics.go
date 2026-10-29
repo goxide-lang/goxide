@@ -6,8 +6,8 @@ import (
 	gotoken "go/token"
 	"go/types"
 
-	"github.com/hxsf/goxide/internal/check"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/check"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 func (e *emitter) typeinfo(name string) goast.Expr {
@@ -15,73 +15,128 @@ func (e *emitter) typeinfo(name string) goast.Expr {
 	return &goast.SelectorExpr{X: pkg, Sel: goast.NewIdent(name)}
 }
 
+// Type-based emission must use the same hygienic names as source identifiers.
+// Keep this binding local to the declaration: instantiated helpers may bind
+// the same source parameters to concrete types in their own emission scope.
+func (e *emitter) functionTypeNames(fn *syntax.FuncDecl, signature *types.Signature) func() {
+	previous := e.inferenceTypes
+	if fn.Generics == nil || signature == nil {
+		return func() {}
+	}
+	e.inferenceTypes = make(map[types.Type]*goast.Ident, len(previous)+signature.TypeParams().Len())
+	for typ, name := range previous {
+		e.inferenceTypes[typ] = name
+	}
+	index := 0
+	for _, group := range fn.Generics.Params {
+		if group.Const {
+			continue
+		}
+		for _, name := range group.Names {
+			if index < signature.TypeParams().Len() {
+				e.inferenceTypes[signature.TypeParams().At(index)] = e.ident(name)
+			}
+			index++
+		}
+	}
+	return func() { e.inferenceTypes = previous }
+}
+
+// Existing Go-expressible protocol functions retain carrier inference. Each
+// target uses one carrier proving all of its declared source bounds.
 func (e *emitter) functionGenerics(fn *syntax.FuncDecl) *goast.FieldList {
+	ordinary := e.functionTypeParameters(fn)
 	bounds := e.info.GenericBounds[fn]
 	if len(bounds) == 0 {
+		return ordinary
+	}
+	if ordinary == nil {
+		ordinary = &goast.FieldList{}
+	}
+	groups := e.functionEvidenceGroups(fn)
+	signature, _ := e.info.Symbols[e.file.Definitions[fn.Name.ID()]].(*types.Signature)
+	projected := projectedParameters(bounds)
+	parameters := append(append([]*goast.Field(nil), ordinary.List...), projected...)
+	for index, parameter := range parameters {
+		var target *types.TypeParam
+		if signature != nil && index < signature.TypeParams().Len() {
+			target = signature.TypeParams().At(index)
+		}
+		for _, group := range groups {
+			if group.param == nil || group.param != target {
+				continue
+			}
+			carrier := enumIndices(e.typeinfo("CarrierFor"), []goast.Expr{e.goType(target), goast.NewIdent(group.name)})
+			if id, ok := parameter.Type.(*goast.Ident); ok && id.Name == "any" {
+				parameter.Type = carrier
+			} else {
+				parameter.Type = &goast.InterfaceType{Methods: &goast.FieldList{List: []*goast.Field{{Type: parameter.Type}, {Type: carrier}}}}
+			}
+		}
+	}
+	for _, group := range groups {
+		ordinary.List = append(ordinary.List, &goast.Field{Names: []*goast.Ident{goast.NewIdent(group.name)}, Type: &goast.InterfaceType{Methods: &goast.FieldList{List: e.evidenceMethods(group.bounds)}}})
+	}
+	ordinary.List = append(ordinary.List, projected...)
+	return ordinary
+}
+
+type functionEvidenceGroup struct {
+	param  *types.TypeParam
+	bounds []*check.TraitBound
+	name   string
+}
+
+func (e *emitter) functionEvidenceGroups(fn *syntax.FuncDecl) []functionEvidenceGroup {
+	bounds := e.info.GenericBounds[fn]
+	e.registerEvidenceNames(bounds)
+	var groups []functionEvidenceGroup
+	byParam := map[*types.TypeParam]int{}
+	for _, bound := range bounds {
+		param, _ := traitBoundTarget(bound).(*types.TypeParam)
+		if index, found := byParam[param]; param != nil && found && !parameterizedTrait(bound.Trait) {
+			groups[index].bounds = append(groups[index].bounds, bound)
+			continue
+		}
+		if param != nil && !parameterizedTrait(bound.Trait) {
+			byParam[param] = len(groups)
+		}
+		groups = append(groups, functionEvidenceGroup{param: param, bounds: []*check.TraitBound{bound}, name: e.evidenceNames[bound]})
+	}
+	return groups
+}
+
+func (e *emitter) functionTypeParameters(fn *syntax.FuncDecl) *goast.FieldList {
+	if fn.Generics == nil {
+		return nil
+	}
+	if fn.Where == nil && len(e.info.GenericBounds[fn]) == 0 {
 		return e.generics(fn.Generics)
 	}
-	byName := map[string]*check.TraitBound{}
-	used := map[string]bool{}
-	for _, p := range fn.Generics.Params {
-		for _, name := range p.Names {
-			used[e.ident(name).Name] = true
-		}
-	}
-	for _, bound := range bounds {
-		byName[bound.Param.Obj().Name()] = bound
-		for _, p := range bound.Projected {
-			used[p.Obj().Name()] = true
-		}
-	}
-	ops := map[*check.TraitBound]string{}
-	for _, bound := range bounds {
-		base := "Goxide" + exportedName(bound.Param.Obj().Name()) + "Ops"
-		name := base
-		for index := 2; used[name] || e.reserved[name]; index++ {
-			name = fmt.Sprintf("%s%d", base, index)
-		}
-		used[name] = true
-		e.reserved[name] = true
-		ops[bound] = name
-	}
+	symbol := e.file.Definitions[fn.Name.ID()]
+	signature, _ := e.info.Symbols[symbol].(*types.Signature)
 	list := &goast.FieldList{}
-	for _, p := range fn.Generics.Params {
-		for _, id := range p.Names {
-			name := e.ident(id)
+	index := 0
+	for _, parameter := range fn.Generics.Params {
+		if parameter.Const {
+			continue
+		}
+		for _, name := range parameter.Names {
 			var constraint goast.Expr
-			if bound := byName[id.Name]; bound != nil {
-				constraint = enumIndices(e.typeinfo("CarrierFor"), []goast.Expr{e.goType(bound.Param), goast.NewIdent(ops[bound])})
+			if signature != nil && index < signature.TypeParams().Len() {
+				constraint = e.goConstraint(signature.TypeParams().At(index).Constraint())
 			} else {
-				constraint = e.typ(p.Constraint)
-				if constraint == nil {
-					constraint = goast.NewIdent("any")
-				}
+				constraint = e.typ(parameter.Constraint)
 			}
-			list.List = append(list.List, &goast.Field{Names: []*goast.Ident{name}, Type: constraint})
+			if constraint == nil {
+				constraint = goast.NewIdent("any")
+			}
+			list.List = append(list.List, &goast.Field{Names: []*goast.Ident{e.ident(name)}, Type: constraint})
+			index++
 		}
 	}
-	for _, bound := range bounds {
-		methods := []*goast.Field{{Type: &goast.UnaryExpr{Op: gotoken.TILDE, X: &goast.StructType{Fields: &goast.FieldList{}}}}}
-		for _, m := range bound.Trait.Methods {
-			ft, _ := e.memberSignature(bound.MethodSignature(m))
-			if !m.Static {
-				receiver := types.Type(bound.Param)
-				if m.Receiver != check.ValueRef {
-					receiver = types.NewPointer(receiver)
-				}
-				ft.Params.List = append([]*goast.Field{{Names: []*goast.Ident{goast.NewIdent("self")}, Type: e.goType(receiver)}}, ft.Params.List...)
-			}
-			methods = append(methods, &goast.Field{Names: []*goast.Ident{goast.NewIdent(traitOperation(m))}, Type: ft})
-		}
-		for _, a := range bound.Trait.Associated {
-			methods = append(methods, &goast.Field{Names: []*goast.Ident{goast.NewIdent(traitWitness(bound.Trait, a.Name))}, Type: resultFunc(e.goType(bound.Associated[a.Name]))})
-		}
-		list.List = append(list.List, &goast.Field{Names: []*goast.Ident{goast.NewIdent(ops[bound])}, Type: &goast.InterfaceType{Methods: &goast.FieldList{List: methods}}})
-	}
-	for _, bound := range bounds {
-		for _, p := range bound.Projected {
-			list.List = append(list.List, &goast.Field{Names: []*goast.Ident{goast.NewIdent(p.Obj().Name())}, Type: goast.NewIdent("any")})
-		}
+	if len(list.List) == 0 {
+		return nil
 	}
 	return list
 }

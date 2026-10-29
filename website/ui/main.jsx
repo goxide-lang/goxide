@@ -276,7 +276,7 @@ function Shell({ manifest }) {
         {(visited || visible) && <PlaygroundLoader manifest={manifest} visible={visible} />}
       </main>
       <footer className="site-footer">
-        <div><a className="footer-brand" href="/">Goxide</a><p>写下业务意图，生成普通 Go。</p><p><a href="/docs/?page=install">CLI v0.0.1 · 实验性预发布</a></p><small>网站构建 {manifest.websiteCommit.slice(0, 7)}</small></div>
+        <div><a className="footer-brand" href="/">Goxide</a><p>写下业务意图，生成普通 Go。</p><p><a href="/docs/?page=install">当前 CLI · 源码构建</a></p><small>网站构建 {manifest.websiteCommit.slice(0, 7)}</small></div>
         <nav aria-label="更多资源"><a href="/learn/">快速开始</a><a href="/docs/">使用参考</a><a href="/design/">设计文档</a><a href="/rfc.html" aria-current={location.path === "/rfc.html" ? "page" : undefined}>RFC 特性</a><a href="/local.html" aria-current={location.path === "/local.html" ? "page" : undefined}>本地使用</a></nav>
         <div className="footer-licenses"><span>MPL-2.0</span><a href="/GO-LICENSE.txt">Go runtime license</a><a href="/THIRD-PARTY-LICENSES.txt">前端依赖许可</a></div>
       </footer>

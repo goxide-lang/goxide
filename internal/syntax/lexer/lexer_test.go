@@ -5,7 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/source"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 func kinds(ts []token.Token) []token.Kind {
@@ -14,6 +15,27 @@ func kinds(ts []token.Token) []token.Kind {
 		ks[i] = t.Kind
 	}
 	return ks
+}
+
+func TestCRLFCommentAndSemicolonRanges(t *testing.T) {
+	const text = "x // 中\r\ny"
+	tokens, diagnostics := Lex([]byte(text))
+	if len(diagnostics) != 0 {
+		t.Fatal(diagnostics)
+	}
+	comment, semicolon := tokens[1], tokens[2]
+	if comment.Kind != token.COMMENT || comment.Text != "// 中" || comment.Start != 2 || comment.End != 8 {
+		t.Fatalf("comment includes line ending: %+v", comment)
+	}
+	if semicolon.Kind != token.SEMICOLON || !semicolon.Implicit || semicolon.Start != 8 || semicolon.End != 8 {
+		t.Fatalf("semicolon splits CRLF: %+v", semicolon)
+	}
+	index := source.New(text)
+	for _, token := range tokens {
+		if _, err := index.Range(int(token.Start), int(token.End), source.UTF16); err != nil {
+			t.Fatalf("token %v has an unrepresentable source range: %v", token, err)
+		}
+	}
 }
 
 func TestNewTokensAndLongestMatch(t *testing.T) {
@@ -73,7 +95,7 @@ func TestContextualWordsStayIdentifiers(t *testing.T) {
 }
 
 func TestAutomaticSemicolons(t *testing.T) {
-	for _, src := range []string{"x\n", "123\n", "2.3\n", "2i\n", "'x'\n", "\"x\"\n", "break\n", "continue\n", "fallthrough\n", "return\n", "x++\n", "x--\n", "f()\n", "a[0]\n", "{}\n", "Self\n", "x"} {
+	for _, src := range []string{"x\n", "123\n", "2.3\n", "2i\n", "'x'\n", "\"x\"\n", "break\n", "continue\n", "fallthrough\n", "return\n", "x++\n", "x--\n", "f()\n", "a[0]\n", "{}\n", "Self\n", "x", "T::from::<From[S]>\n", "value.into::<Into[T]>", "value.into::/*comment*/<Into[T]>/*tail\n*/"} {
 		ts, ds := Lex([]byte(src))
 		if len(ds) != 0 {
 			t.Fatal(ds)
@@ -82,7 +104,7 @@ func TestAutomaticSemicolons(t *testing.T) {
 			t.Errorf("%q: no implicit semicolon: %v", src, ts)
 		}
 	}
-	for _, src := range []string{"x +\n", "a,\n", "func\n", "if\n", "x;\n"} {
+	for _, src := range []string{"x +\n", "a,\n", "func\n", "if\n", "x;\n", "x >\n", "x >>\n", "T::from::<From[S]> >\n"} {
 		ts, ds := Lex([]byte(src))
 		if len(ds) != 0 {
 			t.Fatal(ds)
@@ -176,7 +198,7 @@ func TestCommentAndUnicodePositions(t *testing.T) {
 		}
 	}
 	ts, ds = Lex([]byte("\ufeffα\r\n"))
-	if len(ds) != 0 || ts[0].Start != 3 || ts[0].End != 5 || ts[1].Start != 6 {
+	if len(ds) != 0 || ts[0].Start != 3 || ts[0].End != 5 || ts[1].Start != 5 || ts[1].End != 5 || !ts[1].Implicit {
 		t.Fatalf("BOM and CRLF byte positions: %v, %v", ts, ds)
 	}
 	for _, src := range []string{"//\xff\n", "/*\ufeff*/", "`\x00`", "\"\xff\""} {

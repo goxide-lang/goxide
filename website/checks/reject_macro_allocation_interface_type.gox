@@ -1,3 +1,0 @@
-package p
-macro_rules! allocate {()=>{new(interface{Read()})};}
-func run(){_=allocate!()}

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 var baseType = reflect.TypeOf(ast.Base{})
@@ -56,6 +56,12 @@ func (e *engine) copyValue(v reflect.Value, expn ast.ExpnID) reflect.Value {
 			if origin, ok := e.r.Origins[old]; ok {
 				e.r.Origins[n] = origin
 			}
+			if location, ok := e.r.Locations[old]; ok {
+				e.r.Locations[n] = location
+			}
+			if body, ok := e.itemBodies[old]; ok {
+				e.itemBodies[n] = body
+			}
 			if capture, ok := e.r.Captures[old]; ok {
 				e.r.Captures[n] = capture
 			}
@@ -65,6 +71,9 @@ func (e *engine) copyValue(v reflect.Value, expn ast.ExpnID) reflect.Value {
 			if oldID, ok := old.(*ast.Ident); ok {
 				if scope, ok := e.r.Scopes[oldID]; ok {
 					e.r.Scopes[n.(*ast.Ident)] = scope
+				}
+				if introduction, ok := e.r.Introductions[oldID]; ok {
+					e.r.Introductions[n.(*ast.Ident)] = introduction
 				}
 			}
 			if tree, ok := old.(*ast.TokenTree); ok {
@@ -121,41 +130,36 @@ func (e *engine) rewrite(v reflect.Value, file *ast.File, parent ast.ExpnID) (re
 		return out, nil
 	}
 	if v.Kind() == reflect.Pointer {
+		switch n := v.Interface().(type) {
+		case *ast.MacroRulesDecl:
+			return v, &Diagnostic{Code: "template", Message: "templates cannot generate macro definitions", Location: e.location(n), Definition: e.r.Origins[n], Call: e.r.Expansions[parent].Call, Expn: parent}
+		}
+		if item, ok := v.Interface().(ast.Item); ok {
+			items, err := e.rewriteItems([]ast.Item{item}, file, parent, singleItem)
+			if err != nil {
+				return v, err
+			}
+			return reflect.ValueOf(items[0]), nil
+		}
 		var path *ast.Path
 		var args *ast.TokenTree
 		var kind fragmentKind
 		switch n := v.Interface().(type) {
 		case *ast.TokenTree, *ast.Attr:
 			return v, nil
-		case *ast.UseDecl:
-			if n.Tree != nil && n.Tree.Path != nil && !n.Tree.Glob && len(n.Tree.Path.Segments) > 0 {
-				name := n.Tree.Alias
-				if name == nil {
-					name = n.Tree.Path.Segments[len(n.Tree.Path.Segments)-1].Name
-				}
-				if name.Name == "cfg" {
-					if _, err := e.lookup(n.Tree.Path, file); err == nil {
-						return v, e.selection(file).fail(n, "reserved built-in macro alias cfg")
-					}
-				}
-			}
-		case *ast.MacroRulesDecl:
-			return v, &Diagnostic{Code: "template", Message: "templates cannot generate macro definitions", Definition: e.r.Origins[n], Call: e.r.Expansions[parent].Call, Expn: parent}
 		case *ast.MacroExpr:
 			path, args, kind = n.Path, n.Args, exprKind
 		case *ast.MacroType:
 			path, args, kind = n.Path, n.Args, typeKind
-		case *ast.MacroItem:
-			path, args, kind = n.Path, n.Args, itemKind
 		case *ast.ExprStmt:
 			if m, ok := n.X.(*ast.MacroExpr); ok {
-				x, err := e.invoke(m, m.Path, m.Args, stmtKind, file, parent)
+				x, err := e.invoke(m, m.Path, m.Args, stmtKind, file, parent, singleStmtKind)
 				if err != nil {
 					return v, err
 				}
 				list := x.(*ast.Block).List
 				if len(list) != 1 {
-					return v, &Diagnostic{Code: "template", Message: "this statement slot requires exactly one statement", Definition: e.r.Origins[x], Call: e.r.Origins[m], Expn: nodeExpn(x)}
+					return v, &Diagnostic{Code: "template", Message: "this statement slot requires exactly one statement", Location: e.location(x), Definition: e.r.Origins[x], Call: e.r.Origins[m], Expn: nodeExpn(x)}
 				}
 				return reflect.ValueOf(list[0]), nil
 			}
@@ -183,7 +187,7 @@ func (e *engine) rewrite(v reflect.Value, file *ast.File, parent ast.ExpnID) (re
 			if _, ok := call.(*ast.CallExpr); !ok {
 				n := v.Interface().(ast.Node)
 				id := nodeExpn(n)
-				return v, &Diagnostic{Code: "category", Message: "go/defer requires a call expression", Definition: e.r.Origins[n], Call: e.r.Expansions[id].Call, Expn: id}
+				return v, &Diagnostic{Code: "category", Message: "go/defer requires a call expression", Location: e.location(n), Definition: e.r.Origins[n], Call: e.r.Expansions[id].Call, Expn: id}
 			}
 		}
 		return v, nil
@@ -194,13 +198,81 @@ func (e *engine) rewrite(v reflect.Value, file *ast.File, parent ast.ExpnID) (re
 			return v, nil
 		}
 		for i := 0; i < v.NumField(); i++ {
+			if v.Type().Field(i).Name == "Items" {
+				switch v.Type() {
+				case reflect.TypeFor[ast.ImplDecl]():
+					slot := implItems
+					decl := v.Interface().(ast.ImplDecl)
+					if decl.Trait != nil {
+						slot = traitImplItems
+
+					}
+					items, err := e.rewriteItems(v.Field(i).Interface().([]ast.Item), file, parent, slot)
+					if err != nil {
+						return v, err
+					}
+					v.Field(i).Set(reflect.ValueOf(items))
+					continue
+				case reflect.TypeFor[ast.TraitDecl]():
+					var input []ast.Item
+					for _, item := range v.Field(i).Interface().([]ast.TraitItem) {
+						input = append(input, item)
+					}
+					items, err := e.rewriteItems(input, file, parent, traitItems)
+					if err != nil {
+						return v, err
+					}
+					var result []ast.TraitItem
+					for _, item := range items {
+						result = append(result, item.(ast.TraitItem))
+					}
+					v.Field(i).Set(reflect.ValueOf(result))
+					continue
+				}
+			}
 			x, err := e.rewrite(v.Field(i), file, parent)
 			if err != nil {
 				return v, err
 			}
 			v.Field(i).Set(x)
 		}
+		switch n := v.Interface().(type) {
+		case ast.UseDecl:
+			if n.Tree != nil && n.Tree.Path != nil && !n.Tree.Glob && len(n.Tree.Path.Segments) > 0 {
+				name := n.Tree.Alias
+				if name == nil {
+					name = n.Tree.Path.Segments[len(n.Tree.Path.Segments)-1].Name
+				}
+				if name.Name == "cfg" {
+					if _, err := e.lookup(n.Tree.Path, file); err == nil {
+						return v, e.selection(file).fail(&n, "reserved built-in macro alias cfg")
+					}
+				}
+			}
+		case ast.ImplDecl:
+			if n.Trait != nil {
+				for _, item := range n.Items {
+					if reflect.ValueOf(item).Elem().FieldByName("Vis").Interface().(ast.Visibility).Kind != ast.VisNone {
+						return v, e.attributeError(item, file, parent, "trait members inherit visibility")
+					}
+				}
+			}
+		case ast.DeclareDecl:
+			valid := false
+			switch d := n.Decl.(type) {
+			case *ast.FuncDecl:
+				valid = d.Body == nil
+			case *ast.TypeDecl:
+				valid = true
+			}
+			if !valid {
+				return v, e.attributeError(n.Decl, file, parent, "declare requires a function without a body or a type")
+			}
+		}
 	case reflect.Slice:
+		if v.IsNil() {
+			return v, nil
+		}
 		out := reflect.MakeSlice(v.Type(), 0, v.Len())
 		for i := 0; i < v.Len(); i++ {
 			if v.Type() == stmtSliceType {

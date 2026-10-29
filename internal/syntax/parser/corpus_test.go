@@ -11,31 +11,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/parser"
-	"github.com/hxsf/goxide/internal/syntax/printer"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/parser"
+	"github.com/goxide-lang/goxide/internal/syntax/printer"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 // Only syntax rejected by the authoritative frontend specification belongs here.
 var corpusSkips = map[string]string{
-	"examples/propagate_places/effects_fallback.gox":               "uses hard-reserved unsafe as an unescaped package/path identifier (§3.3)",
-	"website/checks/catalog/use_path_proposal.gox":                 "use requires an identifier path, not a quoted string (§5.1)",
-	"website/checks/error_only.gox":                                "uses import, which .gox rejects (§5.1)",
-	"website/checks/macro_a01_opaque.gox":                          "uses import, which .gox rejects (§5.1)",
-	"website/checks/macro_a01_roles.gox":                           "uses import, which .gox rejects (§5.1)",
-	"website/checks/macro_imported_helper.gox":                     "uses import, which .gox rejects (§5.1)",
-	"website/checks/match_a04_literals.gox":                        "uses import, which .gox rejects (§5.1)",
-	"website/checks/match_a04_question.gox":                        "uses import, which .gox rejects (§5.1)",
-	"website/checks/match_a04_short_circuit.gox":                   "uses import, which .gox rejects (§5.1)",
-	"website/checks/match_a04_unary.gox":                           "uses import, which .gox rejects (§5.1)",
-	"website/checks/reject_macro_allocation_definition_import.gox": "uses import, which .gox rejects (§5.1)",
-	"website/checks/reject_macro_allocation_primitive_import.gox":  "uses import, which .gox rejects (§5.1)",
-	"website/checks/reject_macro_append_definition_import.gox":     "uses import, which .gox rejects (§5.1)",
-	"website/checks/reject_macro_copy_definition_import.gox":       "uses import, which .gox rejects (§5.1)",
-	"website/checks/reject_macro_prepared.gox":                     "uses import, which .gox rejects (§5.1)",
-	"website/checks/reject_macro_selector.gox":                     "uses import, which .gox rejects (§5.1)",
-	"website/checks/reject_wrong_type.gox":                         "uses import, which .gox rejects (§5.1)",
+	"examples/propagate_places/effects_fallback.gox": "uses hard-reserved unsafe as an unescaped package/path identifier (§3.3)",
+	"website/checks/catalog/use_path_proposal.gox":   "use requires an identifier path, not a quoted string (§5.1)",
 }
 
 func structural(v reflect.Value) any {
@@ -59,7 +44,7 @@ func structural(v reflect.Value) any {
 			if v.Type() == reflect.TypeFor[ast.Base]() && (name == "NodeID" || name == "Loc") {
 				continue
 			}
-			if v.Type() == reflect.TypeFor[ast.File]() && name == "LineStarts" {
+			if v.Type() == reflect.TypeFor[ast.File]() && (name == "LineStarts" || name == "Tokens") {
 				continue
 			}
 			if v.Type() == reflect.TypeFor[token.Token]() && (name == "Start" || name == "End") {

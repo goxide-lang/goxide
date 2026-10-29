@@ -3,7 +3,7 @@ package parser
 import (
 	"testing"
 
-	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 func TestEnumStructVariantAndPattern(t *testing.T) {

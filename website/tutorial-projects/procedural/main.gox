@@ -1,0 +1,14 @@
+package main
+
+use fmt;
+use macros;
+
+#[macros::constant(6 * 7)]
+func answer() int { return 0 }
+
+#[derive(macros::TypeName)]
+type Order struct { ID int }
+
+func main() {
+    fmt::Println(macros::twice!(21), answer(), Order{ID: 1001}.typeName())
+}

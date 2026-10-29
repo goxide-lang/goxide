@@ -1,0 +1,85 @@
+{
+  "name": "goxide",
+  "displayName": "Goxide",
+  "description": "Goxide language services through the goxide compiler.",
+  "version": "0.0.0",
+  "publisher": "goxide-lang",
+  "license": "MPL-2.0",
+  "repository": { "type": "git", "url": "https://github.com/goxide-lang/goxide.git", "directory": "editors/vscode" },
+  "engines": { "vscode": "^1.91.0" },
+  "categories": ["Programming Languages", "Debuggers", "Testing"],
+  "main": "./extension.js",
+  "extensionKind": ["workspace"],
+  "activationEvents": ["onLanguage:goxide", "workspaceContains:goxide.toml", "onDebugResolve:goxide", "onDebugInitialConfigurations"],
+  "capabilities": {
+    "untrustedWorkspaces": { "supported": false, "description": "Goxide starts the configured compiler and prepares project dependencies." },
+    "virtualWorkspaces": { "supported": false }
+  },
+  "contributes": {
+    "languages": [{ "id": "goxide", "aliases": ["Goxide", "goxide"], "extensions": [".gox"], "configuration": "./language-configuration.json" }],
+    "grammars": [{ "language": "goxide", "scopeName": "source.goxide", "path": "./syntaxes/goxide.tmLanguage.json" }],
+    "commands": [
+      { "command": "goxide.restart", "title": "Goxide: Restart Language Server" },
+      { "command": "goxide.generatedSource", "title": "Goxide: Show Generated Go" },
+      { "command": "goxide.enableManagedGo", "title": "Goxide: Enable Managed Go for This Project" },
+      { "command": "goxide.run", "title": "Goxide: Run", "icon": "$(play)" },
+      { "command": "goxide.test", "title": "Goxide: Run Tests" },
+      { "command": "goxide.debug", "title": "Goxide: Debug", "icon": "$(debug-alt)" },
+      { "command": "goxide.selectTarget", "title": "Goxide: Select Project Target" }
+    ],
+    "menus": {
+      "editor/title": [
+        { "command": "goxide.run", "when": "resourceLangId == goxide", "group": "navigation" },
+        { "command": "goxide.debug", "when": "resourceLangId == goxide", "group": "navigation" }
+      ]
+    },
+    "breakpoints": [{ "language": "goxide" }, { "language": "go" }],
+    "debuggers": [{
+      "type": "goxide", "label": "Goxide", "languages": ["goxide", "go"],
+      "configurationAttributes": {
+        "launch": {
+          "properties": {
+            "input": { "type": "string", "description": "Project directory, manifest, or one .gox file. Empty uses the current Goxide project." },
+            "bin": { "type": "string", "description": "Selected project binary." },
+            "example": { "type": "string", "description": "Selected project example." },
+            "lib": { "type": "boolean", "description": "Select the library when debugging tests." },
+            "features": { "type": "array", "items": { "type": "string" }, "description": "Selected Goxide features." },
+            "tags": { "type": "array", "items": { "type": "string" }, "description": "Selected Go build tags." },
+            "noDefaultFeatures": { "type": "boolean" },
+            "target": { "type": "string", "description": "Compilation target; debugging requires the host platform." },
+            "args": { "type": "array", "items": { "type": "string" }, "default": [] },
+            "cwd": { "type": "string", "description": "Working directory of the debugged program." },
+            "env": { "type": "object", "additionalProperties": { "type": ["string", "null"] }, "description": "Environment overrides for the debugged program." },
+            "test": { "type": "boolean", "default": false, "description": "Debug a test binary." },
+            "package": { "type": "string", "description": "Selected test package from Goxide test discovery." },
+            "run": { "type": "string", "description": "Go test name pattern." },
+            "dlv": { "type": "string", "description": "Original Delve executable; defaults to goxide.dlv." },
+            "stopOnEntry": { "type": "boolean", "default": false }
+          }
+        }
+      },
+      "configurationSnippets": [{ "label": "Goxide: Debug", "body": { "type": "goxide", "request": "launch", "name": "Debug Goxide", "input": "${workspaceFolder}" } }]
+    }],
+    "configuration": {
+      "title": "Goxide",
+      "properties": {
+        "goxide.enabled": { "type": "boolean", "default": true, "scope": "resource", "description": "Enable Goxide language services in this folder." },
+        "goxide.executable": { "type": "string", "default": "goxide", "minLength": 1, "scope": "resource", "description": "Goxide executable path or command on PATH. Relative paths resolve from the workspace folder." },
+        "goxide.gopls": { "type": "string", "default": "gopls", "minLength": 1, "scope": "resource", "description": "Original gopls path or command, or off to disable Go-backed services. The default uses PATH first, then installs v0.24.0 with go into the extension host's private storage. Custom paths are never replaced." },
+        "goxide.dlv": { "type": "string", "default": "dlv", "minLength": 1, "scope": "resource", "description": "Original Delve executable used for Goxide debugging. Relative paths resolve from the workspace folder." },
+        "goxide.input": { "type": "string", "default": "", "scope": "resource", "description": "Project directory, goxide.toml, or one .gox file, relative to the workspace folder. Empty discovers goxide.toml; other .gox files use standalone sessions." },
+        "goxide.bin": { "type": "string", "default": "", "scope": "resource", "description": "Selected project binary. Mutually exclusive with goxide.example and goxide.lib." },
+        "goxide.example": { "type": "string", "default": "", "scope": "resource", "description": "Selected project example. Mutually exclusive with goxide.bin and goxide.lib." },
+        "goxide.lib": { "type": "boolean", "default": false, "scope": "resource", "description": "Select the project library. Mutually exclusive with goxide.bin and goxide.example." },
+        "goxide.features": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true, "default": [], "scope": "resource", "description": "Selected Goxide features. Changing this restarts the project session." },
+        "goxide.tags": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true, "default": [], "scope": "resource", "description": "Selected Go build tags." },
+        "goxide.noDefaultFeatures": { "type": "boolean", "default": false, "scope": "resource", "description": "Disable the project's default features." },
+        "goxide.target": { "type": "string", "default": "", "pattern": "^([a-zA-Z0-9_]+/[a-zA-Z0-9_]+)?$", "scope": "resource", "description": "Selected GOOS/GOARCH target, such as linux/amd64. Empty uses the compiler default." },
+        "goxide.enableManagedGo": { "type": "boolean", "default": false, "scope": "resource", "description": "Let Goxide serve .go files in explicitly managed projects. Disable the Go extension for this workspace first to avoid a second gopls session." }
+      }
+    }
+  },
+  "scripts": { "test": "node --test test/*.test.js", "test:syntax": "node host-test/syntax-test.js", "test:host": "node host-test/run.js", "test:development": "node host-test/development-run.js", "test:debug": "node host-test/debug-run.js", "check": "node --check extension.js && node --check config.js && node --check development.js && node --check tools.js", "package": "vsce package" },
+  "dependencies": { "vscode-languageclient": "11.0.0" },
+  "devDependencies": { "@vscode/vsce": "4.0.0" }
+}

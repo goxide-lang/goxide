@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/project"
+	"github.com/goxide-lang/goxide/internal/project"
 )
 
 func TestNativeImportKeepsIndependentNestedModuleIdentity(t *testing.T) {

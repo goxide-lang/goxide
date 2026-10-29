@@ -2,7 +2,7 @@ package project
 
 import (
 	"fmt"
-	"github.com/hxsf/goxide/internal/naming"
+	"github.com/goxide-lang/goxide/internal/naming"
 	"go/version"
 	"os"
 	"path"

@@ -5,9 +5,9 @@ import (
 	gotoken "go/token"
 	"go/types"
 
-	"github.com/hxsf/goxide/internal/resolve"
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 func (c *checker) globals(items []ast.Item) {
@@ -28,17 +28,7 @@ func (c *checker) globals(items []ast.Item) {
 func (c *checker) item(item ast.Item) {
 	switch n := item.(type) {
 	case *ast.FuncDecl:
-		old := c.returns
-		oldReceiver := c.currentReceiver
-		if m := c.memberSymbols[c.symbol(n.Name)]; m != nil && !m.Static {
-			c.currentReceiver = c.symbol(n.Params[0].Names[0])
-		}
-		c.returns = tupleTypes(c.tuple(n.Results))
-		c.tuple(n.Params)
-		c.tuple(n.Recv)
-		c.block(n.Body)
-		c.returns = old
-		c.currentReceiver = oldReceiver
+		c.checkFunctionCases(n)
 	case *ast.VarDecl:
 		c.values(n.Specs)
 	case *ast.ConstDecl:
@@ -60,15 +50,53 @@ func (c *checker) item(item ast.Item) {
 	}
 }
 
+func (c *checker) checkItemPhase(items []ast.Item, implementations bool) {
+	for _, item := range items {
+		switch declaration := item.(type) {
+		case *ast.ModDecl:
+			c.checkItemPhase(declaration.Items, implementations)
+		case *ast.DeclareDecl:
+			c.checkItemPhase([]ast.Item{declaration.Decl}, implementations)
+		case *ast.ImplDecl:
+			if implementations {
+				c.item(item)
+			}
+		default:
+			if !implementations {
+				c.item(item)
+			}
+		}
+	}
+}
+
+func (c *checker) checkFunctionBody(n *ast.FuncDecl) {
+	old, oldBounds, oldReceiver := c.returns, c.activeBounds, c.currentReceiver
+	oldSources := c.returnSources
+	c.activeBounds = c.out.GenericBounds[n]
+	if member := c.memberSymbols[c.symbol(n.Name)]; member != nil && !member.Static {
+		c.currentReceiver = c.symbol(n.Params[0].Names[0])
+	}
+	c.returns = tupleTypes(c.tuple(n.Results))
+	c.returnSources = c.newPermissionChecker().functionType(nil, n.Results).results
+	c.tuple(n.Params)
+	c.tuple(n.Recv)
+	c.block(n.Body)
+	c.validateConstBody(n.Body, c.returns)
+	c.returns, c.activeBounds, c.currentReceiver = old, oldBounds, oldReceiver
+	c.returnSources = oldSources
+}
+
 func (c *checker) values(specs []*ast.ValueSpec) {
 	for _, s := range specs {
 		var want types.Type
+		var source *permission
 		if s.Type != nil {
 			want = c.typ(s.Type)
+			source = c.newPermissionChecker().astType(s.Type, nil)
 		}
 		var values []types.Type
 		for _, v := range s.Values {
-			t := c.expr(v, want)
+			t := c.exprSource(v, want, source)
 			if tuple, ok := t.(*types.Tuple); ok {
 				values = append(values, tupleTypes(tuple)...)
 			} else {
@@ -87,8 +115,8 @@ func (c *checker) values(specs []*ast.ValueSpec) {
 				c.out.Symbols[sym] = t
 				if s.Type != nil {
 					c.sourceTypes[sym] = permissionDeclaration{c.file, s.Type}
-				} else if i < len(s.Values) {
-					c.sourceValues[sym] = sourceExpression{c.file, s.Values[i]}
+				} else {
+					c.sourceValues[sym] = c.sourceValueAt(s.Values, i)
 				}
 				if sym.Kind == resolve.Constant && i < len(s.Values) {
 					c.constants[sym] = c.constant(s.Values[i])
@@ -123,10 +151,12 @@ func (c *checker) stmt(stmt ast.Stmt) {
 		c.item(n.Decl)
 	case *ast.LetStmt:
 		var want types.Type
+		var source *permission
 		if n.Type != nil {
 			want = c.typ(n.Type)
+			source = c.newPermissionChecker().astType(n.Type, nil)
 		}
-		got := c.expr(n.Value, want)
+		got := c.exprSource(n.Value, want, source)
 		if want == nil {
 			want = defaultType(got)
 		}
@@ -136,7 +166,7 @@ func (c *checker) stmt(stmt ast.Stmt) {
 				if n.Type != nil {
 					c.sourceTypes[sym] = permissionDeclaration{c.file, n.Type}
 				} else {
-					c.sourceValues[sym] = sourceExpression{c.file, n.Value}
+					c.sourceValues[sym] = sourceExpression{file: c.file, node: n.Value}
 				}
 			}
 		}
@@ -144,10 +174,12 @@ func (c *checker) stmt(stmt ast.Stmt) {
 		var values []types.Type
 		for i, r := range n.Rhs {
 			var want types.Type
+			var source *permission
 			if i < len(n.Lhs) {
 				want = c.expr(n.Lhs[i], nil)
+				source = c.memberSource(n.Lhs[i], want)
 			}
-			t := c.expr(r, want)
+			t := c.exprSource(r, want, source)
 			if tuple, ok := t.(*types.Tuple); ok {
 				values = append(values, tupleTypes(tuple)...)
 			} else {
@@ -167,8 +199,8 @@ func (c *checker) stmt(stmt ast.Stmt) {
 						c.out.Symbols[sym] = defaultType(values[i])
 					}
 					c.out.Types[id] = c.out.Symbols[sym]
-					if i < len(n.Rhs) && c.sourceTypes[sym].node == nil {
-						c.sourceValues[sym] = sourceExpression{c.file, n.Rhs[i]}
+					if c.sourceTypes[sym].node == nil {
+						c.sourceValues[sym] = c.sourceValueAt(n.Rhs, i)
 					}
 				}
 			} else {
@@ -184,10 +216,14 @@ func (c *checker) stmt(stmt ast.Stmt) {
 	case *ast.ReturnStmt:
 		for i, v := range n.Results {
 			var want types.Type
+			var source *permission
 			if i < len(c.returns) {
 				want = c.returns[i]
 			}
-			c.expr(v, want)
+			if i < len(c.returnSources) {
+				source = c.returnSources[i]
+			}
+			c.exprSource(v, want, source)
 		}
 	case *ast.IfStmt:
 		c.checkMatchHeader(n.Init, n.Cond)
@@ -216,9 +252,16 @@ func (c *checker) stmt(stmt ast.Stmt) {
 		t := c.expr(n.X, want)
 		key, value := types.Type(types.Typ[types.Int]), types.Type(types.Typ[types.Invalid])
 		if valid(t) {
-			switch x := t.Underlying().(type) {
+			if array, ok := c.out.ArrayOf(t); ok {
+				value = array.Elem
+			}
+			switch x := coreType(t, nil).(type) {
 			case *types.Array:
 				value = x.Elem()
+			case *types.Pointer:
+				if array, ok := c.out.ArrayOf(x.Elem()); ok {
+					value = array.Elem
+				}
 			case *types.Slice:
 				value = x.Elem()
 			case *types.Map:
@@ -233,6 +276,17 @@ func (c *checker) stmt(stmt ast.Stmt) {
 				}
 			case *types.Signature:
 				c.checkRangePropagation(n.X, "error propagation in a function iterator source is not supported")
+				key = types.Typ[types.Invalid]
+				if x.Params().Len() == 1 {
+					if yield, ok := x.Params().At(0).Type().Underlying().(*types.Signature); ok {
+						if yield.Params().Len() > 0 {
+							key = yield.Params().At(0).Type()
+						}
+						if yield.Params().Len() > 1 {
+							value = yield.Params().At(1).Type()
+						}
+					}
+				}
 			}
 		}
 		if n.Tok == token.DEFINE {
@@ -379,7 +433,7 @@ func (c *checker) bindPatternReference(p ast.Pat, t types.Type, mode RefMode) {
 	switch p := p.(type) {
 	case *ast.BindPat:
 		if s := c.symbol(p.Name); s != nil && (s.Kind == resolve.Variant || s.Kind == resolve.Constant) {
-			if s.Kind == resolve.Constant && valid(t) && !types.Comparable(t) {
+			if s.Kind == resolve.Constant && valid(t) && !c.out.Comparable(t) {
 				c.diag(p, IncomparablePayload, "constant payload pattern requires a comparable type; use a binding with a guard")
 			}
 			return
@@ -403,11 +457,11 @@ func (c *checker) bindPatternReference(p ast.Pat, t types.Type, mode RefMode) {
 		}
 	case *ast.LitPat:
 		c.expr(p.Value, t)
-		if valid(t) && !types.Comparable(t) {
+		if valid(t) && !c.out.Comparable(t) {
 			c.diag(p, IncomparablePayload, "constant payload pattern requires a comparable type; use a binding with a guard")
 		}
 	case *ast.TuplePat:
-		if enum := c.out.EnumOf(t); enum != nil {
+		if enum := c.enumOf(t); enum != nil {
 			if v := enum.Variant(c.patternName(p)); v != nil {
 				fields := enum.Fields(v)
 				for i, elt := range p.Elts {
@@ -418,7 +472,7 @@ func (c *checker) bindPatternReference(p ast.Pat, t types.Type, mode RefMode) {
 			}
 		}
 	case *ast.StructPat:
-		if enum := c.out.EnumOf(t); enum != nil {
+		if enum := c.enumOf(t); enum != nil {
 			if v := enum.Variant(c.patternName(p)); v != nil {
 				fields := enum.Fields(v)
 				for _, f := range p.Fields {

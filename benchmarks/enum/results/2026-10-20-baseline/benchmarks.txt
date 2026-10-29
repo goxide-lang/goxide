@@ -1,0 +1,180 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/goxide-lang/syntax/internal/enumbench
+cpu: Apple M2
+BenchmarkUnitConstruct/Numeric8         	166803158	         2.080 ns/op	         1.000 B/slot	         2.080 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitConstruct/Numeric8         	182022496	         1.971 ns/op	         1.000 B/slot	         1.971 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitConstruct/Numeric8         	181421132	         1.975 ns/op	         1.000 B/slot	         1.975 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitConstruct/Numeric8         	182336721	         1.969 ns/op	         1.000 B/slot	         1.969 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitConstruct/Numeric8         	183166296	         1.968 ns/op	         1.000 B/slot	         1.968 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitConstruct/Numeric8         	183090489	         1.967 ns/op	         1.000 B/slot	         1.967 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitConstruct/Numeric8         	182843404	         1.985 ns/op	         1.000 B/slot	         1.985 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitConstruct/NumericInt       	181890792	         1.976 ns/op	         8.000 B/slot	         1.976 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitConstruct/NumericInt       	180011288	         2.014 ns/op	         8.000 B/slot	         2.014 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitConstruct/NumericInt       	175976731	         2.014 ns/op	         8.000 B/slot	         2.014 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitConstruct/NumericInt       	182102064	         1.999 ns/op	         8.000 B/slot	         1.999 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitConstruct/NumericInt       	180115536	         1.986 ns/op	         8.000 B/slot	         1.986 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitConstruct/NumericInt       	180784036	         2.002 ns/op	         8.000 B/slot	         2.002 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitConstruct/NumericInt       	180309681	         1.987 ns/op	         8.000 B/slot	         1.987 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitConstruct/Sealed           	51964923	         6.441 ns/op	        16.00 B/slot	         6.441 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitConstruct/Sealed           	72396369	         5.619 ns/op	        16.00 B/slot	         5.619 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitConstruct/Sealed           	72832725	         4.926 ns/op	        16.00 B/slot	         4.926 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitConstruct/Sealed           	77708329	         5.281 ns/op	        16.00 B/slot	         5.281 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitConstruct/Sealed           	73027867	         4.821 ns/op	        16.00 B/slot	         4.821 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitConstruct/Sealed           	66194722	         5.257 ns/op	        16.00 B/slot	         5.257 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitConstruct/Sealed           	81811208	         4.755 ns/op	        16.00 B/slot	         4.755 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitDispatch/Numeric8          	63759606	         4.966 ns/op	         1.000 B/slot	         4.966 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitDispatch/Numeric8          	83550098	         3.981 ns/op	         1.000 B/slot	         3.981 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitDispatch/Numeric8          	81729950	         6.288 ns/op	         1.000 B/slot	         6.288 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitDispatch/Numeric8          	73425691	         5.165 ns/op	         1.000 B/slot	         5.165 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitDispatch/Numeric8          	82150348	         4.862 ns/op	         1.000 B/slot	         4.862 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitDispatch/Numeric8          	74474412	         4.596 ns/op	         1.000 B/slot	         4.596 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitDispatch/Numeric8          	91546750	         4.629 ns/op	         1.000 B/slot	         4.629 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitDispatch/NumericInt        	67828621	         5.337 ns/op	         8.000 B/slot	         5.337 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitDispatch/NumericInt        	66737380	         5.318 ns/op	         8.000 B/slot	         5.318 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitDispatch/NumericInt        	50007236	         6.510 ns/op	         8.000 B/slot	         6.510 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitDispatch/NumericInt        	72936637	         4.467 ns/op	         8.000 B/slot	         4.467 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitDispatch/NumericInt        	80040019	         5.916 ns/op	         8.000 B/slot	         5.916 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitDispatch/NumericInt        	70703190	         5.148 ns/op	         8.000 B/slot	         5.148 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitDispatch/NumericInt        	63223058	         4.761 ns/op	         8.000 B/slot	         4.761 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitDispatch/Sealed            	34706461	        10.40 ns/op	        16.00 B/slot	        10.40 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitDispatch/Sealed            	34737996	        10.29 ns/op	        16.00 B/slot	        10.29 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitDispatch/Sealed            	34907959	         9.859 ns/op	        16.00 B/slot	         9.859 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitDispatch/Sealed            	34480971	        10.26 ns/op	        16.00 B/slot	        10.26 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitDispatch/Sealed            	35818518	        10.36 ns/op	        16.00 B/slot	        10.36 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitDispatch/Sealed            	35127948	        10.55 ns/op	        16.00 B/slot	        10.55 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitDispatch/Sealed            	35315032	        10.32 ns/op	        16.00 B/slot	        10.32 ns/value	         1.000 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitBatchBuild/Numeric8        	   99304	      3656 ns/op	         1.000 B/slot	         0.5100 ns/value	      7168 values/op	    8192 B/op	       1 allocs/op
+BenchmarkUnitBatchBuild/Numeric8        	   97422	      3654 ns/op	         1.000 B/slot	         0.5098 ns/value	      7168 values/op	    8192 B/op	       1 allocs/op
+BenchmarkUnitBatchBuild/Numeric8        	   95680	      3691 ns/op	         1.000 B/slot	         0.5149 ns/value	      7168 values/op	    8192 B/op	       1 allocs/op
+BenchmarkUnitBatchBuild/Numeric8        	   98083	      3711 ns/op	         1.000 B/slot	         0.5177 ns/value	      7168 values/op	    8192 B/op	       1 allocs/op
+BenchmarkUnitBatchBuild/Numeric8        	   99363	      3700 ns/op	         1.000 B/slot	         0.5161 ns/value	      7168 values/op	    8192 B/op	       1 allocs/op
+BenchmarkUnitBatchBuild/Numeric8        	   96612	      3694 ns/op	         1.000 B/slot	         0.5153 ns/value	      7168 values/op	    8192 B/op	       1 allocs/op
+BenchmarkUnitBatchBuild/Numeric8        	   94492	      3669 ns/op	         1.000 B/slot	         0.5118 ns/value	      7168 values/op	    8192 B/op	       1 allocs/op
+BenchmarkUnitBatchBuild/NumericInt      	   66256	      5502 ns/op	         8.000 B/slot	         0.7675 ns/value	      7168 values/op	   57344 B/op	       1 allocs/op
+BenchmarkUnitBatchBuild/NumericInt      	   64741	      5642 ns/op	         8.000 B/slot	         0.7871 ns/value	      7168 values/op	   57344 B/op	       1 allocs/op
+BenchmarkUnitBatchBuild/NumericInt      	   63667	      5679 ns/op	         8.000 B/slot	         0.7923 ns/value	      7168 values/op	   57344 B/op	       1 allocs/op
+BenchmarkUnitBatchBuild/NumericInt      	   60070	      5883 ns/op	         8.000 B/slot	         0.8208 ns/value	      7168 values/op	   57344 B/op	       1 allocs/op
+BenchmarkUnitBatchBuild/NumericInt      	   63602	      5813 ns/op	         8.000 B/slot	         0.8110 ns/value	      7168 values/op	   57344 B/op	       1 allocs/op
+BenchmarkUnitBatchBuild/NumericInt      	   67285	      5611 ns/op	         8.000 B/slot	         0.7828 ns/value	      7168 values/op	   57344 B/op	       1 allocs/op
+BenchmarkUnitBatchBuild/NumericInt      	   63910	      5650 ns/op	         8.000 B/slot	         0.7882 ns/value	      7168 values/op	   57344 B/op	       1 allocs/op
+BenchmarkUnitBatchBuild/Sealed          	    6980	     48933 ns/op	        16.00 B/slot	         6.827 ns/value	      7168 values/op	  114688 B/op	       1 allocs/op
+BenchmarkUnitBatchBuild/Sealed          	    8251	     48882 ns/op	        16.00 B/slot	         6.819 ns/value	      7168 values/op	  114688 B/op	       1 allocs/op
+BenchmarkUnitBatchBuild/Sealed          	    8444	     49098 ns/op	        16.00 B/slot	         6.850 ns/value	      7168 values/op	  114688 B/op	       1 allocs/op
+BenchmarkUnitBatchBuild/Sealed          	    8349	     50323 ns/op	        16.00 B/slot	         7.020 ns/value	      7168 values/op	  114688 B/op	       1 allocs/op
+BenchmarkUnitBatchBuild/Sealed          	    8119	     49436 ns/op	        16.00 B/slot	         6.897 ns/value	      7168 values/op	  114688 B/op	       1 allocs/op
+BenchmarkUnitBatchBuild/Sealed          	    8077	     49791 ns/op	        16.00 B/slot	         6.946 ns/value	      7168 values/op	  114688 B/op	       1 allocs/op
+BenchmarkUnitBatchBuild/Sealed          	    8358	     50504 ns/op	        16.00 B/slot	         7.046 ns/value	      7168 values/op	  114688 B/op	       1 allocs/op
+BenchmarkUnitTraversal/Numeric8         	   28390	     11663 ns/op	         1.000 B/slot	         1.627 ns/value	      7168 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitTraversal/Numeric8         	   35763	     11885 ns/op	         1.000 B/slot	         1.658 ns/value	      7168 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitTraversal/Numeric8         	   24254	     13903 ns/op	         1.000 B/slot	         1.940 ns/value	      7168 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitTraversal/Numeric8         	   34720	     12050 ns/op	         1.000 B/slot	         1.681 ns/value	      7168 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitTraversal/Numeric8         	   34623	     10265 ns/op	         1.000 B/slot	         1.432 ns/value	      7168 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitTraversal/Numeric8         	   35740	     10242 ns/op	         1.000 B/slot	         1.429 ns/value	      7168 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitTraversal/Numeric8         	   32673	     10505 ns/op	         1.000 B/slot	         1.466 ns/value	      7168 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitTraversal/NumericInt       	   22662	     15123 ns/op	         8.000 B/slot	         2.110 ns/value	      7168 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitTraversal/NumericInt       	   22976	     17362 ns/op	         8.000 B/slot	         2.422 ns/value	      7168 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitTraversal/NumericInt       	   30537	     11344 ns/op	         8.000 B/slot	         1.583 ns/value	      7168 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitTraversal/NumericInt       	   35102	     10191 ns/op	         8.000 B/slot	         1.422 ns/value	      7168 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitTraversal/NumericInt       	   35527	     10246 ns/op	         8.000 B/slot	         1.429 ns/value	      7168 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitTraversal/NumericInt       	   33135	     10811 ns/op	         8.000 B/slot	         1.508 ns/value	      7168 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitTraversal/NumericInt       	   34098	     11175 ns/op	         8.000 B/slot	         1.559 ns/value	      7168 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitTraversal/Sealed           	    5940	     59938 ns/op	        16.00 B/slot	         8.362 ns/value	      7168 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitTraversal/Sealed           	    6504	     56932 ns/op	        16.00 B/slot	         7.943 ns/value	      7168 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitTraversal/Sealed           	    6502	     56232 ns/op	        16.00 B/slot	         7.845 ns/value	      7168 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitTraversal/Sealed           	    6225	     58407 ns/op	        16.00 B/slot	         8.148 ns/value	      7168 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitTraversal/Sealed           	    6183	     58851 ns/op	        16.00 B/slot	         8.210 ns/value	      7168 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitTraversal/Sealed           	    6144	     57482 ns/op	        16.00 B/slot	         8.019 ns/value	      7168 values/op	       0 B/op	       0 allocs/op
+BenchmarkUnitTraversal/Sealed           	    6117	     59335 ns/op	        16.00 B/slot	         8.278 ns/value	      7168 values/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/goxide-lang/syntax/internal/enumbench	31.222s
+goos: darwin
+goarch: arm64
+pkg: github.com/goxide-lang/syntax/internal/tokenbench
+cpu: Apple M2
+BenchmarkBuild/Program/Flat    	    8810	     38528 ns/op	       576.0 nodes/op	  130112 B/op	      89 allocs/op
+BenchmarkBuild/Program/Flat    	   10000	     36607 ns/op	       576.0 nodes/op	  130112 B/op	      89 allocs/op
+BenchmarkBuild/Program/Flat    	   10000	     36385 ns/op	       576.0 nodes/op	  130112 B/op	      89 allocs/op
+BenchmarkBuild/Program/Flat    	   10000	     37032 ns/op	       576.0 nodes/op	  130112 B/op	      89 allocs/op
+BenchmarkBuild/Program/Flat    	   10000	     36707 ns/op	       576.0 nodes/op	  130112 B/op	      89 allocs/op
+BenchmarkBuild/Program/Flat    	   10000	     36981 ns/op	       576.0 nodes/op	  130112 B/op	      89 allocs/op
+BenchmarkBuild/Program/Flat    	   10000	     37169 ns/op	       576.0 nodes/op	  130112 B/op	      89 allocs/op
+BenchmarkBuild/Program/EnumPayload         	   13350	     27095 ns/op	       576.0 nodes/op	   58169 B/op	     665 allocs/op
+BenchmarkBuild/Program/EnumPayload         	   12836	     27778 ns/op	       576.0 nodes/op	   58169 B/op	     665 allocs/op
+BenchmarkBuild/Program/EnumPayload         	   12415	     28649 ns/op	       576.0 nodes/op	   58169 B/op	     665 allocs/op
+BenchmarkBuild/Program/EnumPayload         	   13484	     26702 ns/op	       576.0 nodes/op	   58169 B/op	     665 allocs/op
+BenchmarkBuild/Program/EnumPayload         	   13438	     26770 ns/op	       576.0 nodes/op	   58169 B/op	     665 allocs/op
+BenchmarkBuild/Program/EnumPayload         	   13480	     26697 ns/op	       576.0 nodes/op	   58169 B/op	     665 allocs/op
+BenchmarkBuild/Program/EnumPayload         	   13023	     27466 ns/op	       576.0 nodes/op	   58169 B/op	     665 allocs/op
+BenchmarkBuild/ProgramX32/Flat             	     276	   1272613 ns/op	     18432 nodes/op	 4155392 B/op	    2817 allocs/op
+BenchmarkBuild/ProgramX32/Flat             	     284	   1273116 ns/op	     18432 nodes/op	 4155392 B/op	    2817 allocs/op
+BenchmarkBuild/ProgramX32/Flat             	     276	   1281146 ns/op	     18432 nodes/op	 4155392 B/op	    2817 allocs/op
+BenchmarkBuild/ProgramX32/Flat             	     274	   1336307 ns/op	     18432 nodes/op	 4155392 B/op	    2817 allocs/op
+BenchmarkBuild/ProgramX32/Flat             	     266	   1318789 ns/op	     18432 nodes/op	 4155392 B/op	    2817 allocs/op
+BenchmarkBuild/ProgramX32/Flat             	     279	   1281311 ns/op	     18432 nodes/op	 4155392 B/op	    2817 allocs/op
+BenchmarkBuild/ProgramX32/Flat             	     279	   1285939 ns/op	     18432 nodes/op	 4155392 B/op	    2817 allocs/op
+BenchmarkBuild/ProgramX32/EnumPayload      	     325	   1062651 ns/op	     18432 nodes/op	 1853218 B/op	   21249 allocs/op
+BenchmarkBuild/ProgramX32/EnumPayload      	     343	   1052957 ns/op	     18432 nodes/op	 1853218 B/op	   21249 allocs/op
+BenchmarkBuild/ProgramX32/EnumPayload      	     345	   1047908 ns/op	     18432 nodes/op	 1853218 B/op	   21249 allocs/op
+BenchmarkBuild/ProgramX32/EnumPayload      	     345	   1063134 ns/op	     18432 nodes/op	 1853218 B/op	   21249 allocs/op
+BenchmarkBuild/ProgramX32/EnumPayload      	     342	   1067687 ns/op	     18432 nodes/op	 1853218 B/op	   21249 allocs/op
+BenchmarkBuild/ProgramX32/EnumPayload      	     333	   1114045 ns/op	     18432 nodes/op	 1853218 B/op	   21249 allocs/op
+BenchmarkBuild/ProgramX32/EnumPayload      	     340	   1054737 ns/op	     18432 nodes/op	 1853218 B/op	   21249 allocs/op
+BenchmarkTraverse/Program/Flat             	  159742	      2236 ns/op	       576.0 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/Program/Flat             	  160549	      2241 ns/op	       576.0 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/Program/Flat             	  160928	      2250 ns/op	       576.0 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/Program/Flat             	  160425	      2244 ns/op	       576.0 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/Program/Flat             	  160762	      2238 ns/op	       576.0 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/Program/Flat             	  160641	      2311 ns/op	       576.0 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/Program/Flat             	  143540	      2372 ns/op	       576.0 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/Program/EnumPayload      	  223528	      1615 ns/op	       576.0 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/Program/EnumPayload      	  223398	      1617 ns/op	       576.0 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/Program/EnumPayload      	  223665	      1610 ns/op	       576.0 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/Program/EnumPayload      	  223632	      1617 ns/op	       576.0 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/Program/EnumPayload      	  222924	      1613 ns/op	       576.0 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/Program/EnumPayload      	  220382	      1615 ns/op	       576.0 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/Program/EnumPayload      	  223677	      1614 ns/op	       576.0 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/ProgramX32/Flat          	    4665	     82600 ns/op	     18432 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/ProgramX32/Flat          	    4820	     78783 ns/op	     18432 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/ProgramX32/Flat          	    4725	     75931 ns/op	     18432 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/ProgramX32/Flat          	    4749	     75889 ns/op	     18432 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/ProgramX32/Flat          	    4740	     75546 ns/op	     18432 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/ProgramX32/Flat          	    4740	     76011 ns/op	     18432 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/ProgramX32/Flat          	    4732	     76262 ns/op	     18432 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/ProgramX32/EnumPayload   	    6354	     60869 ns/op	     18432 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/ProgramX32/EnumPayload   	    6638	     54413 ns/op	     18432 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/ProgramX32/EnumPayload   	    6578	     57412 ns/op	     18432 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/ProgramX32/EnumPayload   	    5767	     55479 ns/op	     18432 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/ProgramX32/EnumPayload   	    6723	     54396 ns/op	     18432 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/ProgramX32/EnumPayload   	    6680	     54250 ns/op	     18432 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkTraverse/ProgramX32/EnumPayload   	    6637	     54047 ns/op	     18432 nodes/op	       0 B/op	       0 allocs/op
+BenchmarkCopyShallow/Program/Flat          	  184192	      1949 ns/op	        42.00 roots/op	    9472 B/op	       1 allocs/op
+BenchmarkCopyShallow/Program/Flat          	  181028	      1943 ns/op	        42.00 roots/op	    9472 B/op	       1 allocs/op
+BenchmarkCopyShallow/Program/Flat          	  188422	      1924 ns/op	        42.00 roots/op	    9472 B/op	       1 allocs/op
+BenchmarkCopyShallow/Program/Flat          	  186805	      1926 ns/op	        42.00 roots/op	    9472 B/op	       1 allocs/op
+BenchmarkCopyShallow/Program/Flat          	  183148	      1939 ns/op	        42.00 roots/op	    9472 B/op	       1 allocs/op
+BenchmarkCopyShallow/Program/Flat          	  186328	      1942 ns/op	        42.00 roots/op	    9472 B/op	       1 allocs/op
+BenchmarkCopyShallow/Program/Flat          	  182715	      2012 ns/op	        42.00 roots/op	    9472 B/op	       1 allocs/op
+BenchmarkCopyShallow/Program/EnumPayload   	  543850	       700.4 ns/op	        42.00 roots/op	    3072 B/op	       1 allocs/op
+BenchmarkCopyShallow/Program/EnumPayload   	  516492	       683.8 ns/op	        42.00 roots/op	    3072 B/op	       1 allocs/op
+BenchmarkCopyShallow/Program/EnumPayload   	  499089	       695.6 ns/op	        42.00 roots/op	    3072 B/op	       1 allocs/op
+BenchmarkCopyShallow/Program/EnumPayload   	  545850	       677.5 ns/op	        42.00 roots/op	    3072 B/op	       1 allocs/op
+BenchmarkCopyShallow/Program/EnumPayload   	  545840	       681.2 ns/op	        42.00 roots/op	    3072 B/op	       1 allocs/op
+BenchmarkCopyShallow/Program/EnumPayload   	  527284	       678.7 ns/op	        42.00 roots/op	    3072 B/op	       1 allocs/op
+BenchmarkCopyShallow/Program/EnumPayload   	  547903	       676.9 ns/op	        42.00 roots/op	    3072 B/op	       1 allocs/op
+BenchmarkCopyShallow/ProgramX32/Flat       	    4474	     72200 ns/op	      1344 roots/op	  294912 B/op	       1 allocs/op
+BenchmarkCopyShallow/ProgramX32/Flat       	    4684	     66150 ns/op	      1344 roots/op	  294912 B/op	       1 allocs/op
+BenchmarkCopyShallow/ProgramX32/Flat       	    5588	     65188 ns/op	      1344 roots/op	  294912 B/op	       1 allocs/op
+BenchmarkCopyShallow/ProgramX32/Flat       	    5566	     64340 ns/op	      1344 roots/op	  294912 B/op	       1 allocs/op
+BenchmarkCopyShallow/ProgramX32/Flat       	    6424	     65555 ns/op	      1344 roots/op	  294912 B/op	       1 allocs/op
+BenchmarkCopyShallow/ProgramX32/Flat       	    5556	     64226 ns/op	      1344 roots/op	  294912 B/op	       1 allocs/op
+BenchmarkCopyShallow/ProgramX32/Flat       	    4618	     66340 ns/op	      1344 roots/op	  294912 B/op	       1 allocs/op
+BenchmarkCopyShallow/ProgramX32/EnumPayload         	   13784	     26397 ns/op	      1344 roots/op	   90112 B/op	       1 allocs/op
+BenchmarkCopyShallow/ProgramX32/EnumPayload         	   12865	     28051 ns/op	      1344 roots/op	   90112 B/op	       1 allocs/op
+BenchmarkCopyShallow/ProgramX32/EnumPayload         	   12777	     28466 ns/op	      1344 roots/op	   90112 B/op	       1 allocs/op
+BenchmarkCopyShallow/ProgramX32/EnumPayload         	   13442	     26072 ns/op	      1344 roots/op	   90112 B/op	       1 allocs/op
+BenchmarkCopyShallow/ProgramX32/EnumPayload         	   13314	     26444 ns/op	      1344 roots/op	   90112 B/op	       1 allocs/op
+BenchmarkCopyShallow/ProgramX32/EnumPayload         	   13406	     26776 ns/op	      1344 roots/op	   90112 B/op	       1 allocs/op
+BenchmarkCopyShallow/ProgramX32/EnumPayload         	   14082	     25957 ns/op	      1344 roots/op	   90112 B/op	       1 allocs/op
+PASS
+ok  	github.com/goxide-lang/syntax/internal/tokenbench	30.641s

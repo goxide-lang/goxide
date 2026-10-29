@@ -11,20 +11,38 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/hxsf/goxide/internal/check"
-	"github.com/hxsf/goxide/internal/resolve"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/check"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 const typeCarrierAnchor = "GoxideInternalTypeCarrierForSelf"
 
 // Generated names and their owning files are fixed before emitting any file.
 type traitProgram struct {
-	impls    []*check.Impl
-	carriers map[*types.Named]*traitCarrier
-	facades  map[string]*traitFacade
-	claims   map[string]map[string]syntax.Node
-	members  map[*types.Named]map[string]syntax.Node
+	typeState           *check.TypeState
+	stableGo            bool
+	sourceInfo          *check.Info
+	impls               []*check.Impl
+	carriers            map[*types.Named]*traitCarrier
+	inherentCarriers    map[*check.Impl]*inherentCarrier
+	facades             map[string]*traitFacade
+	claims              map[string]map[string]syntax.Node
+	members             map[*types.Named]map[string]syntax.Node
+	functions           map[*types.Signature]*traitFunction
+	instances           map[string]*traitInstance
+	templateImpls       map[*check.Impl]bool
+	templateFunctions   map[*syntax.FuncDecl]bool
+	templateNames       map[*check.Impl]string
+	legacyFunctions     map[*syntax.FuncDecl]bool
+	helperFunctions     map[*syntax.FuncDecl]bool
+	helperImpls         map[*check.Impl]bool
+	inferredCalls       map[*syntax.FuncDecl]bool
+	inferredOperations  map[*syntax.FuncDecl]bool
+	boundBindings       map[*check.TraitBound]map[string]bool
+	implBindings        map[*check.Impl]map[string]bool
+	enumReadExpressions map[*syntax.FuncDecl]bool
+	enumChecks          map[enumAssertionBodyKey][]types.Type
 }
 
 type traitCarrier struct {
@@ -40,13 +58,36 @@ type traitFacade struct {
 	impls []*check.Impl
 }
 
-func prepareTraits(info *check.Info) *traitProgram {
-	p := &traitProgram{carriers: map[*types.Named]*traitCarrier{}, facades: map[string]*traitFacade{}, claims: map[string]map[string]syntax.Node{}, members: map[*types.Named]map[string]syntax.Node{}}
+func prepareTraits(info *check.Info, state *check.TypeState, validation, stableGo bool) *traitProgram {
+	p := &traitProgram{typeState: state, stableGo: stableGo, sourceInfo: info, carriers: map[*types.Named]*traitCarrier{}, facades: map[string]*traitFacade{}, claims: map[string]map[string]syntax.Node{}, members: map[*types.Named]map[string]syntax.Node{}}
 	if info == nil {
 		return p
 	}
+	p.functions = prepareTraitFunctions(info)
+	p.prepareInstances(info)
 	for _, impl := range info.Impls {
-		if impl.AliasOf == nil {
+		if len(impl.ConstParams) != 0 {
+			if validation || stableGo {
+				p.impls = append(p.impls, impl)
+			}
+			if info.Demands != nil && !stableGo {
+				for _, definition := range info.Demands.GenericImpls {
+					if definition.Template == impl {
+						p.impls = append(p.impls, definition)
+					}
+				}
+			}
+			continue
+		}
+		if info.Demands != nil && !parameterizedImpl(impl) {
+			for _, selected := range info.Demands.Impls {
+				if implTemplate(selected) == impl {
+					impl = selected
+					break
+				}
+			}
+		}
+		if validation || stableGo || info.Demands == nil || !info.Demands.ImplTemplates[impl] || p.templateImpls[impl] || implHasBodyCases(info, impl) {
 			p.impls = append(p.impls, impl)
 		}
 	}
@@ -55,8 +96,17 @@ func prepareTraits(info *check.Info) *traitProgram {
 		if a.File != b.File {
 			return a.File < b.File
 		}
-		return a.Decl.Span().Start < b.Decl.Span().Start
+		if a.Decl.Span().Start != b.Decl.Span().Start {
+			return a.Decl.Span().Start < b.Decl.Span().Start
+		}
+		return implIdentity(info, a) < implIdentity(info, b)
 	})
+	p.prepareTemplateNames(info)
+	if stableGo && info.Demands != nil {
+		for _, impl := range info.Demands.GenericImpls {
+			p.templateNames[impl] = p.templateNames[originalImpl(impl)]
+		}
+	}
 	seen := map[string]bool{}
 	unique := p.impls[:0]
 	for _, impl := range p.impls {
@@ -78,8 +128,11 @@ func prepareTraits(info *check.Info) *traitProgram {
 			}
 			carrier.impls = append(carrier.impls, impl)
 		}
+		if impl.Base == nil || parameterizedImpl(impl) {
+			continue
+		}
 		local := impl.Base.Obj().Pkg() != nil && impl.Base.Obj().Pkg().Path() == filepath.ToSlash(filepath.Dir(impl.File))
-		if impl.Trait.Runtime && (!local || !goMethodReceiver(impl.Base)) {
+		if impl.Trait.Runtime && !parameterizedTrait(impl.Trait) && (!local || !goMethodReceiver(impl.Base)) {
 			// Value enum views already have an As method on every variant.
 			if local && info.EnumOf(impl.Base) != nil && impl.Capture == check.ValueRef {
 				continue
@@ -95,21 +148,44 @@ func prepareTraits(info *check.Info) *traitProgram {
 	p.impls = unique
 	for _, facade := range p.facades {
 		for _, impl := range p.impls {
-			if impl.Base == facade.typ && impl.Trait != nil && impl.Trait.Runtime && filepath.Dir(impl.File) == filepath.Dir(facade.file) {
+			if impl.Base == facade.typ && impl.Trait != nil && impl.Trait.Runtime && !parameterizedTrait(impl.Trait) && filepath.Dir(impl.File) == filepath.Dir(facade.file) {
 				facade.impls = append(facade.impls, impl)
 			}
 		}
 	}
+	if info.Demands != nil {
+		p.prepareFunctionEntries(info)
+		p.prepareTemplateHelpers(info)
+		p.prepareInferenceCalls(info)
+	}
+	p.prepareBindings(info)
+	p.prepareInherentCarriers(info)
+	if validation {
+		for _, function := range p.functions {
+			if function.decl.Body != nil && info.Demands != nil && info.Demands.FunctionTemplates[function.decl] {
+				p.templateFunctions[function.decl], p.helperFunctions[function.decl] = true, true
+			}
+		}
+		for _, impl := range p.impls {
+			if parameterizedImpl(impl) {
+				p.helperImpls[impl] = true
+			}
+		}
+	}
+	p.prepareEnumAssertions(info)
 	return p
 }
 
 func carrierTarget(info *check.Info, impl *check.Impl) bool {
-	return impl.Base != nil && types.Identical(types.Unalias(impl.Target), impl.Base) &&
+	return !parameterizedTrait(impl.Trait) && !parameterizedImpl(impl) && impl.Base != nil && impl.Base.TypeParams().Len() == 0 && types.Identical(types.Unalias(impl.Target), impl.Base) &&
 		impl.Base.Obj().Pkg() != nil && impl.Base.Obj().Pkg().Path() == filepath.ToSlash(filepath.Dir(impl.File)) &&
 		(goMethodReceiver(impl.Base) || info.EnumOf(impl.Base) != nil)
 }
 
 func goMethodReceiver(t *types.Named) bool {
+	if t == nil {
+		return false
+	}
 	switch t.Underlying().(type) {
 	case *types.Pointer, *types.Interface:
 		return false
@@ -133,22 +209,25 @@ func privateName(name string) string {
 }
 
 func canonicalPackage(info *check.Info, pkg *types.Package) string {
-	if pkg == nil {
-		return ""
-	}
-	if path := info.PackagePaths[pkg.Path()]; path != "" {
-		return path
-	}
-	return pkg.Path()
+	return info.CanonicalPackagePath(pkg)
 }
 
 func implIdentity(info *check.Info, impl *check.Impl) string {
-	target := types.TypeString(impl.Target, func(pkg *types.Package) string { return canonicalPackage(info, pkg) })
-	owner := filepath.ToSlash(filepath.Dir(impl.File))
-	if mapped := info.PackagePaths[owner]; mapped != "" {
-		owner = mapped
+	impl = implTemplate(impl)
+	owner := canonicalPackage(info, impl.Owner)
+	identity := owner + ":" + impl.DeclID + ":" + impl.ApplicationKey()
+	for _, argument := range impl.ConstArgs {
+		identity += fmt.Sprintf(":const:%d", argument.Value)
 	}
-	return owner + ":" + target + ":" + impl.Trait.Marker
+	var branches []string
+	for declaration, branch := range impl.MethodCases {
+		branches = append(branches, declaration.Name.Name+":"+branch.Key)
+	}
+	sort.Strings(branches)
+	for _, branch := range branches {
+		identity += ":case:" + branch
+	}
+	return identity
 }
 
 func implSuffix(info *check.Info, impl *check.Impl) string {
@@ -157,6 +236,9 @@ func implSuffix(info *check.Info, impl *check.Impl) string {
 }
 
 func targetName(impl *check.Impl) string {
+	if impl.Base == nil {
+		return typeTargetName(impl.Target)
+	}
 	name := exportedName(impl.Base.Obj().Name())
 	if pkg := impl.Base.Obj().Pkg(); pkg != nil && pkg.Path() != filepath.ToSlash(filepath.Dir(impl.File)) {
 		name = exportedName(pkg.Name()) + name
@@ -164,10 +246,87 @@ func targetName(impl *check.Impl) string {
 	return name
 }
 
-func traitName(trait *check.Trait) string  { return exportedName(trait.Symbol.GoName) }
-func traitFactory(impl *check.Impl) string { return "As" + targetName(impl) + traitName(impl.Trait) }
-func traitAs(impl *check.Impl) string      { return "As" + traitName(impl.Trait) }
+func typeTargetName(target types.Type) string {
+	switch target := types.Unalias(target).(type) {
+	case *types.Named:
+		name := exportedName(target.Obj().Name())
+		for index := 0; index < target.TypeArgs().Len(); index++ {
+			name += typeTargetName(target.TypeArgs().At(index))
+		}
+		return name
+	case *types.TypeParam:
+		return exportedName(target.Obj().Name())
+	case *types.Pointer:
+		return typeTargetName(target.Elem()) + "Pointer"
+	case *types.Slice:
+		return typeTargetName(target.Elem()) + "Slice"
+	case *types.Array:
+		return fmt.Sprintf("%sArray%d", typeTargetName(target.Elem()), target.Len())
+	case *types.Map:
+		return "Map" + typeTargetName(target.Key()) + typeTargetName(target.Elem())
+	case *types.Chan:
+		direction := "Chan"
+		if target.Dir() == types.RecvOnly {
+			direction = "ReceiveChan"
+		}
+		if target.Dir() == types.SendOnly {
+			direction = "SendChan"
+		}
+		return direction + typeTargetName(target.Elem())
+	case *types.Signature:
+		name := "Func"
+		for index := 0; index < target.Params().Len(); index++ {
+			name += typeTargetName(target.Params().At(index).Type())
+		}
+		name += "To"
+		for index := 0; index < target.Results().Len(); index++ {
+			name += typeTargetName(target.Results().At(index).Type())
+		}
+		return name
+	case *types.Struct:
+		return "Record"
+	case *types.Interface:
+		return "Interface"
+	case *types.Basic:
+		return exportedName(target.Name())
+	default:
+		return "Value"
+	}
+}
+
+func traitName(trait *check.Trait) string { return exportedName(trait.Symbol.GoName) }
+func traitApplicationName(impl *check.Impl) string {
+	name := traitName(impl.Trait)
+	for _, input := range impl.Inputs {
+		name += typeTargetName(input)
+	}
+	return name
+}
+
+func traitFactory(impl *check.Impl) string {
+	impl = implTemplate(impl)
+	return "As" + targetName(impl) + traitApplicationName(impl)
+}
+func (e *emitter) traitFactoryName(impl *check.Impl) string {
+	branch := impl.Case
+	impl = implTemplate(impl)
+	if branch != nil {
+		return "As" + e.traits.templateNames[impl] + caseSuffix(branch.Key) + "Func"
+	}
+	if parameterizedImpl(impl) {
+		return "As" + e.traits.templateNames[impl] + "Func"
+	}
+	name := traitFactory(impl)
+	if parameterizedTrait(impl.Trait) || impl.Base == nil || impl.Base.TypeParams().Len() != 0 || impl.Base.TypeArgs().Len() != 0 {
+		name += "_" + implSuffix(e.info, impl)
+	}
+	return name
+}
+func traitAs(impl *check.Impl) string { return "As" + traitName(impl.Trait) }
 func traitOperation(member *check.Member) string {
+	if parameterizedTrait(member.Trait) {
+		return exportedName(member.GoName)
+	}
 	return member.Trait.Marker + "_" + exportedName(member.GoName)
 }
 func traitWitness(trait *check.Trait, name string) string {
@@ -175,23 +334,45 @@ func traitWitness(trait *check.Trait, name string) string {
 }
 
 func (e *emitter) traitWrapper(impl *check.Impl) string {
-	return "goxide" + targetName(impl) + traitName(impl.Trait) + "_" + implSuffix(e.info, impl)
+	branch := impl.Case
+	impl = implTemplate(impl)
+	if branch != nil {
+		return "goxide" + e.traits.templateNames[impl] + caseSuffix(branch.Key) + "View"
+	}
+	if parameterizedImpl(impl) {
+		return "goxide" + e.traits.templateNames[impl] + "View"
+	}
+	return "goxide" + targetName(impl) + traitApplicationName(impl) + "_" + implSuffix(e.info, impl)
 }
 
 func (e *emitter) traitFreeOperation(member *check.Member) string {
-	return "Goxide" + targetName(member.Impl) + "_" + traitOperation(member) + "_" + implSuffix(e.info, member.Impl)
+	impl := implTemplate(member.Impl)
+	return "Goxide" + targetName(impl) + "_" + traitOperation(member) + "_" + implSuffix(e.info, impl)
 }
 
-func inherentName(member *check.Member) string {
-	name := exportedName(member.Impl.Base.Obj().Name()) + exportedName(member.GoName)
+func (e *emitter) inherentName(member *check.Member) string {
+	impl := implTemplate(member.Impl)
+	name := targetName(impl) + exportedName(member.GoName)
 	if member.Name == "new" {
-		name = "New" + exportedName(member.Impl.Base.Obj().Name())
+		name = "New" + targetName(impl)
+	}
+	if !nativeInherentImpl(impl) {
+		name += "_" + implSuffix(e.info, impl)
 	}
 	if member.Symbol != nil && member.Symbol.Visibility != resolve.Public {
 		name = privateName(name)
 	}
 	return name
 }
+
+func nativeInherentImpl(impl *check.Impl) bool {
+	if impl == nil {
+		return false
+	}
+	return check.CanUseGoReceiver(implTemplate(impl))
+}
+
+func carrierExportedName(carrier *traitCarrier) string { return exportedName(carrier.name) }
 
 func (e *emitter) generatedName(name string, node syntax.Node) bool {
 	pkg := filepath.ToSlash(filepath.Dir(e.name))
@@ -274,25 +455,33 @@ func (e *emitter) reserveTraitNames() {
 		}
 		if impl.Trait == nil {
 			for _, m := range impl.Methods {
-				if m.Static || !goMethodReceiver(impl.Base) {
-					e.reserved[inherentName(m)] = true
+				if m.Static {
+					if carrier := e.inherentCarrier(impl); carrier != nil {
+						e.reserved[carrier.name] = true
+					}
+				} else if !nativeInherentImpl(impl) {
+					e.reserved[e.inherentName(m)] = true
 				}
 			}
 			continue
 		}
 		e.reserved[e.traitWrapper(impl)] = true
 		if impl.Trait.Runtime {
-			e.reserved[traitFactory(impl)] = true
+			e.reserved[e.traitFactoryName(impl)] = true
 		}
 		if !carrierTarget(e.info, impl) {
-			for _, m := range impl.Methods {
-				e.reserved[e.traitFreeOperation(m)] = true
+			e.reserved[e.implOpsName(impl)] = true
+			if !parameterizedTrait(impl.Trait) {
+				for _, m := range impl.Methods {
+					e.reserved[e.traitFreeOperation(m)] = true
+				}
 			}
 		}
 	}
 	for _, carrier := range e.traits.carriers {
 		if e.samePackage(carrier.file) {
 			e.reserved[carrier.name] = true
+			e.reserved[carrierExportedName(carrier)] = true
 		}
 	}
 	for _, facade := range e.traits.facades {
@@ -321,4 +510,35 @@ func (e *emitter) sourceGlobal(file, name string) goast.Expr {
 		pkg = mapped
 	}
 	return &goast.SelectorExpr{X: e.importName(strings.Split(pkg, "/"), "", 0), Sel: goast.NewIdent(name)}
+}
+
+func (p *traitProgram) prepareTemplateNames(info *check.Info) {
+	p.templateNames = map[*check.Impl]string{}
+	for _, impl := range p.impls {
+		if !parameterizedImpl(impl) {
+			continue
+		}
+		name := typeTargetName(impl.Target)
+		if p.stableGo {
+			name = stableTypeTargetName(p.typeState, info, impl.Target)
+		}
+		if impl.Trait != nil {
+			if p.stableGo {
+				name += traitName(impl.Trait)
+				for _, input := range impl.Inputs {
+					name += stableTypeTargetName(p.typeState, info, input)
+				}
+			} else {
+				name += traitApplicationName(impl)
+			}
+		}
+		p.templateNames[impl] = name + "_" + implSuffix(info, impl)
+	}
+}
+
+func (e *emitter) templateTargetName(target types.Type) string {
+	if e.traits.stableGo {
+		return stableTypeTargetName(e.typeState, e.info, target)
+	}
+	return typeTargetName(target)
 }

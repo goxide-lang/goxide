@@ -13,27 +13,18 @@ func TestCrossModuleBuiltinArtifacts(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
-	module := func(name, lib string) string {
-		text := fmt.Sprintf("module %s\ngo 1.27\n", name)
-		if lib != "" {
-			text += fmt.Sprintf("require sums.example/lib v0.0.0\nreplace sums.example/lib => %s\n", filepath.ToSlash(lib))
-		}
-		return text
-	}
-	src := t.TempDir()
-	packagesWrite(t, src, "go.mod", module("sums.example/lib", ""))
-	writeAcceptanceSerdeRoots(t, src, "")
-	packagesWrite(t, src, "lib.gox", "package library\npub mod model;\npub mod relay;\npub mod fake;\n")
-	packagesWrite(t, src, "model/model.gox", `package model; use serde;
+	cli := acceptanceCLI(t)
+	src := formalDependencyDir(t)
+	writeStdFormalManifest(t, src, "sums.example/lib", "library", nil)
+	packagesWrite(t, src, "lib.gox", "package library; use std; use std::PartialEq;\npub mod model;\npub mod relay;\npub mod fake;\n")
+	packagesWrite(t, src, "model/model.gox", `package model; use std; use std::PartialEq; use serde;
 use errors;
 var Sentinel=errors::New("failed")
 type Fault struct{}
 func(*Fault)Error()string{return "typed"}
 type hidden struct{N int}
 type Exposed=hidden
-#[derive(serde::Serialize,serde::Deserialize)]
+#[derive(serde::derive::Serialize,serde::derive::Deserialize)]
 type Config struct{Value Option[int]}
 type secret struct{N int}
 func Private()Option[hidden]{return Option[hidden]::Some(hidden{N:7})}
@@ -48,13 +39,22 @@ func OptionalE()Option[E]{return Option[E]::Some(E::Good)}
 func String()Option[string]{return Option[string]::Some("word")}
 func Shape()Option[struct{T int;V int}]{return Option[struct{T int;V int}]::Some(struct{T int;V int}{T:2,V:3})}
 func OptionalNested()Option[Option[int]]{return Option[Option[int]]::Some(Option[int]::None)}
-#[derive(Error)]
+#[derive(std::derive::Error)]
 pub enum RemoteError{
  #[error("remote")]
  #[from]
  Cause(error),
 }
 func Remote()Result[int,RemoteError]{return Result[int,RemoteError]::Ok(1)}
+
+impl Config {
+ pub func encode(s serde::Serializer,value &Self) error { return serde::Write(s,value) }
+ pub func decode(d serde::Deserializer) (Self,error) { return serde::Read[Self](d) }
+}
+
+impl RemoteError {
+ pub func wrap(cause error) Self { return RemoteError::from::<std::From[error]>(cause) }
+}
 `)
 	packagesWrite(t, src, "model/nil.go", `package model
 import "github.com/goxide-lang/std/sum"
@@ -80,31 +80,32 @@ type Result[T,E any]interface{}
 func Get()Result[int,error]{return nil}
 `)
 	lib := filepath.Join(t.TempDir(), "lib")
-	packagesCommand(t, root, cli, true, "transpile", "-o", lib, src)
+	lib = strings.TrimSpace(packagesCommand(t, root, cli, true, "transpile", "--lib", "-o", lib, src))
 	appFor := func(source string) string {
 		d := t.TempDir()
-		packagesWrite(t, d, "go.mod", module("sums.example/app", lib))
-		writeAcceptanceSerdeRoots(t, d, "sums.example/lib")
+		writeStdFormalManifest(t, d, "sums.example/app", "app", map[string]string{"library": src})
 		// A final source newline is optional, including before imported preludes.
 		packagesWrite(t, d, "app.gox", strings.TrimRight(source, "\n"))
 		return d
 	}
-	app := appFor(`package app
+	app := appFor(`package app; use std; use std::PartialEq;
 use library::model as m; use library::relay as r;
-#[derive(Error)]
+#[derive(std::derive::Error)]
 pub enum LocalError{
  #[error("local")]
  #[from]
  Cause(error),
 }
+func Converted(kind int)Result[int,m::RemoteError]{n:=m::Load(kind)?;return Result[int,m::RemoteError]::Ok(n)}
 func OptionFlow(ok bool)Option[int]{n:=m::Pick(ok)?;return Option[int]::Some(n+1)}
 func ResultFlow(kind int)Result[string,error]{n:=m::Load(kind)?;_=n;return Result[string,error]::Ok("done")}
-func Wrapped(kind int)Result[int,LocalError]{n:=m::Load(kind)?;return Result[int,LocalError]::Ok(n)}
+func Wrapped(kind int)Result[int,LocalError]{n:=match m::Load(kind){Result[int,error]::Ok(value)=>value,Result[int,error]::Err(cause)=>{return Result[int,LocalError]::Err(LocalError::wrap(cause))},};return Result[int,LocalError]::Ok(n)}
 func Match(v Option[int])int{return match v{Option[int]::Some(n)=>n,Option[int]::None=>0,}}
 func Alias()int{v:=r::Numeric[int]::Some(9);return match v{r::Int::Some(n)=>n,r::Maybe[int]::None=>0,}}
 func Reorder()int{v:=r::Swap[error,int]::Ok(10);return match v{r::Outcome[int,error]::Ok(n)=>n,r::Swap[error,int]::Err(_)=>0,}}
 func Fixed()int{v:=r::Fixed[int]::Ok(11);return match v{r::Fixed[int]::Ok(n)=>n,r::Fixed[int]::Err(_)=>0,}}
 func Private()Option[int]{n:=m::Private()?;return Option[int]::Some(n.N)}
+func Secret()Option[int]{n:=m::Secret()?;return Option[int]::Some(n.N)}
 func Shape()int{v:=r::Wrap[int]::Some(struct{T int;V int}{T:2,V:3});return match v{r::Wrap[int]::Some(n)=>n.T+n.V,r::Wrap[int]::None=>0,}}
 func PrivateMatch()int{return match m::Private(){r::Private::Some(n)=>n.N,r::Private::None=>0,}}
 func Forward(){_=m::Secret()}
@@ -122,16 +123,20 @@ func Shadow()Result[int,error]{input:=m::Load(0);m:=3;_=m;n:=input?;return Resul
 // A new concrete shared-family instance retains its static sum identity.
 func NewInstance(v Option[bool])Option[bool]{n:=v?;return Option[bool]::Some(n)}
 func SumLarge(items []int)Result[int,error]{total:=0;for _,item:=range items{total+=m::LoadNumber(item)?};return Result[int,error]::Ok(total)}
+
+impl LocalError {
+ pub func wrap(cause error) Self { return LocalError::from::<std::From[error]>(cause) }
+}
 `)
 	out := filepath.Join(t.TempDir(), "out")
-	compileAcceptanceGraph(t, true, app, out, src)
+	compileStdFormalGraph(t, true, app, out)
 	// Compare before adding Go-only test files; no test source participates in artifacts.
 	compare := func(source, first string) {
 		second := filepath.Join(t.TempDir(), "repeat")
 		if source == src {
-			packagesCommand(t, root, cli, true, "transpile", "-o", second, src)
+			second = strings.TrimSpace(packagesCommand(t, root, cli, true, "transpile", "--lib", "-o", second, src))
 		} else {
-			compileAcceptanceGraph(t, true, source, second, src)
+			compileStdFormalGraph(t, true, source, second)
 		}
 		err := filepath.WalkDir(first, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
@@ -166,13 +171,13 @@ func SumLarge(items []int)Result[int,error]{total:=0;for _,item:=range items{tot
 	packagesWrite(t, lib, "model/model_test.go", `package model
 import __borrow_std "github.com/goxide-lang/std/sum"
 import("testing";"github.com/goxide-lang/serde/json")
-func TestProducer(t *testing.T){for _,wire:=range []string{"{}",`+"`"+`{"Value":null}`+"`"+`}{v,e:=serdejson.Unmarshal([]byte(wire),DeserializeConfig);if e!=nil||__borrow_std.TagOption(v.Value)!=0{t.Fatal(v,e)}};v,e:=serdejson.Unmarshal([]byte(`+"`"+`{"Value":3}`+"`"+`),DeserializeConfig);if e!=nil||__borrow_std.ValueSome(v.Value)!=3{t.Fatal(v,e)}}
+func TestProducer(t *testing.T){for _,wire:=range []string{"{}",`+"`"+`{"Value":null}`+"`"+`}{v,e:=serdejson.Unmarshal([]byte(wire),(ConfigOps{}).Decode);if e!=nil||__borrow_std.TagOption(v.Value)!=0{t.Fatal(v,e)}};v,e:=serdejson.Unmarshal([]byte(`+"`"+`{"Value":3}`+"`"+`),(ConfigOps{}).Decode);if e!=nil||__borrow_std.ValueSome(v.Value)!=3{t.Fatal(v,e)}}
 `)
 	packagesWrite(t, out, "app_test.go", `package app
 import __borrow_std "github.com/goxide-lang/std/sum"
 
 import("testing";"errors";"fmt";"strings";m "sums.example/lib/model")
-func TestBusiness(t *testing.T){if Match(OptionFlow(true))!=6||Match(OptionFlow(false))!=0||Alias()!=9||Reorder()!=10||Fixed()!=11||PrivateMatch()!=7||Shape()!=5{t.Fatal("business")};if __borrow_std.ValueSome(Private())!=7{t.Fatal("private")};if __borrow_std.ValueOk(ResultFlow(0))!="done"{t.Fatal("result")};if !errors.Is(__borrow_std.ValueErr(ResultFlow(1)),m.Sentinel){t.Fatal("cause")};if e:=__borrow_std.ValueErr(ResultFlow(2));e==nil{t.Fatal("typed nil lost")};if !errors.Is(__borrow_std.ValueErr(Wrapped(1)),m.Sentinel){t.Fatal("from")};if __borrow_std.TagOption(NestedNone())!=0{t.Fatal("Some(None)")};_=Shadow()}
+func TestBusiness(t *testing.T){if !errors.Is(__borrow_std.ValueErr(Converted(1)),m.Sentinel){t.Fatal("canonical imported From")};if Match(OptionFlow(true))!=6||Match(OptionFlow(false))!=0||Alias()!=9||Reorder()!=10||Fixed()!=11||PrivateMatch()!=7||Shape()!=5{t.Fatal("business")};if __borrow_std.ValueSome(Private())!=7{t.Fatal("private")};if n:=__borrow_std.ValueSome(Secret());n!=8{t.Fatal("private unnamed payload",n)};if __borrow_std.ValueOk(ResultFlow(0))!="done"{t.Fatal("result")};if !errors.Is(__borrow_std.ValueErr(ResultFlow(1)),m.Sentinel){t.Fatal("cause")};if e:=__borrow_std.ValueErr(ResultFlow(2));e==nil{t.Fatal("typed nil lost")};if !errors.Is(__borrow_std.ValueErr(Wrapped(1)),m.Sentinel){t.Fatal("from")};if __borrow_std.TagOption(NestedNone())!=0{t.Fatal("Some(None)")};_=Shadow()}
 func TestNewConcreteInstance(t *testing.T){
  if __borrow_std.TagOption(NewInstance(__borrow_std.None[bool]()))!=0||!__borrow_std.ValueSome(NewInstance(__borrow_std.NewSome(true))){t.Fatal("new concrete identity")}
 }
@@ -215,7 +220,7 @@ func TestImportedResultAllocations(t *testing.T){
 `)
 	packagesCommand(t, out, tool, true, "test", "-count=1", "-run", "^TestImportedResultAllocations$", ".")
 	plain := t.TempDir()
-	packagesWrite(t, plain, "go.mod", module("sums.example/plain", lib))
+	writeStdNativeConsumerManifest(t, plain, "sums.example/plain", lib)
 	packagesWrite(t, plain, "plain_test.go", `package plain
 import __borrow_std "github.com/goxide-lang/std/sum"
 
@@ -223,7 +228,7 @@ import("testing";m "sums.example/lib/model";r "sums.example/lib/relay")
 func TestGo(t *testing.T){var v r.Maybe[int]=__borrow_std.NewSome[int](4);if __borrow_std.ValueSome(v)!=4||__borrow_std.TagOption(__borrow_std.None[int]())!=0{t.Fatal(v)};var p *m.Fault;v2:=__borrow_std.NewErr[int,error](p);if __borrow_std.ValueErr(v2)==nil{t.Fatal("typednil")}}
 `)
 	for _, d := range []string{lib, out, plain} {
-		packagesCommand(t, d, tool, true, "test", "-race", "-count=1", "-v", "./...")
+		packagesCommand(t, d, tool, true, "test", "-mod=mod", "-race", "-count=1", "-v", "./...")
 		packagesCommand(t, d, tool, true, "vet", "./...")
 	}
 	assertNativeGoRejected(t, out, tool, map[string]nativeGoRejection{
@@ -231,18 +236,17 @@ func TestGo(t *testing.T){var v r.Maybe[int]=__borrow_std.NewSome[int](4);if __b
 		"forged-result": {"package app\nimport __borrow_std \"github.com/goxide-lang/std/sum\"\ntype forged struct{__borrow_std.Result[int,error]}\nvar _ __borrow_std.Result[int,error]=forged{}\n", "cannot use"},
 	})
 	for name, tc := range map[string]struct{ body, want string }{
-		"fake-family":                {`use library::fake as f;func Bad()Result[int,error]{n:=f::Get()?;return Result[int,error]::Ok(n)}`, "requires Option or Result"},
-		"private-unnameable":         {`use library::model as m;func Bad()Option[int]{n:=m::Secret()?;return Option[int]::Some(n.N)}`, "not nameable"},
-		"external-from-not-implicit": {`use library::model as m;func Bad()Result[int,m::RemoteError]{n:=m::Load(1)?;return Result[int,m::RemoteError]::Ok(n)}`, "unique explicit From"},
-		"cross-family":               {`use library::model as m;func Bad()Option[int]{n:=m::Load(0)?;return Option[int]::Some(n)}`, "return the same Option or Result family"},
-		"non-exhaustive":             {`use library::model as m;func Bad(v Option[int])int{return match v{Option[int]::Some(n)=>n,}}`, "does not cover Option::None"},
-		"constrained-alias-ctor":     {`use library::relay as r;func Bad(){_=r::Numeric[string]::Some("bad")}`, "does not satisfy"},
-		"constrained-alias-pattern":  {`use library::model as m; use library::relay as r;func Bad(v Option[string])int{return match v{r::Numeric[string]::Some(_)=>1,r::Numeric[string]::None=>0,}}`, "does not satisfy"},
-		"new-defined":                {`use library::relay as r;func Bad()r::New{return r::New::Some(1)}`, "unknown associated type or member path"},
+		"fake-family": {`use library::fake as f;func Bad()Result[int,error]{n:=f::Get()?;return Result[int,error]::Ok(n)}`, "requires Option or Result"},
+
+		"cross-family":              {`use library::model as m;func Bad()Option[int]{n:=m::Load(0)?;return Option[int]::Some(n)}`, "return the same Option or Result family"},
+		"non-exhaustive":            {`use library::model as m;func Bad(v Option[int])int{return match v{Option[int]::Some(n)=>n,}}`, "does not cover Option::None"},
+		"constrained-alias-ctor":    {`use library::relay as r;func Bad(){_=r::Numeric[string]::Some("bad")}`, "does not satisfy"},
+		"constrained-alias-pattern": {`use library::model as m; use library::relay as r;func Bad(v Option[string])int{return match v{r::Numeric[string]::Some(_)=>1,r::Numeric[string]::None=>0,}}`, "does not satisfy"},
+		"new-defined":               {`use library::relay as r;func Bad()r::New{return r::New::Some(1)}`, "unknown associated type or member path"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			s := appFor("package app\n" + tc.body)
-			msg := compileAcceptanceGraph(t, false, s, filepath.Join(t.TempDir(), "out"), src)
+			s := appFor("package app; use std; use std::PartialEq;\n" + tc.body)
+			msg := compileStdFormalGraph(t, false, s, filepath.Join(t.TempDir(), "out"))
 			if !strings.Contains(msg, tc.want) || !strings.Contains(msg, "app.gox:") {
 				t.Fatal(msg)
 			}

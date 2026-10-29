@@ -1,3 +1,0 @@
-package p
-macro_rules! value {()=>{new};}
-func run(){_=value!()}

@@ -1,32 +1,30 @@
 package main
 
-import sum "github.com/goxide-lang/std/sum"
 import fmt "fmt"
+import sum "github.com/goxide-lang/std/sum"
 
 func typed() sum.Option[int] {
 	{
-		var gxTry2 sum.Option[int] = sum.NewSome[int](7)
-		var gxOk3 int
+		gxTry2 := sum.NewSome[int](7)
 		switch sum.TagOption(gxTry2) {
 		case 1:
-			gxOk3 = sum.ValueSome(gxTry2)
 		case 0:
 			return sum.None[int]()
 		default:
 			panic("goxide: invalid Option at ?")
 		}
+		gxOk3 := sum.ValueSome(gxTry2)
 
 		n := gxOk3
-		var gxTry4 sum.Option[any] = sum.NewSome[any](n)
-		var gxOk5 any
+		gxTry4 := sum.NewSome[any](n)
 		switch sum.TagOption(gxTry4) {
 		case 1:
-			gxOk5 = sum.ValueSome(gxTry4)
 		case 0:
 			return sum.None[int]()
 		default:
 			panic("goxide: invalid Option at ?")
 		}
+		gxOk5 := sum.ValueSome(gxTry4)
 		switch value := gxOk5.(type) {
 		case int:
 			return sum.NewSome[int](value + n)
@@ -52,16 +50,15 @@ func send(ok bool, channel chan int, trace *[]string) sum.Option[int] {
 		var gxValue7 chan int = first()
 		var gxValue8 int = value()
 		var gxValue9 chan int = channel
-		var gxTry10 sum.Option[int] = load()
-		var gxOk11 int
+		gxTry10 := load()
 		switch sum.TagOption(gxTry10) {
 		case 1:
-			gxOk11 = sum.ValueSome(gxTry10)
 		case 0:
 			return sum.None[int]()
 		default:
 			panic("goxide: invalid Option at ?")
 		}
+		gxOk11 := sum.ValueSome(gxTry10)
 		var gxValue12 int = gxOk11
 		select {
 		case gxValue7 <- gxValue8:
@@ -82,16 +79,15 @@ func receive(channel chan int) sum.Option[int] {
 		select {
 		case gxReceive15 := <-gxValue14:
 			var gxValue16 []int = values
-			var gxTry17 sum.Option[int] = sum.None[int]()
-			var gxOk18 int
+			gxTry17 := sum.None[int]()
 			switch sum.TagOption(gxTry17) {
 			case 1:
-				gxOk18 = sum.ValueSome(gxTry17)
 			case 0:
 				return sum.None[int]()
 			default:
 				panic("goxide: invalid Option at ?")
 			}
+			gxOk18 := sum.ValueSome(gxTry17)
 			var gxValue19 int = gxOk18
 			gxValue16[gxValue19] = gxReceive15
 
@@ -111,16 +107,15 @@ func disabled(ready chan int) sum.Option[int] {
 		select {
 		case gxReceive22 := <-gxValue21:
 			var gxValue23 []int = values
-			var gxTry24 sum.Option[int] = sum.None[int]()
-			var gxOk25 int
+			gxTry24 := sum.None[int]()
 			switch sum.TagOption(gxTry24) {
 			case 1:
-				gxOk25 = sum.ValueSome(gxTry24)
 			case 0:
 				return sum.None[int]()
 			default:
 				panic("goxide: invalid Option at ?")
 			}
+			gxOk25 := sum.ValueSome(gxTry24)
 			var gxValue26 int = gxOk25
 			gxValue23[gxValue26] = gxReceive22
 

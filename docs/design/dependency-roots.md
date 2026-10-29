@@ -15,11 +15,11 @@
 | 清单读取、feature 求解与 target 选择 | [manifest.go](../../internal/project/manifest.go) 的 `Parse/validate/Resolve/Select`；[compile/project.go](../../internal/compile/project.go) 的 `PrepareProject` | 校验库名与全量依赖占名；分离已声明根和活动根；把 lib/bin/example 的选中入口及可用 lib 交给包加载器 |
 | 来源图与 Go 选版 | [graph.go](../../internal/project/graph.go)、[planner.go](../../internal/project/planner.go) | 保留来源身份、feature 合并与 Go module 选版职责；自动库入口不创建 self dependency，crate 也不成为新来源节点 |
 | 编译前的 Go module 上下文 | [compile/modules.go](../../internal/compile/modules.go) 的 `prepareModules` | 为 importer 准备受管 go.mod、已选版本和来源映射；此步骤在 `CompileModules` 之前 |
-| 源文件选择、包图和 target 归属 | [sources.go](../../internal/compile/sources.go) 的 `stageSources/moduleRoots/libraryPackage`；[lower/module.go](../../internal/lower/module.go) 的 `CompileModules/moduleSources`；[module_crates.go](../../internal/lower/module_crates.go) | 确定 target 根、有效 `mod` 图及同 target 原生 Go import 闭包；检查嵌套 target、共享 lib、生成包和文件型 target 的归属及实际包路径 |
-| Go 混编与纯 Go 包加载 | [module_native.go](../../internal/lower/module_native.go)、[module_lookup.go](../../internal/lower/module_lookup.go)、[go_namespaces.go](../../internal/paths/go_namespaces.go) | 共享同包声明、隔离文件 import；让纯 Go 子包参加 `mod` 图，按真实 Go 包树和来源身份解析外部子路径；检查手写 `.go` import 的跨 crate 边界 |
-| 语法、宏上下文与静态名字绑定 | [parser](../../internal/syntax/parser/)、[expand.go](../../internal/expand/expand.go)、[static_bindings.go](../../internal/expand/static_bindings.go)、[macro_roots.go](../../internal/lower/macro_roots.go)、[resolve](../../internal/resolve/) | 识别固定 `crate::`、自动库根和定义点归属；lower/typecheck 共用展开后的卫生静态绑定，统一根优先级及标准库 fallback；纯 Go 来源按真实子路径和导出成员解析并检查歧义，Goxide 来源保持公开模块树 |
-| 包可达性与成员/类型检查 | [module_visibility.go](../../internal/lower/module_visibility.go) 的 `checkSourceRoots`；[check/packages.go](../../internal/check/packages.go) | 对解析到的真实目标检查 crate 公开边界；保留成员权限、Go internal、main 和循环规则，保持类型身份 |
-| Go 降低与产物发布 | [canonical_path.go](../../internal/lower/canonical_path.go)、[lower/imports.go](../../internal/lower/imports.go)、[layout_bundle.go](../../internal/project/layout_bundle.go) | 消费已解析叶子包，生成普通 import 并发布完整 bundle；共享库不复制、不加包装，核对重复生成一致性 |
+| 源文件选择、包图和 target 归属 | [sources.go](../../internal/compile/sources.go) 的 `stageSources/moduleRoots/libraryPackage`；[analysis/sources.go](../../internal/analysis/sources.go) 的 `LoadInput` 与 [analysis.go](../../internal/analysis/analysis.go) 的 `Analyze`；[module_crates.go](../../internal/analysis/module_crates.go) | 确定 target 根、有效 `mod` 图及同 target 原生 Go import 闭包；检查嵌套 target、共享 lib、生成包和文件型 target 的归属及实际包路径 |
+| Go 混编与纯 Go 包加载 | [module_native.go](../../internal/analysis/module_native.go)、[module_lookup.go](../../internal/analysis/module_lookup.go)、[go_namespaces.go](../../internal/paths/go_namespaces.go) | 共享同包声明、隔离文件 import；让纯 Go 子包参加 `mod` 图，按真实 Go 包树和来源身份解析外部子路径；检查手写 `.go` import 的跨 crate 边界 |
+| 语法、宏上下文与静态名字绑定 | [parser](../../internal/syntax/parser/)、[expand.go](../../internal/expand/expand.go)、[static_bindings.go](../../internal/expand/static_bindings.go)、[macro_roots.go](../../internal/analysis/macro_roots.go)、[resolve](../../internal/resolve/) | 识别固定 `crate::`、自动库根和定义点归属；lower/typecheck 共用展开后的卫生静态绑定，统一根优先级及标准库 fallback；纯 Go 来源按真实子路径和导出成员解析并检查歧义，Goxide 来源保持公开模块树 |
+| 包可达性与成员/类型检查 | [module_visibility.go](../../internal/analysis/module_visibility.go) 的 `checkSourceRoots`；[check/packages.go](../../internal/check/packages.go) | 对解析到的真实目标检查 crate 公开边界；保留成员权限、Go internal、main 和循环规则，保持类型身份 |
+| Go 降低与产物发布 | [canonical_path.go](../../internal/analysis/canonical_path.go)、[lower/imports.go](../../internal/lower/imports.go)、[layout_bundle.go](../../internal/project/layout_bundle.go) | 消费已解析叶子包，生成普通 import 并发布完整 bundle；共享库不复制、不加包装，核对重复生成一致性 |
 
 全量根声明保留占名，活动请求决定可用性；包归属与公开路径按 crate 检查，不因同 module 放行。包加载与最终生成产物只纳入选中入口、lib 及明确可达子包，项目 CLI 显式选择 lib/bin/example。当前完成范围和回归入口见状态表。
 
@@ -34,7 +34,7 @@
 | 浏览器单文件/多文件 | [playground/package.go](../../internal/playground/package.go)、[platform_wasm.go](../../internal/typecheck/platform_wasm.go)、[website/build.py](../../website/build.py) | 使用配套工具链的标准库 origins/export 快照，保持 CLI/WASM 规则一致；浏览器不执行 Go 工具链查询 |
 | host/build helper | [cmd/goxide/roots.go](../../cmd/goxide/roots.go)、[buildscript/prepare.go](../../internal/buildscript/prepare.go) | 保留独立根和权限上下文，删除映射字段不能把 target 根透传给 host；脚本 CLI 的重启仍属原阶段 |
 
-标准库包身份的现有证据入口是 [module_importer.go](../../internal/lower/module_importer.go)、[typecheck/importer.go](../../internal/typecheck/importer.go) 和 WASM importer 的 `PackageOrigin`。fallback 属于名字绑定与导入上下文，不属于依赖下载/选版或最终 Go 输出阶段。
+标准库包身份的现有证据入口是 [module_importer.go](../../internal/analysis/module_importer.go)、[typecheck/importer.go](../../internal/typecheck/importer.go) 和 WASM importer 的 `PackageOrigin`。fallback 属于名字绑定与导入上下文，不属于依赖下载/选版或最终 Go 输出阶段。
 
 ### 实现顺序
 
@@ -120,7 +120,7 @@ func main() { output::Println("explicit dependencies") }
 
 `git`、`path`、`go` 是互斥获取字段，`version` 配合 Go module；单独 version 的 registry 来源尚未实现。`go = "fmt"` 表示真实 Go 标准库，无 module/version 或下载，不接收 features/default_features。optional 仍由正常 feature 规则控制；内部加载校验 Standard，不用包名猜归属。
 
-path/Git 从所选项目根的 `goxide.toml` 中 `go_mod.module` 或 `go.mod` 中 `module` 读取 Go 投影路径，显式 `module` 可选且只作一致性断言。Git 的 `subdir` 仍选择含自身清单的项目/module 根，不选择普通子包。库作者的 `[lib]` 决定 Goxide 公开根；消费方不重复指定入口，也不能通过真实 Go 子路径绕过 Goxide 私有包。纯 Go 子包按使用路径查询，并核验实际 module owner；同一段的子包与成员冲突时报歧义。
+path/Git 从所选项目根的 `goxide.toml` 中 `go_mod.module` 或 `go.mod` 中 `module` 读取 Go 投影路径，显式 `module` 可选且只作一致性断言。依赖 checkout 可同时带有 Goxide 源清单与发布用的 `go.mod`；两份模块政策须一致，过程宏角色重载沿用此规则。主作者项目仍由 `goxide.toml` 管理 Go 元数据。Git 的 `subdir` 仍选择含自身清单的项目/module 根，不选择普通子包。库作者的 `[lib]` 决定 Goxide 公开根；消费方不重复指定入口，也不能通过真实 Go 子路径绕过 Goxide 私有包。纯 Go 子包按使用路径查询，并核验实际 module owner；同一段的子包与成员冲突时报歧义。
 
 可选 module 依赖同样先经过 feature 解析；全量声明决定根占名，只有活动 dependency 提供可用入口。访问未激活根报错，不由 `use` 启用依赖，也不 fallback 标准库。工具链依赖保留活动请求以提供根，但不参与下载、MVS 或增强模块构建。
 
@@ -134,7 +134,7 @@ workspace 的 `[workspace.dependencies.alias]` 是模板。成员以 `workspace 
 
 ### 保留 go.mod 的混合源码项目
 
-没有 `goxide.toml` 的 Go module 可在 module 根放置 `goxide.roots.toml`。文件只描述根，版本与 replace 仍来自原有 `go.mod`：
+没有 `goxide.toml` 的 Go module 由原有 `go.mod` 选择依赖版本。原生 `gen` / `transpile` 从这些依赖发现 Goxide 库的默认名字；需要改名、选择精确包或指定工具链来源时，可在 module 根放置 `goxide.roots.toml`。文件只描述根，版本与 replace 仍来自原有 `go.mod`：
 
 ```toml
 [roots.output]
@@ -154,11 +154,45 @@ goxide run --go "$GO_BIN" ./app/main.gox
 goxide transpile --roots ./chosen-roots.toml ./app/main.gox
 ```
 
-目录与 Go module 内单文件默认只读取所属 module 根的 roots 声明。`--roots FILE` 选择唯一根文件，不与发现到的文件合并，也不在所选显式根失败后回退。
+目录与 Go module 内单文件只读取所属 module 根的 roots 声明。`--roots FILE` 选择唯一显式根文件，不与发现到的 roots 文件合并，也不在所选显式根失败后回退。原生 `gen` / `transpile` 按下节补充尚未显式命名的 Goxide 库；原生 build/run/test、项目模式、浏览器和 host helper 保持各自已有的根输入。
 
 独立 `.gox` 从源文件目录向上找最近的 `goxide.roots.toml`，遇到 `go.mod` 边界停止；也支持 `--roots`。这只是名字上下文，不让根文件成为版本解析器。未声明根可查询标准库，其他未知 root 给出诊断，不猜外部来源。原有独立运行的支持库配置继续由 `--runtime` 指定的工具链清单提供。
 
 已有 `goxide.toml` 的项目和 workspace 使用 dependencies 根声明，拒绝 CLI `--roots` 覆盖或同根的 `goxide.roots.toml` 双重配置。迁入作者项目后，模块版本权威仍在 TOML 内。
+
+### 原生 gen 的默认库名与获取
+
+本节适用于所属 Go module 没有 `goxide.toml` 的 `gen` / `transpile`，包括包目录、单个 `.gox`、标准输出和指定输出文件。`gen` 与 `transpile` 继续是同一入口的两个名称。独立文件没有所属 `go.mod` 时沿用既有 roots / runtime 输入，不搜索其他项目或整个模块缓存。
+
+1. 在查询前记录作者 `go.mod` 的 `require` 条目，包含带 `// indirect` 的条目。它们是默认库候选；Go 选版为这些逻辑 module 确定实际版本。仅经传递依赖到达、未列在作者 require 中的 module，以及只有 replace 而没有 require 的 module，不成为默认根。
+2. 使用 Go 工具查询实际选版与 replace。缓存缺失时通过 `go mod download` 取得选中的模块内容，遵守用户的代理、私有模块、校验和与网络设置；本地 replace 直接读取其目录。不得运行 `go mod tidy`，不得自行请求 `latest`、扫描缓存中的其他版本或增加另一份锁文件。自动发现和下载使用私有 module 配置副本，保留作者 `go.mod` / `go.sum` 的原字节。
+3. 从选中源码的 `goxide.toml` 读取合法的 `[lib].name` 作为默认根名，由 `[lib].path` 选择入口；没有 Goxide 库清单的普通 Go module 不产生默认根。replace 改变内容来源，逻辑根身份仍是原 require module。宏角色、依赖和重导出继续由库自己的清单决定。
+4. 显式 roots 保持优先；某 module 已有显式映射时，不再为它补默认根，从而保留改名和精确包限制。其他默认根不能覆盖显式 alias。多个自动候选同名时，在使用该名字时列出候选 module 并诊断歧义，不能按 require 或缓存顺序选择。已有本地声明、`use` 绑定与真实 Go 标准库解析保持原结果；与工具链根同名的 Goxide 库通过显式 alias 使用。
+5. 发现候选与准备源码依赖分开。只因 require 中存在一个未使用的库，不能构建它的过程宏、执行其宏或把它的源码加入当前目标。实际根引用按条件选择后的语法与既有卫生绑定解析，覆盖宏生成的引用；不以正则搜索源码文本代替名字解析。
+
+缺失声明、下载失败、校验失败、库清单错误、同名歧义和宏入口不存在分别诊断。已声明版本不可用时，不改用编译器推荐版本。自动发现共用现有源码依赖准备和过程宏宿主，不建立 gen 专用宏登记表。
+
+### gen 的 std/serde 安装提示
+
+CLI 内置 std/serde 的模块路径与推荐公开版本，仅用于缺依赖提示；推荐版本由构建时的编译器 require pin 提供。宏实现、库默认名及协议语义仍从实际选择的库源码读取。
+
+当当前 `.gox` 的有效引用需要 std/serde，而所属 `go.mod` 没有相应 require 时，交互式 gen 展示所需模块、明确版本与将执行的 Go 命令，询问是否添加。只有终端输入和终端诊断输出均可交互时才询问；空回答、否定或 EOF 都不添加。拒绝、非交互运行和没有可用推荐版本时，返回缺依赖诊断及可手动执行的命令，不等待 CI 或管道输入。
+
+用户同意后才通过正常 Go 工具更新作者的 `go.mod` / `go.sum` 并下载所需内容；准备修改时使用私有副本，成功后发布两份文件，再重新读取 module 图继续本次生成。失败不留下半更新配置，不覆盖提示期间其他进程对作者配置的修改。已有 require、显式 roots 的其他来源、关闭的 cfg 分支、注释或字符串里的库名均不触发建议。一次收集当前可确定的缺失模块并共同确认，不为同一个模块重复询问。自动发现不等于自动升级依赖。
+
+纯生成期依赖需要 Go 可识别的依赖引用，才能在使用者主动运行 `go mod tidy` 后保留 require。整包原位 gen 对实际使用、尚未被普通 Go import 保留的源码库，生成带 `goxide_tools` build tag 的 `goxide_tools_gox.go`，引用库提供的可加载入口；默认 Go 构建不加载这些生成期包。再次生成时同步移除已不用的引用。单文件、标准输出和指定输出文件保持单一产物，并提示所需的手写生成期依赖文件。不能把 compiler pin 当作 tidy 后无声明时的隐式依赖版本。
+
+### gen 产物与验收
+
+原位 gen 交付的 `_gox.go` 必须能由作者的 Go module 独立构建。生成阶段的私有 modfile、临时依赖替换和已清理的目录不能成为产物要求；不能以使用临时依赖的类型检查通过代替这个检查。
+
+发布输出前，使用保留作者原始 require / replace 的私有 Go 配置核对生成包与生成期依赖入口；该检查可以复用已下载的校验和，但不得引用生成阶段的临时库替换。所选库版本只有 `.gox`、缺少可加载的 Go 包或稳定操作入口时，明确诊断该版本需要补齐 Go 发布产物，不留下声称可独立构建的输出。
+
+上述作者依赖图检查适用于原位写入，包括只选择一个源文件的原位生成。标准输出和指定输出文件可交付给另一个消费模块，继续在准备好的依赖图上检查生成代码，由接收模块提供对应的 Go 库产物；指定输出目录则连同生成模块和依赖一起检查、导出。这些输出模式均保留默认库名发现。只有 TOML 清单的本地源码 replacement 在私有目录中复用项目规划器投影依赖图，不向源码目录补写 `go.mod`，也不忽略 Go 选版错误。
+
+普通 Goxide 库面向原生 Go 消费时，同版本发布语义源码和稳定可导入的 Go 定义、运行时及泛型操作入口。稳定库产物使用带 Goxide 生成标记的 `*_gox.go`；编译源码库时，只在同目录或库文件入口映射中仍有对应 `.gox` 且标记吻合时忽略该派生 Go 文件并重新生成，手写 Go 保留。消费者新增的特化不能要求已发布依赖增加符号；优先使用稳定的泛型或操作参数入口，确需具体 helper 时放在消费包，并保持定义点解析、私有访问、命名类型身份和求值顺序。不得通过有限示例枚举未来全部类型，也不得为 gen 恢复 std/serde 内建实现。
+
+验收覆盖无 roots 的三类过程宏和正式 std/serde、显式 roots 改名与精确包、同名冲突、Go 选版与本地/远程 replace、冷缓存获取及校验失败、无关 require、cfg 与卫生引用；交互接受/拒绝/EOF、非终端和已有依赖分别检查作者配置与生成输出。用真实 `go generate` 生成后清除临时依赖，再由原始 Go module 执行 build/run/test；增加用户类型、切片与跨包调用，运行 tidy 后重新生成，并核对两次输出字节一致。现有项目、原生入口、浏览器和宏隔离回归保持通过。
 
 ### 包身份、加载与锁
 

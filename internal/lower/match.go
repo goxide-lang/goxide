@@ -7,9 +7,9 @@ import (
 	"go/types"
 	"strconv"
 
-	"github.com/hxsf/goxide/internal/check"
-	"github.com/hxsf/goxide/internal/resolve"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/check"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 type matchGroup struct {
@@ -29,8 +29,8 @@ func (e *emitter) matchStmts(n *syntax.MatchExpr, target *goast.Ident) (output [
 	e.matchDepth++
 	defer func() { e.matchDepth-- }()
 	info := e.info.Matches[n]
-	if info == nil || info.Enum == nil {
-		e.fail(n, "match 需要已知 enum 类型")
+	if info == nil {
+		e.fail(n, "缺少 match 检查结果")
 		return nil
 	}
 	var owner goast.Expr
@@ -410,7 +410,7 @@ func (e *emitter) matchPattern(instance *check.Instance, variant *check.Variant,
 	var part func(syntax.Pat, types.Type, goast.Expr, goast.Expr)
 	var fields func(*check.Instance, *check.Variant, matchPayload, syntax.Pat)
 	fields = func(instance *check.Instance, variant *check.Variant, payload matchPayload, pat syntax.Pat) {
-		decls := instance.Fields(variant)
+		decls := e.typeState.Fields(instance, variant)
 		e.eachMatchField(variant, pat, func(index int, child syntax.Pat) {
 			if index >= len(payload.values) || index >= len(decls) {
 				e.fail(child, "变体模式载荷数量不匹配")

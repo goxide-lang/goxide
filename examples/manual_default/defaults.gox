@@ -1,14 +1,22 @@
-package main
+package main; use std; use std::PartialEq;
 
-impl Default for Settings {
-    func default() Settings {
+impl std::Default for Settings {
+    func Default() Settings {
         defaultTrace += "S"
         return Settings{Port: 8080, Ready: make(chan int, 1)}
     }
 }
-impl Default for Credentials {
-    func default() Credentials {
+impl std::Default for Credentials {
+    func Default() Credentials {
         defaultTrace += "C"
         return Credentials{Name: "service"}
     }
+}
+
+impl Settings {
+ pub func initial() Self { return std::default_value[Self]() }
+}
+
+impl Credentials {
+ pub func initial() Self { return std::default_value[Self]() }
 }

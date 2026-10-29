@@ -1,24 +1,27 @@
 package acceptance_test
 
 import (
-	"fmt"
-	"github.com/hxsf/goxide/internal/rootconfig"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/goxide-lang/goxide/internal/rootconfig"
 )
 
 func TestGoResultMacros(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
+	cli := acceptanceCLI(t)
 	source := t.TempDir()
-	packagesWrite(t, source, "go.mod", packagesModule())
+	packagesWrite(t, source, "go.mod", packagesModule()+stdFixtureGoRequirements(t))
 	writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+		"std":   {Module: "github.com/goxide-lang/std"},
 		"ops":   {Module: "packages.example/app", Package: "packages.example/app/ops"},
 		"model": {Module: "packages.example/app", Package: "packages.example/app/model"},
 	})
@@ -34,6 +37,7 @@ func AliasCall()(Number,ErrorAlias){return 7,nil}
 func Generic[T any](v T)(T,error){return v,nil}
 `)
 	packagesWrite(t, source, "app.gox", `package app
+use std;
 use strconv;
 use io;
 use errors;
@@ -69,13 +73,13 @@ func FamilyTypeShadow()any{type Result int;_=Result(99);return go_result!(int,st
 func MacroKeep()Result[int,Partial]{return m::retained!(pair(2))}
 func MacroType()Result[Number,error]{return m::typed!(Number,AliasCall())}
 func OrdinaryQuestion()Result[int,error]{return Result[int,error]::Ok(m::ordinary!(strconv::Atoi("12"))?)}
-#[derive(Error)]
+#[derive(std::derive::Error)]
 #[error("parse failure")]
 type Failure struct {
  #[from]
  Cause error
 }
-func Convert(s string)Result[int,Failure]{n:=go_result!(int,strconv::Atoi(s))?;return Result[int,Failure]::Ok(n)}
+func Convert(s string)Result[int,Failure]{n:=match go_result!(int,strconv::Atoi(s)){Result[int,error]::Ok(value)=>value,Result[int,error]::Err(cause)=>{return Result[int,Failure]::Err(Failure::from::<std::From[error]>(cause))},};return Result[int,Failure]::Ok(n)}
 `)
 	generated := filepath.Join(t.TempDir(), "generated")
 	packagesCommand(t, root, cli, true, "transpile", "-o", generated, source)
@@ -88,6 +92,41 @@ func Convert(s string)Result[int,Failure]{n:=go_result!(int,strconv::Atoi(s))?;r
 	second, err := os.ReadFile(filepath.Join(again, "app.go"))
 	if err != nil || string(first) != string(second) {
 		t.Fatal("nondeterministic adapter expansion", err)
+	}
+	generatedAST, err := parser.ParseFile(token.NewFileSet(), "app.go", first, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapters := map[string]string{}
+	for _, declaration := range generatedAST.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Body == nil || len(function.Body.List) != 1 {
+			continue
+		}
+		returned, ok := function.Body.List[0].(*ast.ReturnStmt)
+		if !ok || len(returned.Results) != 1 {
+			continue
+		}
+		call, ok := returned.Results[0].(*ast.CallExpr)
+		if !ok {
+			continue
+		}
+		if helper, ok := call.Fun.(*ast.Ident); ok {
+			adapters[function.Name.Name] = helper.Name
+		}
+	}
+	seen := map[string]bool{}
+	for _, functions := range [][]string{{"Parse", "Drop", "NativeGeneric"}, {"Read", "Methods"}, {"NativeAlias", "MacroType"}, {"Unit"}, {"KeepUnit"}} {
+		helper := adapters[functions[0]]
+		if helper == "" || seen[helper] {
+			t.Fatalf("different adapter signatures share a helper, or helper missing: %v", adapters)
+		}
+		seen[helper] = true
+		for _, function := range functions[1:] {
+			if adapters[function] != helper {
+				t.Fatalf("identical adapters were emitted more than once: %v", adapters)
+			}
+		}
 	}
 	packagesWrite(t, generated, "adapter_test.go", `package app
 import __borrow_std "github.com/goxide-lang/std/sum"
@@ -123,8 +162,9 @@ func TestOrderAndFrames(t *testing.T){trace=nil;e:=__borrow_std.ValueErr(Factory
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
-			packagesWrite(t, dir, "go.mod", packagesModule())
+			packagesWrite(t, dir, "go.mod", packagesModule()+stdFixtureGoRequirements(t))
 			writeMacroFixtureRoots(t, dir, map[string]rootconfig.Mapping{
+				"std":   {Module: "github.com/goxide-lang/std"},
 				"ops":   {Module: "packages.example/app", Package: "packages.example/app/ops"},
 				"model": {Module: "packages.example/app", Package: "packages.example/app/model"},
 			})
@@ -144,12 +184,12 @@ func TestGoResultIndependentModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
+	cli := acceptanceCLI(t)
 	producer := t.TempDir()
-	packagesWrite(t, producer, "go.mod", "module adapter.example/producer\ngo 1.27\n")
+	packagesWrite(t, producer, "go.mod", "module adapter.example/producer\ngo 1.27\n"+stdFixtureGoRequirements(t))
 	writeMacroFixtureRoots(t, producer, map[string]rootconfig.Mapping{
 		"producer": {Module: "adapter.example/producer", Package: "adapter.example/producer"},
+		"std":      {Module: "github.com/goxide-lang/std", Package: "github.com/goxide-lang/std"},
 	})
 	packagesWrite(t, producer, "native.go", `package producer
 import "io"
@@ -162,13 +202,14 @@ pub macro_rules! retained {($call:expr)=>{go_result_keep!(int,$call)};}
 type Partial = struct{Value int; Err error}
 func Wrapped()Result[int,Partial]{return go_result_keep!(int,Read())}
 `)
-	prodOut := filepath.Join(t.TempDir(), "producer")
+	prodOut := filepath.Join(formalDependencyDir(t), "producer")
 	packagesCommand(t, root, cli, true, "transpile", "-o", prodOut, producer)
 	consumer := t.TempDir()
 	writeMacroFixtureRoots(t, consumer, map[string]rootconfig.Mapping{
 		"producer": {Module: "adapter.example/producer", Package: "adapter.example/producer"},
+		"std":      {Module: "github.com/goxide-lang/std", Package: "github.com/goxide-lang/std"},
 	})
-	packagesWrite(t, consumer, "go.mod", fmt.Sprintf("module adapter.example/consumer\ngo 1.27\nrequire adapter.example/producer v0.0.0\nreplace adapter.example/producer => %q\n", prodOut))
+	writeStdNativeConsumerManifest(t, consumer, "adapter.example/consumer", prodOut)
 	packagesWrite(t, consumer, "consumer.gox", `package consumer
 use producer as p;
 use strconv;

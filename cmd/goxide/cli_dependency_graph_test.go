@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/project"
+	"github.com/goxide-lang/goxide/internal/project"
 )
 
 // Generated modules promote selected native modules to explicit roots. That can

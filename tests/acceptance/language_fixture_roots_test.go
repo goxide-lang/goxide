@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/paths"
-	"github.com/hxsf/goxide/internal/rootconfig"
-	testdeps "github.com/hxsf/goxide/tests/testutil"
+	"github.com/goxide-lang/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/rootconfig"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
 func acceptanceLanguageRoots() paths.Roots {

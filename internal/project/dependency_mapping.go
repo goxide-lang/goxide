@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/paths"
 )
 
 func dependencyIdentifier(name string) bool {

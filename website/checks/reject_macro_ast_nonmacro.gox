@@ -1,7 +1,0 @@
-package main
-macro_rules! outer { ($x:expr) => { len($x?) }; }
-func values() Option[[]int] { return Option[[]int]::Some([]int{1}) }
-func good() Option[int] { _ = outer!(values()); return Option[int]::None }
-func value() Option[int] { return Option[int]::Some(1) }
-func bad() Option[int] { _ = len(value()?); return Option[int]::None }
-func main() {}

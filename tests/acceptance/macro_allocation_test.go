@@ -3,7 +3,7 @@ package acceptance_test
 import (
 	"bytes"
 	"fmt"
-	"github.com/hxsf/goxide/internal/rootconfig"
+	"github.com/goxide-lang/goxide/internal/rootconfig"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -18,8 +18,7 @@ func TestMacroAllocationCLI(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
-	cli := filepath.Join(t.TempDir(), "goxide")
-	deliveryCommand(t, root, tool, true, nil, "build", "-o", cli, "./cmd/goxide")
+	cli := acceptanceCLI(t)
 	outside := t.TempDir()
 
 	t.Run("generated-module", func(t *testing.T) {

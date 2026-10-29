@@ -16,33 +16,12 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/check"
-	"github.com/hxsf/goxide/internal/expand"
-	"github.com/hxsf/goxide/internal/resolve"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/analysis"
+	"github.com/goxide-lang/goxide/internal/check"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
-
-type Severity uint8
-
-const Error Severity = 0
-
-type Diagnostic struct {
-	Definition, Call expand.Origin
-	Severity         Severity
-	File             string
-	Span             syntax.Span
-	Message          string
-	Origin           resolve.Origin
-}
-
-func (d *Diagnostic) Error() string {
-	message := fmt.Sprintf("%s:%d:%d: %s", d.File, d.Span.Start, d.Span.End, d.Message)
-	if d.Call.File != nil {
-		message += fmt.Sprintf(" (macro definition %d:%d, call %d:%d)", d.Definition.Span.Start, d.Definition.Span.End, d.Call.Span.Start, d.Call.Span.End)
-	}
-	return message
-}
 
 // Lower 的输出键沿用输入文件名；调用方写盘时将 .gox 后缀换成 .go。
 // files 和 info 必须描述同一批 AST。失败时返回 nil，不返回部分输出。
@@ -53,6 +32,9 @@ func Lower(files map[string]*syntax.File, info *check.Info) (map[string][]byte, 
 type emissionOptions struct {
 	lineDirectives bool
 	originals      map[string]*syntax.File
+	validation     *definitionValidation
+	stableGo       bool
+	sourceMaps     map[string]*emitter
 }
 
 func lower(files map[string]*syntax.File, info *check.Info, options emissionOptions) (map[string][]byte, error) {
@@ -63,16 +45,26 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 			return nil, info.Diagnostics[0]
 		}
 	}
+	if options.validation == nil && hasGenericDefinitions(files) {
+		if err := ValidateDefinitions(files, info); err != nil {
+			return nil, err
+		}
+	}
 	names := make([]string, 0, len(files))
 	for name := range files {
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	hygienicNames := macroNames(info)
-	traits := prepareTraits(info)
+	typeState := &check.TypeState{}
+	hygienicNames := macroNames(info, typeState)
+	traits := prepareTraits(info, typeState, options.validation != nil, options.stableGo)
+	if info != nil && info.Demands != nil && info.Demands.Info != nil {
+		info = info.Demands.Info
+	}
 	fset := gotoken.NewFileSet()
 	var emitters []*emitter
-	memberSymbols := make(map[*resolve.Symbol]bool)
+	enumValidHelpers := map[*check.Enum]bool{}
+	enumAssertions := &enumAssertionPlan{}
 	externalTests := make(map[*resolve.Scope]bool)
 	if res != nil {
 		for _, pkg := range res.Packages {
@@ -80,25 +72,22 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 				externalTests[pkg.Scope] = true
 			}
 		}
-		for _, f := range res.Files {
-			for _, scope := range f.Scopes {
-				if scope.Kind == resolve.MemberScope {
-					for _, symbol := range scope.Bindings {
-						memberSymbols[symbol] = true
-					}
-				}
-			}
-		}
 	}
 	for _, name := range names {
 		tree := files[name]
-		e := &emitter{symbolNames: hygienicNames, traits: traits, info: info, name: name, tree: tree, result: res, imports: make(map[string]*importUse), reserved: make(map[string]bool), memberSymbols: memberSymbols, memberNames: make(map[*goast.Ident]string)}
+		e := &emitter{typeState: typeState, symbolNames: hygienicNames, traits: traits, info: info, name: name, tree: tree, result: res, imports: make(map[string]*importUse), reserved: make(map[string]bool)}
+		e.enumValidHelpers = enumValidHelpers
+		e.enumAssertions = enumAssertions
+		e.validation = options.validation
+		if options.sourceMaps != nil || options.validation != nil && options.validation.provenance {
+			e.sourceNodes = map[goast.Node]syntax.Node{}
+		}
 		e.lineDirectives, e.original = options.lineDirectives, options.originals[name]
 		if res != nil {
 			e.file = res.Files[name]
 		}
 		if tree == nil {
-			return nil, &Diagnostic{File: name, Message: "缺少输入 AST"}
+			return nil, &analysis.Diagnostic{File: name, Message: "缺少输入 AST"}
 		}
 		if e.file == nil || e.file.AST != tree {
 			e.fail(tree, "缺少与输入 AST 对应的名字解析结果")
@@ -113,9 +102,9 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 		e.base = gotoken.Pos(e.tokenFile.Base())
 		e.reserveNames()
 		e.reserveTraitNames()
-		e.validatePrintStatements()
 		e.checkMacroNames()
 		f := &goast.File{Package: e.pos(tree.Package) - 8, Name: &goast.Ident{NamePos: e.pos(tree.Package), Name: tree.Package.Name}}
+		e.recordSource(f.Name, tree.Package)
 		if f.Package < e.base {
 			f.Package = e.base
 		}
@@ -127,30 +116,62 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 			if decl := e.decl(item); decl != nil {
 				f.Decls = append(f.Decls, decl)
 			}
+			f.Decls = append(f.Decls, e.traitTemplateDeclarations(item)...)
+			f.Decls = append(f.Decls, e.itemExtras...)
+			e.itemExtras = nil
 		}
-		f.Decls = append(f.Decls, e.deriveDeclarations()...)
-		f.Decls = append(f.Decls, e.errorDeclarations()...)
-		f.Decls = append(f.Decls, e.serdeDeclarations()...)
-		f.Decls = append(f.Decls, e.traitDeclarations()...)
+		f.Decls = e.traitDeclarations(f.Decls)
 		f.Decls = append(f.Decls, e.resultAdapters...)
-		f.Decls = append(f.Decls, e.flowHelpers...)
 		if e.err != nil {
 			return nil, e.err
 		}
 		for _, diagnostic := range res.Diagnostics {
 			if diagnostic.File == name && diagnostic.Severity == resolve.Error {
-				return nil, &Diagnostic{File: name, Span: diagnostic.Span, Message: diagnostic.Message, Origin: diagnostic.Origin, Definition: diagnostic.Definition, Call: diagnostic.Call}
+				return nil, &analysis.Diagnostic{File: name, Span: diagnostic.Span, Message: diagnostic.Message, Origin: diagnostic.Origin, Definition: diagnostic.Definition, Call: diagnostic.Call}
 			}
-		}
-		e.addImports(f)
-		e.positions(f, fset)
-		if options.lineDirectives {
-			multilineSourceBodies(f, fset)
 		}
 		e.goFile = f
 		emitters = append(emitters, e)
 	}
-	bindMembers(fset, emitters)
+	// A diagnostic may be displayed in a macro definition or another input
+	// file that is not among the emitted files.
+	if res != nil {
+		for _, diagnostic := range res.Diagnostics {
+			if diagnostic.Severity == resolve.Error {
+				return nil, &analysis.Diagnostic{File: diagnostic.File, Span: diagnostic.Span, Message: diagnostic.Message, Origin: diagnostic.Origin, Definition: diagnostic.Definition, Call: diagnostic.Call}
+			}
+		}
+	}
+	if err := emitEnumAssertions(emitters, enumAssertions); err != nil {
+		return nil, err
+	}
+	for _, e := range emitters {
+		e.goFile.Decls = append(e.goFile.Decls, e.flowHelpers...)
+		e.goFile.Decls = append(e.goFile.Decls, e.enumValidDeclarations()...)
+		if e.err != nil {
+			return nil, e.err
+		}
+		e.addImports(e.goFile)
+		if options.validation == nil {
+			e.positions(e.goFile, fset)
+		} else {
+			lines := make([]int, len(e.tree.LineStarts))
+			for index, offset := range e.tree.LineStarts {
+				lines[index] = int(offset)
+			}
+			e.tokenFile.SetLines(lines)
+		}
+		if options.lineDirectives {
+			multilineSourceBodies(e.goFile, fset)
+		}
+	}
+	if options.validation != nil && options.validation.provenance {
+		fset = validationPositions(emitters)
+	}
+	if options.validation != nil {
+		validateGeneratedDefinitions(fset, emitters)
+		return nil, options.validation.err
+	}
 	out := make(map[string][]byte, len(files))
 	for _, e := range emitters {
 		var buf bytes.Buffer
@@ -165,16 +186,26 @@ func lower(files map[string]*syntax.File, info *check.Info, options emissionOpti
 			e.fail(e.tree, "Go 输出格式化失败: "+err.Error())
 			return nil, e.err
 		}
+		// Reparse the printed source to normalize positions synthesized by lowering.
+		// Formatting the original AST alone can retain noncanonical call wrapping.
 		data, err := format.Source(buf.Bytes())
 		if err != nil {
 			e.fail(e.tree, "生成的 Go 语法无效: "+err.Error())
 			return nil, e.err
 		}
-		if _, err := goparser.ParseFile(gotoken.NewFileSet(), e.name, data, goparser.AllErrors); err != nil {
-			e.fail(e.tree, "生成的 Go 语法无效: "+err.Error())
-			return nil, e.err
+		if len(e.goFile.Imports) > 1 {
+			set := gotoken.NewFileSet()
+			parsed, err := goparser.ParseFile(set, e.name, data, goparser.ImportsOnly|goparser.AllErrors|goparser.ParseComments)
+			if err != nil {
+				e.fail(e.tree, "生成的 Go 语法无效: "+err.Error())
+				return nil, e.err
+			}
+			data = canonicalImports(parsed, set, data)
 		}
 		out[e.name] = data
+		if options.sourceMaps != nil {
+			options.sourceMaps[e.name] = e
+		}
 	}
 	return out, nil
 }
@@ -183,10 +214,12 @@ type goImporter func(string) (*types.Package, error)
 
 func (f goImporter) Import(path string) (*types.Package, error) { return f(path) }
 
-func bindMembers(fset *gotoken.FileSet, emitters []*emitter) {
+func validateGeneratedDefinitions(fset *gotoken.FileSet, emitters []*emitter) {
+	if len(emitters) == 0 {
+		return
+	}
 	groups := map[string][]*emitter{}
 	tests := map[*resolve.Scope][]*emitter{}
-	needed := false
 	for _, e := range emitters {
 		key := filepath.ToSlash(filepath.Dir(e.name))
 		if e.externalTest {
@@ -194,11 +227,8 @@ func bindMembers(fset *gotoken.FileSet, emitters []*emitter) {
 		} else {
 			groups[key] = append(groups[key], e)
 		}
-		needed = needed || len(e.memberNames) > 0
 	}
-	if !needed {
-		return
-	}
+	validation := emitters[0].validation
 	// Go's receiver validation requires a file for both declared type names and
 	// instantiated receiver names. Give generated names temporary source positions.
 	var generatedTypePositions []*gotoken.Pos
@@ -232,7 +262,6 @@ func bindMembers(fset *gotoken.FileSet, emitters []*emitter) {
 			*position = gotoken.NoPos
 		}
 	}()
-	var renamer memberRenamer
 	loaded := map[string]*types.Package{}
 	loadedGroups := map[*emitter]*types.Package{}
 	loading := map[*emitter]bool{}
@@ -240,18 +269,22 @@ func bindMembers(fset *gotoken.FileSet, emitters []*emitter) {
 	if emitters[0].info.GoImporter != nil {
 		standard = emitters[0].info.GoImporter
 	}
-	indexSourcePackages(groups, emitters, standard)
-	var load goImporter
-	rename := func(path string, group []*emitter) *types.Package {
-		var files []*goast.File
-		names := map[*goast.Ident]string{}
-		for _, e := range group {
-			files = append(files, e.goFile)
-			for id, name := range e.memberNames {
-				names[id] = name
-			}
+	for dir, path := range emitters[0].info.PackagePaths {
+		if group := groups[dir]; group != nil && path != "" {
+			groups[path] = group
 		}
-		return renamer.rename(path, fset, files, names, load, group[0].info.GoSizes)
+	}
+	var load goImporter
+	validate := func(path string, group []*emitter) *types.Package {
+		files := make([]*goast.File, len(group))
+		for i, e := range group {
+			files[i] = e.goFile
+		}
+		pkg := types.NewPackage(path, files[0].Name.Name)
+		validation.preparePackage(pkg)
+		config := types.Config{Importer: load, Sizes: group[0].info.GoSizes, Error: func(err error) { validation.report(err, emitters) }}
+		_ = types.NewChecker(&config, fset, pkg, nil).Files(files)
+		return pkg
 	}
 	load = func(path string) (*types.Package, error) {
 		if p := loaded[path]; p != nil {
@@ -269,7 +302,7 @@ func bindMembers(fset *gotoken.FileSet, emitters []*emitter) {
 			return nil, fmt.Errorf("import cycle: %s", path)
 		}
 		loading[identity] = true
-		p := rename(path, group)
+		p := validate(path, group)
 		loaded[path] = p
 		loadedGroups[identity] = p
 		loading[identity] = false
@@ -280,55 +313,10 @@ func bindMembers(fset *gotoken.FileSet, emitters []*emitter) {
 		if e.externalTest {
 			group := tests[e.file.Scope.Parent]
 			if group[0] == e {
-				rename(path, group)
+				validate(path, group)
 			}
 		} else {
 			_, _ = load(path)
-		}
-	}
-}
-
-// 文件名可以是源码路径；同一模块的包目录共享一个导入前缀。
-func indexSourcePackages(groups map[string][]*emitter, emitters []*emitter, standard types.Importer) {
-	root := filepath.Dir(emitters[0].name)
-	for _, e := range emitters[1:] {
-		root = commonDirectory(root, filepath.Dir(e.name))
-	}
-	relative := map[string][]*emitter{}
-	for dir, group := range groups {
-		rel, err := filepath.Rel(root, filepath.FromSlash(dir))
-		if err != nil {
-			return
-		}
-		relative[filepath.ToSlash(rel)] = group
-	}
-	prefixes := map[string]bool{}
-	seen := map[string]bool{}
-	for _, e := range emitters {
-		for imported := range e.imports {
-			if seen[imported] || groups[imported] != nil {
-				continue
-			}
-			seen[imported] = true
-			if _, err := standard.Import(imported); err == nil {
-				continue
-			}
-			for rel := range relative {
-				if rel != "." && (imported == rel || strings.HasSuffix(imported, "/"+rel)) {
-					prefixes[strings.TrimSuffix(strings.TrimSuffix(imported, rel), "/")] = true
-				}
-			}
-		}
-	}
-	if len(prefixes) != 1 {
-		return
-	}
-	for prefix := range prefixes {
-		for rel, group := range relative {
-			alias := filepath.ToSlash(filepath.Join(prefix, rel))
-			if groups[alias] == nil {
-				groups[alias] = group
-			}
 		}
 	}
 }
@@ -344,14 +332,28 @@ func commonDirectory(root, dir string) string {
 }
 
 type emitter struct {
+	typeState          *check.TypeState
+	constTemplate      *constTemplate
+	traitBodySources   map[goast.Decl]syntax.Node
+	enumValidHelpers   map[*check.Enum]bool
+	enumAssertions     *enumAssertionPlan
+	enumCheckCallbacks map[types.Type]goast.Expr
+	inferenceTypes     map[types.Type]*goast.Ident
 	functionFrame      *functionFrame
 	assignmentGuard    *goast.Ident
 	shiftCount         *goast.Ident
 	resultAdapters     []goast.Decl
+	resultAdapterTypes []resultAdapter
 	flowHelpers        []goast.Decl
 	zeroFunctions      map[int]*goast.Ident
 	zeroPointers       map[int]*goast.Ident
 	traits             *traitProgram
+	evidenceNames      map[*check.TraitBound]string
+	boundCallbacks     map[*check.TraitBound]map[string]goast.Expr
+	callbackReceiver   string
+	instanceBody       *check.BodyInstance
+	caseViewImpl       *check.Impl
+	itemExtras         []goast.Decl
 	symbolNames        map[*resolve.Symbol]string
 	primitiveAliases   map[string]*goast.Ident
 	packageTypeAliases map[string]*goast.Ident
@@ -366,18 +368,19 @@ type emitter struct {
 	base               gotoken.Pos
 	tokenFile          *gotoken.File
 	goFile             *goast.File
-	memberSymbols      map[*resolve.Symbol]bool
-	memberNames        map[*goast.Ident]string
+	sourceNodes        map[goast.Node]syntax.Node
+	diagnosticNodes    map[gotoken.Pos]syntax.Node
 	name               string
 	tree               *syntax.File
 	file               *resolve.File
 	result             *resolve.Result
-	err                *Diagnostic
+	err                *analysis.Diagnostic
 	imports            map[string]*importUse
 	reserved           map[string]bool
 	externalTest       bool
 	lineDirectives     bool
 	original           *syntax.File
+	validation         *definitionValidation
 }
 
 func (e *emitter) samePackage(file string) bool {
@@ -397,10 +400,13 @@ func (e *emitter) fail(n syntax.Node, message string) {
 	if n != nil && !reflect.ValueOf(n).IsNil() {
 		span = n.Span()
 	}
-	e.err = &Diagnostic{File: e.name, Span: span, Message: message, Origin: resolve.Origin{File: e.name, Span: span}}
+	e.err = &analysis.Diagnostic{File: e.name, Span: span, Message: message, Origin: resolve.Origin{File: e.name, Span: span}}
 	if e.result != nil && n != nil && !reflect.ValueOf(n).IsNil() {
 		if origin, ok := e.result.Origins[resolve.Ref{File: e.name, ID: n.ID()}]; ok {
 			e.err.Origin = origin
+			if origin.File != "" {
+				e.err.File, e.err.Span = origin.File, origin.Span
+			}
 			if expansion, ok := e.result.Expansions[origin.Expn]; ok {
 				e.err.Definition, e.err.Call = expansion.Definition, expansion.Call
 			}
@@ -459,14 +465,24 @@ func (e *emitter) ident(id *syntax.Ident) *goast.Ident {
 	if mapped := e.symbolNames[symbol]; mapped != "" {
 		name = mapped
 	}
+	if symbol != nil && symbol.Kind == resolve.Field {
+		if referenced := e.file.References[id.ID()].Symbol; referenced != nil {
+			for referenced.AliasOf != nil {
+				referenced = referenced.AliasOf
+			}
+			if referenced.Kind == resolve.Type && referenced.GoName != "" {
+				name = referenced.GoName
+			}
+		}
+	}
 	if !gotoken.IsIdentifier(name) {
 		e.fail(id, fmt.Sprintf("名字 %q 无法作为 Go 标识符输出", name))
 	}
 	out := &goast.Ident{NamePos: e.pos(id), Name: name}
-	if sym := e.file.Definitions[id.ID()]; e.memberSymbols[sym] && name != id.Name {
-		out.Name = id.Name
-		e.memberNames[out] = name
+	if mapped := e.info.GoMembers[id]; mapped != "" {
+		out.Name = mapped
 	}
+	e.recordSource(out, id)
 	return out
 }
 

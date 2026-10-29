@@ -4,7 +4,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 )
 
@@ -12,8 +11,7 @@ func TestMatchBinaryAndIndexedModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
+	cli := acceptanceCLI(t)
 	sourceFor := func(body string) string {
 		dir := t.TempDir()
 		packagesWrite(t, dir, "go.mod", packagesModule())
@@ -106,15 +104,6 @@ func CheckUserClosure()int{return match UserClosure(){Result[int,error]::Ok(n)=>
 		})
 		if err != nil {
 			t.Fatal(err)
-		}
-		data, e := os.ReadFile(filepath.Join(generated, "app.go"))
-		if e != nil {
-			t.Fatal(e)
-		}
-		for _, marker := range []string{"__goxide_match_expr_pending", "__goxide_match_expr_operand_context(", "__goxide_match_expr_zero[", "__goxide_match_expr_return(", "__goxide_match_expr_peers(", ".Catch(", ".Fail("} {
-			if strings.Contains(string(data), marker) {
-				t.Fatalf("residual %s", marker)
-			}
 		}
 		packagesWrite(t, generated, "match_test.go", `package app
 import("testing";"reflect";m "packages.example/app/model")

@@ -1,17 +1,66 @@
 package lower
 
 import (
+	"bytes"
 	"fmt"
 	goast "go/ast"
 	gotoken "go/token"
 	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/resolve"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
+
+// Sort complete import declarations after formatting has attached their source
+// comments. Moving only AST declarations would leave use documentation at its
+// old position and attach it to the wrong import.
+func canonicalImports(file *goast.File, set *gotoken.FileSet, source []byte) []byte {
+	type declaration struct {
+		path       string
+		start, end int
+		documented bool
+	}
+	var declarations []declaration
+	for _, node := range file.Decls {
+		decl, ok := node.(*goast.GenDecl)
+		if !ok || decl.Tok != gotoken.IMPORT {
+			continue
+		}
+		start, end := decl.Pos(), decl.End()
+		if decl.Doc != nil {
+			start = decl.Doc.Pos()
+		}
+		for _, spec := range decl.Specs {
+			if comment := spec.(*goast.ImportSpec).Comment; comment != nil && comment.End() > end {
+				end = comment.End()
+			}
+		}
+		declarations = append(declarations, declaration{path: decl.Specs[0].(*goast.ImportSpec).Path.Value, start: set.PositionFor(start, false).Offset, end: set.PositionFor(end, false).Offset, documented: decl.Doc != nil})
+	}
+	ordered := append([]declaration(nil), declarations...)
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].path < ordered[j].path })
+	var result bytes.Buffer
+	cursor := 0
+	for index, original := range declarations {
+		separator := source[cursor:original.start]
+		if index != 0 && len(bytes.TrimSpace(separator)) == 0 {
+			result.WriteByte('\n')
+			if ordered[index].documented {
+				result.WriteByte('\n')
+			}
+		} else {
+			result.Write(separator)
+		}
+		result.Write(source[ordered[index].start:ordered[index].end])
+		cursor = original.end
+	}
+	result.Write(source[cursor:])
+	return result.Bytes()
+}
 
 type importUse struct {
 	path, alias string
@@ -66,7 +115,25 @@ func (e *emitter) importName(target []string, preferred string, pos gotoken.Pos)
 	return &goast.Ident{NamePos: pos, Name: alias}
 }
 
-func (e *emitter) external(n syntax.Node, target []string, name, preferred string) goast.Expr {
+func (e *emitter) external(n syntax.Node, target []string, name, preferred string) (out goast.Expr) {
+	defer func() {
+		e.recordSource(out, n)
+		var first, last *syntax.Ident
+		switch original := n.(type) {
+		case *syntax.Ident:
+			last = original
+		case *syntax.Path:
+			if len(original.Segments) != 0 {
+				first, last = original.Segments[0].Name, original.Segments[len(original.Segments)-1].Name
+			}
+		}
+		if selector, ok := out.(*goast.SelectorExpr); ok {
+			e.recordSource(selector.X, first)
+			e.recordSource(selector.Sel, last)
+		} else {
+			e.recordSource(out, last)
+		}
+	}()
 	if len(target) < 2 {
 		e.fail(n, "外部成员缺少包路径")
 		return nil
@@ -74,15 +141,27 @@ func (e *emitter) external(n syntax.Node, target []string, name, preferred strin
 	if name == "" {
 		name = target[len(target)-1]
 	}
+	if strings.Join(target[:len(target)-1], "/") == filepath.ToSlash(filepath.Dir(e.name)) && !e.externalTest {
+		if symbol := e.file.References[n.ID()].Symbol; symbol != nil && symbol.Kind == resolve.Function {
+			return e.unshadowedFunction(name)
+		}
+		return &goast.Ident{NamePos: e.pos(n), Name: name}
+	}
 	pkg := e.importName(target[:len(target)-1], preferred, e.pos(n))
 	return &goast.SelectorExpr{X: pkg, Sel: &goast.Ident{NamePos: e.end(n) - gotoken.Pos(len(name)), Name: name}}
 }
 
-func (e *emitter) reference(id *syntax.Ident) goast.Expr {
+func (e *emitter) reference(id *syntax.Ident) (out goast.Expr) {
+	defer func() { e.recordSource(out, id) }()
 	if id == nil {
 		return nil
 	}
 	r := e.file.References[id.ID()]
+	if e.instanceBody != nil && r.Symbol != nil && r.Symbol.Kind == resolve.TypeParam {
+		if typ := e.info.Symbols[r.Symbol]; typ != nil {
+			return e.goType(typ)
+		}
+	}
 	prelude := r.Symbol
 	for prelude != nil && prelude.AliasOf != nil {
 		prelude = prelude.AliasOf
@@ -174,7 +253,7 @@ func (e *emitter) addImports(f *goast.File) {
 	}
 	sources := make(map[syntax.NodeID]*syntax.UseDecl)
 	for _, item := range e.tree.Items {
-		if use, ok := item.(*syntax.UseDecl); ok {
+		if use, ok := item.(*syntax.UseDecl); ok && !use.Implicit {
 			sources[use.ID()] = use
 		}
 	}
@@ -218,7 +297,11 @@ func (e *emitter) addImports(f *goast.File) {
 			Path: &goast.BasicLit{ValuePos: namePos, Kind: gotoken.STRING, Value: strconv.Quote(imported.path)},
 		}
 		// Separate declarations retain each use's documentation at its source position.
-		declarations = append(declarations, &goast.GenDecl{TokPos: imported.pos, Tok: gotoken.IMPORT, Specs: []goast.Spec{spec}})
+		declaration := &goast.GenDecl{TokPos: imported.pos, Tok: gotoken.IMPORT, Specs: []goast.Spec{spec}}
+		e.recordSource(declaration, imported.source)
+		e.recordSource(spec, imported.source)
+		e.recordSource(spec.Path, imported.source)
+		declarations = append(declarations, declaration)
 		f.Imports = append(f.Imports, spec)
 	}
 	f.Decls = append(declarations, f.Decls...)

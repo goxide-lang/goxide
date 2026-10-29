@@ -1,5 +1,0 @@
-package main
-enum Mode { Off, Count(int), }
-type Tiny struct { N uint8 }
-func broken(m Mode) Tiny { return Tiny{N: match m { Mode::Off => 256, Mode::Count(_) => 0, }} }
-func main() {}

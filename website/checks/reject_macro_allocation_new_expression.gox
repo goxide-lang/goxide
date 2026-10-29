@@ -1,4 +1,0 @@
-package p
-// Go 1.27 permits new(7); this macro batch intentionally supports only new(Type).
-macro_rules! allocate {()=>{new(7)};}
-func run(){_=allocate!()}

@@ -3,8 +3,8 @@ package check
 import (
 	"go/types"
 
-	"github.com/hxsf/goxide/internal/resolve"
-	"github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 type GoResult struct {
@@ -52,8 +52,11 @@ func (c *checker) goResult(call *ast.CallExpr, keep bool) types.Type {
 		value = results[0]
 	}
 	failure := results[len(results)-1]
-	if !types.Implements(failure, types.Universe.Lookup("error").Type().Underlying().(*types.Interface)) {
+	if !c.satisfiesGo(failure, types.Universe.Lookup("error").Type().Underlying().(*types.Interface)) {
 		return fail("last result E must implement the predeclared error interface")
+	}
+	if c.out.isArray(failure) {
+		return fail("error result E must be nilable; a non-nilable error has no implicit success value")
 	}
 	switch failure.Underlying().(type) {
 	case *types.Interface, *types.Pointer, *types.Slice, *types.Map, *types.Signature, *types.Chan:
@@ -80,7 +83,11 @@ func (c *checker) goResult(call *ast.CallExpr, keep bool) types.Type {
 			types.NewField(0, nil, "Err", failure, false),
 		}, nil)
 	}
-	result := instanceType(&Instance{Enum: c.builtins["Result"], Args: []types.Type{value, payload}})
+	resultEnum := c.builtinEnum("Result")
+	if resultEnum == nil {
+		return types.Typ[types.Invalid]
+	}
+	result := instanceType(&Instance{Enum: resultEnum, Args: []types.Type{value, payload}})
 	c.out.GoResults[call] = &GoResult{Call: native, Value: value, Error: failure, Payload: payload, Result: result, Unit: len(results) == 1, Keep: keep}
 	return result
 }
@@ -89,6 +96,10 @@ func (c *checker) goResult(call *ast.CallExpr, keep bool) types.Type {
 // an identical public alias. Emit that alias so the adapter remains nameable.
 func (c *checker) exportedGoType(t types.Type) types.Type {
 	switch typ := t.(type) {
+	case *types.TypeParam:
+		if array, ok := c.out.ArrayOf(t); ok {
+			return c.out.ArrayType(c.exportedGoType(array.Elem), array.Length)
+		}
 	case *types.Named:
 		object := typ.Obj()
 		if object.Pkg() != nil && !object.Exported() {
@@ -173,6 +184,9 @@ func (c *checker) packageNameable(t types.Type) bool {
 			}
 		}
 	case *types.TypeParam:
+		if array, ok := c.out.ArrayOf(t); ok {
+			return array.Length.Param == nil && c.packageNameable(array.Elem)
+		}
 		return false
 	}
 	if object == nil || object.Pkg() == nil {

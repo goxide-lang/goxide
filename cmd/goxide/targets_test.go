@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/config"
 )
 
 func targetCLI(t *testing.T, args ...string) (string, error) {

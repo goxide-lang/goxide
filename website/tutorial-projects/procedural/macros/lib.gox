@@ -1,0 +1,19 @@
+package macros
+
+use syntax::token;
+use syntax::proc_macro as pm;
+
+#[proc_macro]
+pub func twice(ctx pm::Context, input token::TokenStream) pm::Output {
+    return expandTwice(ctx, input)
+}
+
+#[proc_macro_attribute]
+pub func constant(ctx pm::Context, args token::TokenStream, item token::TokenStream) pm::Output {
+    return expandConstant(ctx, args, item)
+}
+
+#[proc_macro_derive(TypeName)]
+pub func deriveTypeName(ctx pm::Context, item token::TokenStream) pm::Output {
+    return expandTypeName(ctx, item)
+}

@@ -3,9 +3,9 @@ package check
 import (
 	"go/types"
 
-	"github.com/hxsf/goxide/internal/resolve"
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 func (p *permissionChecker) values(specs []*ast.ValueSpec) {
@@ -56,7 +56,7 @@ func (p *permissionChecker) requireLocal(node ast.Node, got, want *permission) {
 		return
 	}
 	if want.typ != nil {
-		if _, iface := want.typ.Underlying().(*types.Interface); iface && p.c.out.EnumOf(want.typ) == nil {
+		if _, iface := want.typ.Underlying().(*types.Interface); iface && !p.c.out.isArray(want.typ) && p.c.enumOf(want.typ) == nil {
 			p.require(node, got, want)
 			return
 		}
@@ -448,7 +448,7 @@ func (p *permissionChecker) bindPattern(pattern ast.Pat, value *permission, mode
 		if s == nil {
 			return
 		}
-		if s.Kind == resolve.Variant || s.Kind == resolve.Constant {
+		if s.Kind == resolve.Variant || s.Kind == resolve.Constant || s.Kind == resolve.ConstParam {
 			return
 		}
 		binding := mode
@@ -465,7 +465,7 @@ func (p *permissionChecker) bindPattern(pattern ast.Pat, value *permission, mode
 			}
 			addressable, writable := p.place(owner)
 			if ownerValue := p.expr(owner, nil); ownerValue != nil && ownerValue.shared {
-				if enum := p.c.out.EnumOf(ownerValue.typ); enum != nil && !enum.Enum.Builtin {
+				if enum := p.c.enumOf(ownerValue.typ); enum != nil && !enum.Enum.Builtin {
 					writable = false
 				}
 			}
@@ -491,7 +491,7 @@ func (p *permissionChecker) bindPattern(pattern ast.Pat, value *permission, mode
 		if value == nil {
 			return
 		}
-		instance := p.c.out.EnumOf(value.typ)
+		instance := p.c.enumOf(value.typ)
 		if instance == nil {
 			return
 		}
@@ -510,7 +510,7 @@ func (p *permissionChecker) bindPattern(pattern ast.Pat, value *permission, mode
 		if value == nil {
 			return
 		}
-		instance := p.c.out.EnumOf(value.typ)
+		instance := p.c.enumOf(value.typ)
 		if instance == nil {
 			return
 		}

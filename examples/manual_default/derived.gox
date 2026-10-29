@@ -1,6 +1,6 @@
-package main
+package main; use std; use std::PartialEq;
 
-#[derive(Default)]
+#[derive(std::derive::Default)]
 type Service struct {
     First Settings
     Login Credentials
@@ -9,7 +9,7 @@ type Service struct {
 }
 
 // Only the selected variant needs Default; Unsupported deliberately has none.
-#[derive(Default)]
+#[derive(std::derive::Default)]
 pub enum Mode {
     Disabled(Unsupported),
     #[default]
@@ -22,4 +22,12 @@ func ModeName(mode Mode) string {
         Mode::Disabled(_) => { return "disabled" },
     }
     panic("unreachable")
+}
+
+impl Service {
+ pub func initial() Self { return std::default_value[Self]() }
+}
+
+impl Mode {
+ pub func initial() Self { return std::default_value[Self]() }
 }

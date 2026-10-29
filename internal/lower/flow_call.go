@@ -5,8 +5,8 @@ import (
 	"go/types"
 	"path/filepath"
 
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 func (e *emitter) flowNativeMethod(call *syntax.CallExpr) (goast.Expr, bool) {

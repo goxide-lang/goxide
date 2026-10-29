@@ -1,0 +1,5 @@
+package macros
+use syntax::token;
+use syntax::proc_macro as pm;
+#[proc_macro_derive(LibraryError, attributes(library_error,library_source))]
+pub func libraryError(ctx pm::Context,input token::TokenStream) pm::Output { return deriveError(ctx,input) }

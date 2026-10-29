@@ -1,18 +1,21 @@
 package main
+use std;
 
-#[derive(Clone)]
-enum AuditState { Ready, Done, }
+#[derive(std::derive::Clone)]
+pub enum AuditState { Ready, Done, }
 
-#[derive(Clone)]
+#[derive(std::derive::Clone)]
 type Snapshot struct { State AuditState; Revision int }
-#[derive(Clone)]
+#[derive(std::derive::Clone)]
 type AuditRecord struct { Current Snapshot; Label string }
 
-enum Receipt { Accepted(int), Ignored, }
+pub enum Receipt { Accepted(int), Ignored, }
+
+impl AuditState { pub func copy(value &Self) Self { return std::Clone::clone(value) } }
+impl AuditRecord { pub func copy(value &Self) Self { return std::Clone::clone(value) } }
 
 func isReady(state AuditState) bool {
     match state { AuditState::Ready => { return true }, AuditState::Done => { return false }, }
-    panic("unreachable")
 }
 func ready() AuditState { return AuditState::Ready }
 func done() AuditState { return AuditState::Done }
@@ -23,7 +26,6 @@ func archive(next func() AuditState, trace *[]string) string {
         state if isReady(state) => { return "known" },
         state => { *trace=append(*trace,"archived"); return "done" },
     }
-    panic("unreachable")
 }
 func acknowledge(next func() Receipt, guard func() bool, trace *[]string) {
     match next() {
@@ -40,11 +42,11 @@ func discardState(next func() AuditState, calls *int) {
 func accepted() Receipt { return Receipt::Accepted(9) }
 func copyAudit(state AuditState) AuditRecord {
     original:=AuditRecord{Current:Snapshot{State:state,Revision:3},Label:"webhook"}
-    return CloneAuditRecord(&original)
+    return AuditRecord::copy(&original)
 }
 func main() {
     record:=copyAudit(AuditState::Done)
     trace:=[]string{}
     result:=archive(func()AuditState{return record.Current.State},&trace)
-    println!("audit {} {}",record.Label,result)
+    std::println!("audit {} {}",record.Label,result)
 }

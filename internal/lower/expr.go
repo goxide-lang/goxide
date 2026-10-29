@@ -4,30 +4,69 @@ import (
 	goast "go/ast"
 	gotoken "go/token"
 	"go/types"
+	"strconv"
 
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
-	defer func() { e.macroLayout(n, out) }()
+	defer func() { e.macroLayout(n, out); e.recordSource(out, n) }()
 	if n == nil {
 		return nil
 	}
+	if constant := e.stableConstant(n); constant != nil {
+		return constant
+	}
+	if parameter := e.validationConstParameter(n); parameter != nil {
+		return &goast.Ident{NamePos: e.pos(n), Name: e.validation.constantName(parameter)}
+	}
+	if value, ok := e.info.ConstValues[n]; ok {
+		if value.Param == nil {
+			return &goast.BasicLit{Kind: gotoken.INT, Value: strconv.FormatInt(value.Value, 10)}
+		}
+		if e.validation != nil {
+			return &goast.Ident{NamePos: e.pos(n), Name: e.validation.constantName(value.Param)}
+		}
+	}
 	if call, ok := n.(*syntax.CallExpr); ok {
+		if length := e.stableLengthCall(call); length != nil {
+			return length
+		}
+		if typ := e.info.EnumAssertions[call]; typ != nil {
+			return e.enumAssert(call, typ)
+		}
+		if instance := e.info.EnumValid[call]; instance != nil {
+			return e.enumValid(call, instance)
+		}
 		if adapter := e.info.GoResults[call]; adapter != nil {
 			return e.goResult(call, adapter)
 		}
 		if result, handled := e.memberCall(call); handled {
 			return result
 		}
+		if inferred, handled := e.inferredFunctionCall(call); handled {
+			return inferred
+		}
+		if function, handled := e.traitFunctionInstance(call); handled {
+			result := &goast.CallExpr{Fun: function, Args: e.exprs(call.Args)}
+			if call.Ellipsis {
+				result.Ellipsis = 1
+			}
+			return result
+		}
+	}
+	if function, handled := e.traitFunctionInstance(n); handled {
+		return function
 	}
 	if member := e.info.Members[n]; member != nil {
+		if len(member.Evidence.Cases) != 0 {
+			e.fail(n, "trait 条件证据尚未实例化为操作或约束回调")
+			return nil
+		}
 		return e.memberExpr(member)
 	}
 	if result, ok := e.enumConstruct(n); ok {
-		return result
-	}
-	if result, ok := e.equalityCall(n); ok {
 		return result
 	}
 	switch n := n.(type) {
@@ -49,6 +88,14 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 		}
 		return &goast.Ident{NamePos: e.pos(n), Name: name}
 	case *syntax.CompositeLit:
+		if literal := e.stableArrayLiteral(n, false); literal != nil {
+			return literal
+		}
+		if e.validation != nil {
+			if array, ok := e.typeState.ArrayOf(e.info, e.info.Types[n]); ok && array.Length.Param != nil {
+				return e.validationArrayLiteral(n, array)
+			}
+		}
 		brace := e.pos(n)
 		if n.Type != nil {
 			brace = e.end(n.Type)
@@ -56,12 +103,12 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 		elts := make([]goast.Expr, len(n.Elts))
 		for i, elt := range n.Elts {
 			elts[i] = e.expr(elt)
-			if typ := e.info.Types[n]; typ != nil {
-				if _, record := typ.Underlying().(*types.Struct); record {
-					if field, ok := elt.(*syntax.KeyValue); ok {
-						if id, ok := field.Key.(*syntax.Ident); ok {
-							elts[i].(*goast.KeyValueExpr).Key = &goast.Ident{NamePos: e.pos(id), Name: id.Name}
-						}
+			if field, ok := elt.(*syntax.KeyValue); ok {
+				if id, ok := field.Key.(*syntax.Ident); ok {
+					if name := e.info.GoMembers[id]; name != "" {
+						key := &goast.Ident{NamePos: e.pos(id), Name: name}
+						e.recordSource(key, id)
+						elts[i].(*goast.KeyValueExpr).Key = key
 					}
 				}
 			}
@@ -87,11 +134,17 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 	case *syntax.SelectorExpr:
 		return &goast.SelectorExpr{X: e.expr(n.X), Sel: e.ident(n.Sel)}
 	case *syntax.IndexExpr:
+		if index := e.stableArrayIndex(n); index != nil {
+			return index
+		}
 		if len(n.Indices) == 1 {
 			return &goast.IndexExpr{X: e.expr(n.X), Lbrack: e.end(n.X), Index: e.expr(n.Indices[0]), Rbrack: e.end(n) - 1}
 		}
 		return &goast.IndexListExpr{X: e.expr(n.X), Lbrack: e.end(n.X), Indices: e.exprs(n.Indices), Rbrack: e.end(n) - 1}
 	case *syntax.SliceExpr:
+		if slice := e.stableArraySlicing(n); slice != nil {
+			return slice
+		}
 		return &goast.SliceExpr{X: e.expr(n.X), Lbrack: e.end(n.X), Low: e.expr(n.Low), High: e.expr(n.High), Max: e.expr(n.Max), Slice3: n.Slice3, Rbrack: e.end(n) - 1}
 	case *syntax.TypeAssertExpr:
 		return &goast.TypeAssertExpr{X: e.expr(n.X), Lparen: e.end(n.X) + 1, Type: e.typ(n.Type), Rparen: e.end(n) - 1}
@@ -104,6 +157,11 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 	case *syntax.StarExpr:
 		return &goast.StarExpr{Star: e.pos(n), X: e.expr(n.X)}
 	case *syntax.UnaryExpr:
+		if n.Op == token.AND {
+			if literal := e.stableArrayAddress(n.X); literal != nil {
+				return literal
+			}
+		}
 		return &goast.UnaryExpr{OpPos: e.pos(n), Op: tokenKind(n.Op), X: e.expr(n.X)}
 	case *syntax.BinaryExpr:
 		return &goast.BinaryExpr{X: e.expr(n.X), OpPos: e.end(n.X), Op: tokenKind(n.Op), Y: e.expr(n.Y)}
@@ -125,6 +183,9 @@ func (e *emitter) rawExpr(n syntax.Expr) (out goast.Expr) {
 	case *syntax.PathExpr:
 		return e.path(n.Path)
 	case *syntax.RefExpr:
+		if literal := e.stableArrayAddress(n.X); literal != nil {
+			return literal
+		}
 		return &goast.UnaryExpr{OpPos: e.pos(n), Op: gotoken.AND, X: e.expr(n.X)}
 	case *syntax.TypeExpr:
 		return e.typ(n.Type)

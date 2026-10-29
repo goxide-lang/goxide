@@ -1,0 +1,11 @@
+package errorsupport
+use fmt;
+
+// Exact terms intentionally reject new defined scalar types and complex values.
+pub func Scalar[T interface { bool | int | int8 | int16 | int32 | int64 | uint | uint8 | uint16 | uint32 | uint64 | uintptr | float32 | float64 | string }](value T) string {
+ return fmt::Sprint(value)
+}
+
+// A pointer to the exact error interface admits aliases while rejecting a
+// different concrete or defined interface type without inspecting its spelling.
+pub func Source[T interface { *error }](value T) error { return *value }

@@ -1,0 +1,102 @@
+package protocol
+use strconv;
+use sort;
+pub trait LibraryDefault { func r#default() Self }
+pub trait LibraryClone { func clone(self &Self) Self }
+pub trait LibraryDebug { func debug(self &Self) string }
+pub trait LibraryPartialEq { func equals(self Self,other Self) bool }
+pub trait LibraryEq where Self: LibraryPartialEq {}
+pub func Make[T LibraryDefault]() T { return T::r#default::<LibraryDefault>() }
+pub func Equal[T LibraryPartialEq](left,right T) bool { return left.equals::<LibraryPartialEq>(right) }
+pub func RequireEq[T LibraryEq](left,right T) bool { return left.equals::<LibraryPartialEq>(right) }
+impl LibraryDefault for int { func r#default() Self { return 0 } }
+impl LibraryClone for int { func clone(self &Self) Self { return *self } }
+impl LibraryDebug for int { func debug(self &Self) string { return strconv::Itoa(*self) } }
+impl LibraryPartialEq for int { func equals(self Self,other Self) bool { return self==other } }
+impl LibraryEq for int {}
+impl[T LibraryClone] LibraryClone for []T {
+ func clone(self &Self) Self { if *self==nil { return nil }; result:=make([]T,len(*self));for i:=range *self { result[i]=LibraryClone::clone(&(*self)[i]) };return result }
+}
+impl[T LibraryClone,const N int] LibraryClone for [N]T {
+ func clone(self &Self) Self { var result [N]T;for i:=range *self { result[i]=LibraryClone::clone(&(*self)[i]) };return result }
+}
+impl[T LibraryDebug] LibraryDebug for []T {
+ func debug(self &Self) string { if *self==nil {return "nil"};result:="[";for i:=range *self {if i!=0 {result+=", "};result+=LibraryDebug::debug(&(*self)[i])};return result+"]" }
+}
+impl[T LibraryDebug,const N int] LibraryDebug for [N]T {
+ func debug(self &Self) string { result:="[";for i:=range *self {if i!=0 {result+=", "};result+=LibraryDebug::debug(&(*self)[i])};return result+"]" }
+}
+impl[T LibraryPartialEq] LibraryPartialEq for []T {
+ func equals(self Self,other Self) bool { if (self==nil)!=(other==nil)||len(self)!=len(other) {return false};for i:=range self {if !LibraryPartialEq::equals(self[i],other[i]) {return false}};return true }
+}
+impl[T LibraryPartialEq,const N int] LibraryPartialEq for [N]T {
+ func equals(self Self,other Self) bool {for i:=range self {if !LibraryPartialEq::equals(self[i],other[i]) {return false}};return true }
+}
+impl[T LibraryEq] LibraryEq for []T {}
+impl[T LibraryEq,const N int] LibraryEq for [N]T {}
+
+// Keep exact builtin key identity: newly defined and complex keys are excluded.
+type CloneKey interface { bool | int | int8 | int16 | int32 | int64 | uint | uint8 | uint16 | uint32 | uint64 | uintptr | float32 | float64 | string }
+impl[K CloneKey,V LibraryClone] LibraryClone for map[K]V {
+ func clone(self &Self) Self { if *self==nil {return nil};result:=make(map[K]V,len(*self));for key,value:=range *self {result[key]=LibraryClone::clone(&value)};return result }
+}
+impl[V LibraryDebug] LibraryDebug for map[string]V {
+ func debug(self &Self) string { if *self==nil {return "nil"};keys:=make([]string,0,len(*self));for key:=range *self {keys=append(keys,key)};sort::Strings(keys);result:="{";for i,key:=range keys {if i!=0 {result+=", "};value:=(*self)[key];result+=strconv::Quote(key)+": "+LibraryDebug::debug(&value)};return result+"}" }
+}
+impl[T any] LibraryDefault for Option[T] {
+ func r#default() Self {return Option[T]::None}
+}
+impl[T LibraryClone] LibraryClone for Option[T] {
+ func clone(self &Self) Self {return match &*self {Option::None=>Option[T]::None,Option::Some(value)=>Option[T]::Some(LibraryClone::clone(value)),}}
+}
+impl[T LibraryDebug] LibraryDebug for Option[T] {
+ func debug(self &Self) string {return match &*self {Option::None=>"Option::None",Option::Some(value)=>"Option::Some("+LibraryDebug::debug(value)+")",}}
+}
+impl[T LibraryClone,E LibraryClone] LibraryClone for Result[T,E] {
+ func clone(self &Self) Self {return match &*self {Result::Ok(value)=>Result[T,E]::Ok(LibraryClone::clone(value)),Result::Err(value)=>Result[T,E]::Err(LibraryClone::clone(value)),}}
+}
+impl[T LibraryDebug,E LibraryDebug] LibraryDebug for Result[T,E] {
+ func debug(self &Self) string {return match &*self {Result::Ok(value)=>"Result::Ok("+LibraryDebug::debug(value)+")",Result::Err(value)=>"Result::Err("+LibraryDebug::debug(value)+")",}}
+}
+impl LibraryDefault for bool { func r#default() Self {return false} }
+impl LibraryClone for bool { func clone(self &Self) Self {return *self} }
+impl LibraryDebug for bool { func debug(self &Self) string {return strconv::FormatBool(*self)} }
+impl LibraryDefault for int8 { func r#default() Self {return 0} }
+impl LibraryClone for int8 { func clone(self &Self) Self {return *self} }
+impl LibraryDebug for int8 { func debug(self &Self) string {return strconv::FormatInt(int64(*self),10)} }
+impl LibraryDefault for int16 { func r#default() Self {return 0} }
+impl LibraryClone for int16 { func clone(self &Self) Self {return *self} }
+impl LibraryDebug for int16 { func debug(self &Self) string {return strconv::FormatInt(int64(*self),10)} }
+impl LibraryDefault for int32 { func r#default() Self {return 0} }
+impl LibraryClone for int32 { func clone(self &Self) Self {return *self} }
+impl LibraryDebug for int32 { func debug(self &Self) string {return strconv::FormatInt(int64(*self),10)} }
+impl LibraryDefault for int64 { func r#default() Self {return 0} }
+impl LibraryClone for int64 { func clone(self &Self) Self {return *self} }
+impl LibraryDebug for int64 { func debug(self &Self) string {return strconv::FormatInt(int64(*self),10)} }
+impl LibraryDefault for uint { func r#default() Self {return 0} }
+impl LibraryClone for uint { func clone(self &Self) Self {return *self} }
+impl LibraryDebug for uint { func debug(self &Self) string {return strconv::FormatUint(uint64(*self),10)} }
+impl LibraryDefault for uint8 { func r#default() Self {return 0} }
+impl LibraryClone for uint8 { func clone(self &Self) Self {return *self} }
+impl LibraryDebug for uint8 { func debug(self &Self) string {return strconv::FormatUint(uint64(*self),10)} }
+impl LibraryDefault for uint16 { func r#default() Self {return 0} }
+impl LibraryClone for uint16 { func clone(self &Self) Self {return *self} }
+impl LibraryDebug for uint16 { func debug(self &Self) string {return strconv::FormatUint(uint64(*self),10)} }
+impl LibraryDefault for uint32 { func r#default() Self {return 0} }
+impl LibraryClone for uint32 { func clone(self &Self) Self {return *self} }
+impl LibraryDebug for uint32 { func debug(self &Self) string {return strconv::FormatUint(uint64(*self),10)} }
+impl LibraryDefault for uint64 { func r#default() Self {return 0} }
+impl LibraryClone for uint64 { func clone(self &Self) Self {return *self} }
+impl LibraryDebug for uint64 { func debug(self &Self) string {return strconv::FormatUint(uint64(*self),10)} }
+impl LibraryDefault for uintptr { func r#default() Self {return 0} }
+impl LibraryClone for uintptr { func clone(self &Self) Self {return *self} }
+impl LibraryDebug for uintptr { func debug(self &Self) string {return strconv::FormatUint(uint64(*self),10)} }
+impl LibraryDefault for float32 { func r#default() Self {return 0} }
+impl LibraryClone for float32 { func clone(self &Self) Self {return *self} }
+impl LibraryDebug for float32 { func debug(self &Self) string {return strconv::FormatFloat(float64(*self),'g',-1,32)} }
+impl LibraryDefault for float64 { func r#default() Self {return 0} }
+impl LibraryClone for float64 { func clone(self &Self) Self {return *self} }
+impl LibraryDebug for float64 { func debug(self &Self) string {return strconv::FormatFloat(float64(*self),'g',-1,64)} }
+impl LibraryDefault for string { func r#default() Self {return ""} }
+impl LibraryClone for string { func clone(self &Self) Self {return *self} }
+impl LibraryDebug for string { func debug(self &Self) string {return strconv::Quote(*self)} }

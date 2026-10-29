@@ -8,8 +8,8 @@ import (
 	"go/types"
 	"sort"
 
-	"github.com/hxsf/goxide/internal/resolve"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 type localTypeName struct {
@@ -126,9 +126,14 @@ func (e *emitter) addFunctionAliases(file *goast.File) {
 }
 
 func (e *emitter) typ(n syntax.Type) (out goast.Expr) {
-	defer func() { e.macroLayout(n, out) }()
+	defer func() { e.macroLayout(n, out); e.recordSource(out, n) }()
 	if n == nil {
 		return nil
+	}
+	if e.constTemplate != nil {
+		if typ := e.info.SourceType(n); typ != nil {
+			return e.goType(typ)
+		}
 	}
 	if t := e.info.TypeOverrides[n]; t != nil {
 		return e.goType(t)
@@ -137,7 +142,7 @@ func (e *emitter) typ(n syntax.Type) (out goast.Expr) {
 	case *syntax.PathType:
 		if n.Path != nil && len(n.Path.Segments) > 0 {
 			id := n.Path.Segments[0].Name
-			if s := e.file.References[id.ID()].Symbol; s != nil && s.Decl.File == "" && (s.Name.Name == "Option" || s.Name.Name == "Result") {
+			if s := e.file.References[id.ID()].Symbol; s != nil && s.Decl.File == "" && len(s.Target) == 0 && (s.Name.Name == "Option" || s.Name.Name == "Result") {
 				return e.typeArgs(e.sumMember(s.Name.Name), n.Path.Segments[0].Args)
 			}
 		}
@@ -147,6 +152,9 @@ func (e *emitter) typ(n syntax.Type) (out goast.Expr) {
 	case *syntax.SliceType:
 		return &goast.ArrayType{Lbrack: e.pos(n), Elt: e.typ(n.Elem)}
 	case *syntax.ArrayType:
+		if parameter := e.validationConstParameter(n.Len); parameter != nil {
+			return e.validation.arrayType(parameter, e.typ(n.Elem))
+		}
 		length := e.expr(n.Len)
 		if n.Ellipsis {
 			length = &goast.Ellipsis{Ellipsis: e.pos(n) + 1}
@@ -175,9 +183,6 @@ func (e *emitter) typ(n syntax.Type) (out goast.Expr) {
 		fields := make([]*goast.Field, len(n.Fields))
 		for i, f := range n.Fields {
 			field := &goast.Field{Type: e.typ(f.Type)}
-			if len(f.Names) == 0 {
-				e.embeddedType(f.Type, field.Type)
-			}
 			for _, name := range f.Names {
 				field.Names = append(field.Names, e.ident(name))
 			}
@@ -241,42 +246,6 @@ func (e *emitter) typ(n syntax.Type) (out goast.Expr) {
 	return nil
 }
 
-func (e *emitter) embeddedType(source syntax.Type, lowered goast.Expr) {
-	id, out := embeddedSyntaxIdent(source), embeddedIdent(lowered)
-	if id == nil || out == nil {
-		return
-	}
-	name := out.Name
-	if symbol := e.file.References[id.ID()].Symbol; symbol != nil {
-		if symbol.AliasOf != nil {
-			symbol = symbol.AliasOf
-		}
-		if symbol.Kind == resolve.Type && symbol.GoName != "" {
-			name = symbol.GoName
-		}
-	}
-	if name != id.Name {
-		out.Name = id.Name
-		e.memberNames[out] = name
-	}
-}
-
-func embeddedSyntaxIdent(typ syntax.Type) *syntax.Ident {
-	switch typ := typ.(type) {
-	case *syntax.PathType:
-		if len(typ.Path.Segments) != 0 {
-			return typ.Path.Segments[len(typ.Path.Segments)-1].Name
-		}
-	case *syntax.PointerType:
-		return embeddedSyntaxIdent(typ.Elem)
-	case *syntax.ProjectionType:
-		return typ.Item
-	case *syntax.ParenType:
-		return embeddedSyntaxIdent(typ.Type)
-	}
-	return nil
-}
-
 func (e *emitter) params(params []*syntax.Param) *goast.FieldList {
 	list := &goast.FieldList{}
 	for _, p := range params {
@@ -301,11 +270,17 @@ func (e *emitter) generics(params *syntax.GenericParams) *goast.FieldList {
 	}
 	list := &goast.FieldList{Opening: e.pos(params), Closing: e.end(params) - 1}
 	for _, p := range params.Params {
+		if p.Const {
+			continue
+		}
 		f := &goast.Field{Type: e.typ(p.Constraint)}
 		for _, name := range p.Names {
 			f.Names = append(f.Names, e.ident(name))
 		}
 		list.List = append(list.List, f)
+	}
+	if len(list.List) == 0 {
+		return nil
 	}
 	return list
 }
@@ -313,6 +288,9 @@ func (e *emitter) generics(params *syntax.GenericParams) *goast.FieldList {
 func (e *emitter) typeArgs(x goast.Expr, args *syntax.GenericArgs) goast.Expr {
 	if args == nil {
 		return x
+	}
+	if function, handled := e.traitFunctionInstance(args); handled {
+		return function
 	}
 	indices := make([]goast.Expr, len(args.Args))
 	for i, a := range args.Args {

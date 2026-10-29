@@ -1,3 +1,0 @@
-package p
-macro_rules! value {()=>{copy};}
-func run(){_=value!()}

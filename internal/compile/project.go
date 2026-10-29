@@ -2,6 +2,7 @@
 package compile
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,23 +10,59 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/config"
-	"github.com/hxsf/goxide/internal/lower"
-	"github.com/hxsf/goxide/internal/paths"
-	"github.com/hxsf/goxide/internal/project"
+	"github.com/goxide-lang/goxide/internal/analysis"
+	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/expand"
+	"github.com/goxide-lang/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/project"
+	pm "github.com/goxide-lang/syntax/proc_macro"
 )
 
 type Options struct {
 	Bin, Example, GoTool, TargetDir, Target string
 	Lib                                     bool
-	Offline, Locked                         bool
-	Features                                []string
-	NoDefaultFeatures                       bool
-	NativeFeatures                          *config.Features // Native directory inputs keep an open root feature set.
-	Roots                                   paths.Roots      // Optional root-module namespace context for native directory inputs.
-	Config                                  config.Config
-	Tags                                    []string
-	Race                                    bool
+	// StableGo requests a separately consumable library export. Selecting a
+	// library target alone keeps the ordinary project compilation behavior.
+	StableGo          bool
+	Offline, Locked   bool
+	Features          []string
+	NoDefaultFeatures bool
+	GoSugar           *bool            // Overrides only the selected entry module.
+	NativeFeatures    *config.Features // Native directory inputs keep an open root feature set.
+	NativeGeneration  bool             // Native gen keeps Go replacement import identities.
+	// NativeFiles is the fixed relative file inventory of an already copied
+	// private native root. Dependency modules retain ordinary source discovery.
+	NativeFiles []string
+	Roots       paths.Roots // Optional root-module namespace context for native directory inputs.
+	Config      config.Config
+	Tags        []string
+	Race        bool
+	// Editor prepares private views without CLI writer leases or target output.
+	// A successful macro may refresh an existing independently leased editor lane.
+	// An unfinished selected producer is analyzed without compiling its own WASM;
+	// dependency macro programs are still built from the current inputs.
+	Editor bool
+	// SourceOverlays fix unsaved source bytes before preparing macro programs.
+	// Keys are absolute author filenames; nil removes a selected source.
+	SourceOverlays map[string][]byte
+	// RunProcMacro executes a prepared WASM command. A nil callback leaves
+	// actual expansion unavailable until a restricted host is supplied.
+	RunProcMacro     func(wasm []byte, request pm.Request) ([]byte, error)
+	OnProcDiagnostic func(filename string, diagnostic expand.ProcDiagnostic)
+	// OnPreparedSources runs while the role-specific importers and staged Go
+	// dependencies remain available, so callers can create fixed distributions.
+	OnPreparedSources    func(PreparedSources) error
+	PrepareNativePackage func([]analysis.Module) error
+}
+
+// PreparedSources is valid only during OnPreparedSources. Its macro libraries
+// retain their own role's live importers, so fixed-distribution snapshots must
+// be taken here rather than after the staging directories have been removed.
+type PreparedSources struct {
+	SourcePackages []analysis.SourcePackage
+	Macros         []ProcArtifact
+	Roots          paths.Roots
+	RuntimeRoots   []analysis.RuntimeRoot
 }
 
 // Result names a stable generated Go module and its selected target package.
@@ -34,11 +71,35 @@ type Result struct {
 	Kind        string
 	SourceRoots []string // Original inputs, retained for caller output protection.
 	Config      config.Config
+	ProcMacro   string // Prepared WASI command for a proc-macro lib target.
+}
+
+// ProcArtifact is one checked macro program and its restricted WASI command.
+// The library is available for a source snapshot; execution uses the supplied host.
+type ProcArtifact struct {
+	Library *analysis.ProcLibrary
+	WASM    []byte
 }
 
 // PrepareProject generates a single manifest project and its source dependencies.
 // The caller can run Go build/run/test in Result.Root after this function returns.
 func PrepareProject(directory string, options Options) (*Result, error) {
+	prepared, err := Prepare(context.Background(), directory, options)
+	if err != nil {
+		return nil, err
+	}
+	defer prepared.Close()
+	return prepared.buildAndPublish(context.Background())
+}
+
+// Prepare loads the selected graph and compiles dependency macros without
+// analyzing the target or publishing build output. Successful macro work has
+// separate intermediate slots. Close releases private views and importers once
+// all snapshots have been released.
+func Prepare(ctx context.Context, directory string, options Options) (*Project, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	root, err := project.DiscoverProject(directory)
 	if err != nil {
 		return nil, err
@@ -62,7 +123,7 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 	}
 	configuration := options.Config
 	if configuration.Environment == nil {
-		configuration.Environment, err = config.Prepare(options.GoTool, root, options.Target, false, os.Environ())
+		configuration.Environment, err = config.PrepareContext(ctx, options.GoTool, root, options.Target, false, os.Environ())
 		if err != nil {
 			return nil, err
 		}
@@ -72,7 +133,8 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 	}
 	environment := configuration.Environment
 	tool := environment.GoTool
-	if work, _ := environment.LookupEnv("GOWORK"); work != "" && work != "off" {
+	// Native inputs use a private staged project and always execute with GOWORK=off.
+	if work, _ := environment.LookupEnv("GOWORK"); options.NativeFeatures == nil && work != "" && work != "off" {
 		return nil, fmt.Errorf("workspace migration unsupported: explicit GOWORK")
 	}
 	targetDir := options.TargetDir
@@ -82,15 +144,39 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 	if targetDir == "" {
 		targetDir = "target"
 	}
-	release, err := project.LockProject(root)
+	var release func()
+	var privateRoot string
+	defer func() {
+		if release != nil {
+			release()
+		}
+		if privateRoot != "" {
+			os.RemoveAll(privateRoot)
+		}
+	}()
+	var plans *project.BuildPlans
+	if options.Editor {
+		privateRoot, err = os.MkdirTemp("", "goxide-editor-")
+		if err != nil {
+			return nil, err
+		}
+		canonical, canonicalErr := filepath.EvalSymlinks(privateRoot)
+		if canonicalErr != nil {
+			return nil, canonicalErr
+		}
+		privateRoot = canonical
+		plans, err = project.LoadEditorBuildPlansContext(ctx, root, tool, options.Features, !options.NoDefaultFeatures, options.Offline, options.Locked, targetDir, privateRoot, environment.Target.OS+"/"+environment.Target.Arch, options.Lib && manifest.Lib != nil && manifest.Lib.ProcMacro, options.NativeGeneration, environment.ExecEnv())
+	} else {
+		release, err = project.LockProject(root)
+		if err != nil {
+			return nil, err
+		}
+		plans, err = project.LoadBuildPlansContext(ctx, root, tool, options.Features, !options.NoDefaultFeatures, options.Offline, options.Locked, targetDir, environment.Target.OS+"/"+environment.Target.Arch, options.Lib && manifest.Lib != nil && manifest.Lib.ProcMacro, options.NativeGeneration, environment.ExecEnv())
+	}
 	if err != nil {
 		return nil, err
 	}
-	defer release()
-	graph, err := project.LoadWithTarget(root, tool, options.Features, !options.NoDefaultFeatures, options.Offline, options.Locked, targetDir, environment.ExecEnv())
-	if err != nil {
-		return nil, err
-	}
+	graph := plans.Target
 	target, err := project.Select(manifest, options.Bin, options.Example, options.Lib, graph.Root.Features)
 	if err != nil {
 		return nil, err
@@ -101,135 +187,36 @@ func PrepareProject(directory string, options Options) (*Result, error) {
 	} else if options.Example != "" {
 		kind = "example"
 	}
-	features := make(map[string]config.Features, len(graph.Nodes))
-	for _, node := range graph.Nodes {
-		selected := config.Features{Enabled: node.Features}
-		if node.HasManifest {
-			if err := singleProject(node.Root); err != nil {
-				return nil, err
-			}
-			if err := supportedManifest(node.Manifest); err != nil {
-				return nil, fmt.Errorf("%s: %w", node.Module, err)
-			}
-			selected.Declared = make(map[string]bool, len(node.Manifest.Features))
-			for name := range node.Manifest.Features {
-				selected.Declared[name] = true
-			}
-		}
-		if node == graph.Root && options.NativeFeatures != nil {
-			selected = *options.NativeFeatures
-		}
-		features[node.SourceKey] = selected
-	}
-	layout, err := project.OpenLayout(root, manifest.Module, targetDir)
-	if err != nil {
-		return nil, err
-	}
-	defer layout.Close()
-	for _, node := range graph.Nodes {
-		cached := node.CheckoutRoot != "" && within(graph.Cache, node.CheckoutRoot) && within(node.CheckoutRoot, node.Root)
-		if within(layout.Root, node.Root) && !cached || node != graph.Root && within(node.Root, layout.Root) {
-			return nil, fmt.Errorf("target directory overlaps source module %s", node.Module)
-		}
-	}
-	staged, err := os.MkdirTemp(layout.Root, ".generation-")
-	if err != nil {
-		return nil, err
-	}
-	defer os.RemoveAll(staged)
-	modules := make([]lower.Module, 0, len(graph.Nodes))
-	generated := make(map[string]string, len(graph.Nodes))
-	ordered := append([]*project.Node{graph.Root}, graph.Nodes...)
-	entry := ""
-	for _, node := range ordered {
-		if generated[node.Module] != "" {
-			continue
-		}
-		output := filepath.Join(staged, "deps", project.Digest(node.Module)[:16])
-		selected := project.Target{Name: "native", Path: "."}
-		targetKind := "lib"
-		if node == graph.Root {
-			output = filepath.Join(staged, "module")
-			selected, targetKind = target, kind
-		} else if node.Manifest.Lib != nil {
-			selected = *node.Manifest.Lib
-		}
-		packagePath, err := stageSources(node, selected, targetKind, output)
+	layoutRoot := privateRoot
+	var beforeLock []byte
+	if !options.Editor {
+		layout, err := project.OpenLayout(root, manifest.Module, targetDir)
 		if err != nil {
 			return nil, err
 		}
-		if node == graph.Root {
-			entry = "./" + filepath.ToSlash(packagePath)
-			if packagePath == "." {
-				entry = "."
-			}
-		}
-		roots, err := moduleRoots(node)
-		if err != nil {
+		layoutRoot = layout.Root
+		layout.Close()
+		beforeLock, err = os.ReadFile(filepath.Join(root, "goxide.lock"))
+		if err != nil && !os.IsNotExist(err) {
 			return nil, err
 		}
-		if node == graph.Root && options.Roots != nil {
-			roots = options.Roots
-		}
-		generated[node.Module] = output
-		rootPackage := ""
-		if node.Manifest.Lib != nil {
-			rootPackage, err = libraryPackage(node)
-			if err != nil {
-				return nil, err
-			}
-		}
-		moduleConfig := configuration
-		moduleConfig.Features = features[node.SourceKey]
-		module := lower.Module{Path: node.Module, Dir: output, RootPackage: rootPackage, Roots: roots, Config: moduleConfig, Tags: options.Tags, Race: options.Race}
-		if node.HasManifest && !(node == graph.Root && options.NativeFeatures != nil) {
-			module.Crates, module.Targets, err = targetCrates(node, selected, targetKind)
-			if err != nil {
-				return nil, err
-			}
-		}
-		modules = append(modules, module)
+		release()
+		release = nil
 	}
-	if err := prepareModules(graph, generated); err != nil {
-		return nil, err
-	}
-	if err := lower.CompileModules(modules); err != nil {
-		return nil, err
-	}
-	arguments := []string{"list", "-mod=readonly", "-tags=" + strings.Join(options.Tags, ","), "-f", "{{.Name}}"}
-	if options.Race {
-		arguments = append(arguments, "-race")
-	}
-	name, err := goCommand(graph, generated[graph.Root.Module], append(arguments, entry)...)
+	prepared, err := prepareBuildPlans(ctx, plans, layoutRoot, target, kind, configuration, options)
 	if err != nil {
 		return nil, err
 	}
-	if main := strings.TrimSpace(string(name)) == "main"; kind == "lib" && main || kind != "lib" && !main {
-		if kind == "lib" {
-			return nil, fmt.Errorf("lib target %s must be an importable package, not package main", target.Name)
-		}
-		return nil, fmt.Errorf("%s target %s must be package main", kind, target.Name)
+	prepared.beforeLock = beforeLock
+	if privateRoot != "" {
+		prepared.directories = append(prepared.directories, privateRoot)
+		privateRoot = "" // The prepared project's snapshots now own this lifetime.
 	}
-	spec, err := unitSpec(graph, target, kind, configuration, features, options.Tags, options.Race)
-	if err != nil {
+	if err := prepared.publishMacroWork(ctx); err != nil {
+		prepared.Close()
 		return nil, err
 	}
-	unit, err := layout.Begin(spec)
-	if err != nil {
-		return nil, err
-	}
-	if err := graph.Save(); err != nil {
-		return nil, err
-	}
-	if err := unit.PublishBundle(staged); err != nil {
-		return nil, err
-	}
-	configuration.Features = features[graph.Root.SourceKey]
-	result := &Result{Root: filepath.Join(unit.Bundle, "module"), Entry: entry, Kind: kind, Config: configuration}
-	for _, node := range graph.Nodes {
-		result.SourceRoots = append(result.SourceRoots, node.Root)
-	}
-	return result, nil
+	return prepared, nil
 }
 
 func singleProject(root string) error {
@@ -270,12 +257,8 @@ func supportedManifest(manifest project.Manifest) error {
 	return nil
 }
 
-func unitSpec(graph *project.Graph, target project.Target, kind string, configuration config.Config, features map[string]config.Features, tags []string, race bool) (project.UnitSpec, error) {
-	executable, err := os.Executable()
-	if err != nil {
-		return project.UnitSpec{}, err
-	}
-	compiler, err := os.ReadFile(executable)
+func unitSpec(graph *project.Graph, target project.Target, kind string, configuration config.Config, features map[string]config.Features, sugar map[string]bool, tags []string, race, stableGo bool) (project.UnitSpec, error) {
+	compiler, err := compilerIdentity()
 	if err != nil {
 		return project.UnitSpec{}, err
 	}
@@ -283,6 +266,7 @@ func unitSpec(graph *project.Graph, target project.Target, kind string, configur
 		Module, Root, Mod string
 		Manifest          project.Manifest
 		Features          []string
+		GoSugar           bool
 	}
 	var sources []source
 	for _, node := range graph.Nodes {
@@ -292,7 +276,7 @@ func unitSpec(graph *project.Graph, target project.Target, kind string, configur
 				enabled = append(enabled, name)
 			}
 		}
-		sources = append(sources, source{node.Module, node.Root, string(node.ModBytes), node.Manifest, enabled})
+		sources = append(sources, source{node.Module, node.Root, string(node.ModBytes), node.Manifest, enabled, sugar[node.SourceKey]})
 	}
 	sort.Slice(sources, func(i, j int) bool { return sources[i].Module < sources[j].Module })
 	buildTags := map[string]bool{}
@@ -307,18 +291,40 @@ func unitSpec(graph *project.Graph, target project.Target, kind string, configur
 	identity := project.Digest(struct {
 		Sources     []source
 		Target      project.Target
+		Host        config.Target
 		Platform    config.Target
 		Environment map[string][]byte
 		EnvReads    []config.EnvInput
 		Tags        []string
 		Race        bool
+		StableGo    bool
 		GoTool      string
 		Compiler    string
 		Plan        string
-	}{sources, target, environment.Target, values, configuration.Reads.Inputs(), project.Keys(buildTags), race, environment.GoTool, project.Digest(compiler), graph.PlanID})
+	}{sources, target, environment.Host, environment.Target, values, configuration.Reads.Inputs(), project.Keys(buildTags), race, stableGo, environment.GoTool, compiler, unitDependencyID(graph)})
 	host := environment.Host.OS + "-" + environment.Host.Arch
 	platform := environment.Target.OS + "-" + environment.Target.Arch
 	return project.UnitSpec{Host: host, Target: platform, Kind: kind, Name: target.Name, Config: identity}, nil
+}
+
+// Unit paths identify selected configurations, not macro source revisions.
+// Include the entire macro dependency closure: a nested selection can change
+// without changing the consumer's own dependency plan.
+func unitDependencyID(graph *project.Graph) string {
+	dependencies := make([]project.RoleDependency, 0, len(graph.ProcEdges))
+	for _, edge := range graph.ProcEdges {
+		dependencies = append(dependencies, project.RoleDependency{Consumer: edge.Consumer.SourceKey, Alias: edge.Alias, Plan: unitDependencyID(edge.Plan)})
+	}
+	sort.Slice(dependencies, func(i, j int) bool {
+		if dependencies[i].Consumer != dependencies[j].Consumer {
+			return dependencies[i].Consumer < dependencies[j].Consumer
+		}
+		return dependencies[i].Alias < dependencies[j].Alias
+	})
+	return project.Digest(struct {
+		Plan         string
+		Dependencies []project.RoleDependency
+	}{graph.DependencyPlanID, dependencies})
 }
 
 func within(root, name string) bool {

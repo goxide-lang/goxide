@@ -1,8 +1,8 @@
 package typecheck
 
 import (
-	"github.com/hxsf/goxide/internal/expand"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/expand"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 const namespaceRootPrefix = "$goxide$roots"
@@ -50,6 +50,9 @@ func (i *NamespaceImporter) Prepare(expanded *expand.Result) {
 				alias := *original
 				use.Tree.Alias = &alias
 				expanded.Origins[&alias], expanded.Scopes[&alias] = expanded.Origins[original], expanded.Scopes[original]
+				if location, ok := expanded.Locations[original]; ok {
+					expanded.Locations[&alias] = location
+				}
 			}
 			name := *first
 			name.Name, name.Raw = namespaceRootPrefix, true
@@ -57,6 +60,12 @@ func (i *NamespaceImporter) Prepare(expanded *expand.Result) {
 			prefix.Name = &name
 			expanded.Origins[&name], expanded.Scopes[&name] = expanded.Origins[first], expanded.Scopes[first]
 			expanded.Origins[&prefix] = expanded.Origins[segments[0]]
+			if location, ok := expanded.Locations[first]; ok {
+				expanded.Locations[&name] = location
+			}
+			if location, ok := expanded.Locations[segments[0]]; ok {
+				expanded.Locations[&prefix] = location
+			}
 			use.Tree.Path.Segments = append([]*syntax.PathSegment{&prefix}, segments...)
 		}
 		var id syntax.NodeID

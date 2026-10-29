@@ -3,9 +3,9 @@ package check
 import (
 	"go/types"
 
-	"github.com/hxsf/goxide/internal/resolve"
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 type permissionLocation struct {
@@ -79,6 +79,19 @@ func (p *permissionChecker) rawExpr(node ast.Expr, want *permission) *permission
 			return value
 		}
 		if f := p.functions[s]; f != nil {
+			if path, ok := n.(*ast.PathExpr); ok && path.Path != nil && len(path.Path.Segments) != 0 {
+				if args := path.Path.Segments[len(path.Path.Segments)-1].Args; args != nil {
+					if sig, ok := f.typ.typ.(*types.Signature); ok {
+						sub := map[*types.TypeParam]*permission{}
+						for index, position := range p.c.typeArgumentPositions(sig, len(args.Args)) {
+							if index < sig.TypeParams().Len() {
+								sub[sig.TypeParams().At(index)] = p.astType(args.Args[position].Type, nil)
+							}
+						}
+						return p.instantiatedFunction(f.typ, q.typ, args, sub)
+					}
+				}
+			}
 			return f.typ
 		}
 		if con := p.c.out.Constructors[node]; con != nil {
@@ -139,7 +152,7 @@ func (p *permissionChecker) rawExpr(node ast.Expr, want *permission) *permission
 	case *ast.SelectorExpr:
 		if n.Static {
 			if signature, ok := q.typ.(*types.Signature); ok && signature.Params().Len() > 0 {
-				object, _, _ := types.LookupFieldOrMethod(signature.Params().At(0).Type(), false, p.c.pkg, n.Sel.Name)
+				object, _ := p.c.lookupGoInteropMember(signature.Params().At(0).Type(), false, n.Sel.Name)
 				if method, ok := object.(*types.Func); ok {
 					return p.nativeMethodExpression(n, method, signature)
 				}
@@ -152,7 +165,7 @@ func (p *permissionChecker) rawExpr(node ast.Expr, want *permission) *permission
 		}
 		var fieldPath []int
 		if x.typ != nil {
-			if obj, index, _ := types.LookupFieldOrMethod(x.typ, true, p.c.pkg, n.Sel.Name); obj != nil {
+			if obj, index := p.c.lookupGoInteropMember(x.typ, true, n.Sel.Name); obj != nil {
 				if method, ok := obj.(*types.Func); ok {
 					return p.method(n, x, method, index)
 				}
@@ -184,7 +197,7 @@ func (p *permissionChecker) rawExpr(node ast.Expr, want *permission) *permission
 	case *ast.IndexExpr:
 		x := p.expr(n.X, nil)
 		if x != nil && (len(x.params) != 0 || signatureType(x)) {
-			return p.instantiateFunction(x, n.Indices, q.typ)
+			return p.instantiateFunction(x, n.Indices, q.typ, n)
 		}
 		for _, index := range n.Indices {
 			p.expr(index, nil)
@@ -216,7 +229,7 @@ func (p *permissionChecker) rawExpr(node ast.Expr, want *permission) *permission
 		}
 		addressable, writable := p.place(n.X)
 		if x != nil && x.typ != nil {
-			if _, array := x.typ.Underlying().(*types.Array); array && !addressable {
+			if p.c.out.isArray(x.typ) && !addressable {
 				p.c.diag(n.X, ReferenceAddress, "slicing an array requires an addressable storage location")
 			}
 		}
@@ -294,6 +307,22 @@ func (p *permissionChecker) rawExpr(node ast.Expr, want *permission) *permission
 	case *ast.TryExpr:
 		x := p.expr(n.X, nil)
 		if trial := p.c.out.Tries[n]; trial != nil && trial.Input != nil {
+			if failure := trial.Input.Variant("Err"); failure != nil && trial.Output != nil && trial.Output.Enum.Name == "Result" && len(p.results) == 1 {
+				actual := p.enumField(x, failure, 0)
+				want := p.enumField(p.results[0], trial.Output.Variant("Err"), 0)
+				if trial.Conversion == nil {
+					p.require(n, actual, want)
+				} else {
+					fun := p.traitMember(n, trial.Conversion)
+					if fun != nil && len(fun.params) == 1 && len(fun.results) == 1 {
+						p.require(n, actual, fun.params[0])
+						p.require(n, fun.results[0], want)
+						p.checkGenericCall(fun, []*permission{actual}, nil)
+						p.applyEffects(fun)
+						p.applyEffects(actual)
+					}
+				}
+			}
 			if v := trial.Input.Variant("Some"); v != nil {
 				q = p.enumField(x, v, 0)
 			} else if v := trial.Input.Variant("Ok"); v != nil {
@@ -395,7 +424,7 @@ func (p *permissionChecker) locations(node ast.Expr) []*permissionLocation {
 			}
 			value = p.deref(value)
 		}
-		if _, array := value.typ.Underlying().(*types.Array); !array {
+		if !p.c.out.isArray(value.typ) {
 			return nil
 		}
 		projected := make([]*permissionLocation, len(locations))
@@ -450,7 +479,7 @@ func (p *permissionChecker) place(node ast.Expr) (bool, bool) {
 	switch n := node.(type) {
 	case *ast.Ident, *ast.PathExpr:
 		s := p.c.symbol(n)
-		return s != nil && s.Kind != resolve.Constant && s.Kind != resolve.Function && s.Kind != resolve.Type && s.Kind != resolve.Variant, true
+		return s != nil && s.Kind != resolve.Constant && s.Kind != resolve.ConstParam && s.Kind != resolve.Function && s.Kind != resolve.Type && s.Kind != resolve.Variant, true
 	case *ast.ParenExpr:
 		return p.place(n.X)
 	case *ast.StarExpr:
@@ -484,13 +513,14 @@ func (p *permissionChecker) place(node ast.Expr) (bool, bool) {
 		if pointerType(q) {
 			return true, q.ref != ReadRef && !q.shared
 		}
+		if p.c.out.isArray(q.typ) {
+			return p.place(n.X)
+		}
 		switch q.typ.Underlying().(type) {
 		case *types.Slice:
 			return true, !q.shared
 		case *types.Map:
 			return false, !q.shared
-		case *types.Array:
-			return p.place(n.X)
 		}
 	}
 	return false, true
@@ -528,7 +558,7 @@ func (p *permissionChecker) literalField(q *permission, index int, name string) 
 
 func (p *permissionChecker) constructorType(node ast.Expr, con *Constructor, want *permission) *permission {
 	q := p.fromGo(instanceType(con.Enum))
-	if want != nil && p.c.out.EnumOf(want.typ) != nil {
+	if want != nil && p.c.enumOf(want.typ) != nil {
 		q = want
 	}
 	var path *ast.Path

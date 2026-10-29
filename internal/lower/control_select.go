@@ -4,8 +4,8 @@ import (
 	goast "go/ast"
 	gotoken "go/token"
 
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 func (e *emitter) flowTypeSwitch(n *syntax.TypeSwitchStmt) goast.Stmt {
@@ -18,7 +18,11 @@ func (e *emitter) flowTypeSwitch(n *syntax.TypeSwitchStmt) goast.Stmt {
 	assign := e.stmt(n.Assign)
 	list = append(list, e.pending...)
 	e.pending = old
-	list = append(list, &goast.TypeSwitchStmt{Assign: assign, Body: e.cases(n, n.Cases)})
+	if e.validation != nil {
+		list = append(list, e.validationTypeSwitch(n, nil, assign))
+	} else {
+		list = append(list, &goast.TypeSwitchStmt{Assign: assign, Body: e.cases(n, n.Cases)})
+	}
 	return &goast.BlockStmt{List: list}
 }
 

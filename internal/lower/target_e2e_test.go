@@ -11,9 +11,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/config"
-	"github.com/hxsf/goxide/internal/lower"
-	"github.com/hxsf/goxide/internal/typecheck"
+	"github.com/goxide-lang/goxide/internal/analysis"
+	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/lower"
+	"github.com/goxide-lang/goxide/internal/typecheck"
 )
 
 func targetConfig(t *testing.T, target string) config.Config {
@@ -121,7 +122,7 @@ func TestTargetModulesSelectGoxideAndNativeFiles(t *testing.T) {
 			for name, source := range files {
 				writeDiagnosticModuleFile(t, directory, name, []byte(source))
 			}
-			if err := lower.CompileModules([]lower.Module{{Path: "selection", Dir: directory, Config: cfg, Tags: []string{"selected"}}}); err != nil {
+			if err := lower.CompileModules([]analysis.Module{{Path: "selection", Dir: directory, Config: cfg, Tags: []string{"selected"}}}); err != nil {
 				t.Fatal(err)
 			}
 			chosen := "value_" + cfg.Environment.Target.OS + ".go"
@@ -153,7 +154,7 @@ func TestTargetMacroConstrainsCallPackage(t *testing.T) {
 	writeDiagnosticModuleFile(t, kit, "macros.gox", []byte("package targetkit\npub macro_rules! marker { () => { #[cfg(target_os(\"plan9\"))] func Gone() {} }; }\n"))
 	writeDiagnosticModuleFile(t, app, "main.gox", []byte("package targetapp\nuse targetkit::marker;\nmarker!()\n"))
 	writeDiagnosticModuleFile(t, app, "other.gox", []byte("package targetapp\nfunc Plain() {}\n"))
-	if err := lower.CompileModules([]lower.Module{{Path: "targetapp", Dir: app, Config: cfg}, {Path: "targetkit", Dir: kit, Config: cfg}}); err != nil {
+	if err := lower.CompileModules([]analysis.Module{{Path: "targetapp", Dir: app, Config: cfg}, {Path: "targetkit", Dir: kit, Config: cfg}}); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"main.go", "other.go"} {

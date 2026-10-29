@@ -7,9 +7,9 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/hxsf/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/resolve"
 
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 func lineOf(file *syntax.File, offset uint32) int {
@@ -37,7 +37,7 @@ func (e *emitter) sourceLocation(node syntax.Node) string {
 // construct that produced them while retaining positions on ordinary children.
 // Optional positions that affect Go syntax must remain absent.
 func (e *emitter) anchor(node goast.Node, source syntax.Node) {
-	if !e.lineDirectives || node == nil || source == nil {
+	if (!e.lineDirectives && e.validation == nil) || node == nil || source == nil {
 		return
 	}
 	position := e.pos(source)
@@ -64,6 +64,7 @@ func (e *emitter) anchor(node goast.Node, source syntax.Node) {
 		if id, ok := node.(*goast.Ident); ok && !id.NamePos.IsValid() && value.CanSet() {
 			copy := *id
 			value.Set(reflect.ValueOf(&copy))
+			e.copySource(id, &copy)
 		}
 		if value.Kind() == reflect.Interface {
 			value = value.Elem()

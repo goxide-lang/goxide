@@ -1,144 +1,58 @@
-# RFC 0003：原生实现采用与声明合并
+# RFC 0003：移除 declare impl，保留普通 Go 互操作
 
 ## 状态与范围
 
-- 已确认：用户包可采用外部 Go 类型的已有方法；统一 wrapper 转发，固定包级工厂位于 impl 声明包 C。
-- 已确认：trait Go 接口包含业务方法与导出 marker，wrapper 实现 marker；Go 便利入口转发同一工厂。
-- 已确认：同一原生绑定、关联类型和调用契约的 declare 可合并；有业务方法体的 impl 须唯一。P4 已在新管线完成。
-- P4：同一实现键混合 declare 与有体 impl 时诊断；不静默覆盖。泛型 impl 与跨包声明加载由后续阶段接续。
+**已完整移除 `declare impl`。** 原生采用、相容无体声明合并及其生成路径已删除；普通 Go 双向调用和有体适配继续保留。实施与验收状态见[状态表](../mvp-gap-audit.md)。
 
-本篇细化[声明合并规则](../design/go-interop.md#6-校验来源与唯一性)：
-不再仅因两个包独立写了相容 declare 就报重复定义。
-`*native::Buffer` 表示被采用的精确 Go 接收者身份；基础类型上的有体 impl 与三种 self 参数见 [trait 合同](../design/traits.md)。
+删除的是“把现有 Go 方法显式登记成 Goxide trait 实现”的语言入口，包含 trait/type 所有者及第三方声明。普通 Go 双向调用、Go interface、`declare func`、`declare type` 与普通有体 impl 保留，不删除 declare 关键字或其他外部声明能力。
 
 ## 源级规则
 
-1. declare、wrapper 与固定工厂属于声明包 C。C 正常依赖 trait 包 A、原类型包 B，不向外部包添加方法。
-2. 采用原生先验签，再在 wrapper 上生成业务转发和导出 marker；缺少业务方法仍是错误。Self 绑定完整声明目标，先代入成员接收类型再检查真实 Go 方法集；不自动消去指针/引用层。
-3. 按规范接收者、trait 身份及参数聚合声明；别名不产生新实现键。
-4. 相同原生业务绑定、关联类型和调用契约的声明可合并；保留每个来源。
-5. 不同但相容的声明怎样合并须有显式规则；不能靠导入先后来放宽权限或改变绑定。
-6. 同一生成包内按实现键去重；不同声明包的相容关系合并不使其 Go wrapper 变成同一动态类型。已发布工厂与载体归属固定，不随下游导入集合重新选择。
-7. 同一实现键的有体 impl 至多一个；多个有体实现即使文本相同也拒绝。
-8. 现有 declare impl 表示采用原生实现，不等同于任意有体实现的前置签名。
-   P4 中 declare 与有体 impl 共现时诊断，不静默覆盖业务行为。
-9. 工厂返回 trait 接口；外部类型的 `ForBuffer(b).AsReadValue()` facade 用命名字段保存 b，并转发同一工厂。
-   类型与 impl 同包且满足 Go 方法接收者规则时才生成原类型的 As 便利方法；其他类型使用包级工厂或门面。统一方案见 [RFC 0019](0019-uniform-trait-wrappers.md)。
+1. Goxide trait 关系由普通有体 impl 建立，必须提供必需业务成员；Go 方法名、结构相容、marker 或同名 helper 不自动登记关系。
+2. 有体 impl 沿既有及 [RFC 0032](0032-from-into-conversions.md#3-实现归属与跨包可见性) 拟扩展的 owner 规则检查。trait 定义包仍可为外部类型写完整 impl；删除采用入口不顺带收紧普通归属规则。
+3. 完整实现头不满足普通有体 impl 的 owner 规则时，定义本地包装类型再实现 trait，或使用普通函数。拥有 trait 输入的包仍可按完整头规则实现协议，例如本地来源转换到外部目标。透明 alias 不创建 owner；包装字段可保存原 Go 指针，显式方法体负责委托。
+4. 运行时 trait 的 wrapper、marker、固定工厂、As/For 与 Go 成员 sugar 保留，只服务已选有体实现。不给外部类型添加方法，不合并不同业务实现，不通过包路径或更具体优先选择。
+5. Goxide 可直接调用原生 Go 函数、方法，并使用 io.Reader 等原生接口；Go 可直接调用生成的公开函数/方法及已有协议入口。删除采用不改变普通参数、返回、nil、指针身份或 D19/D20 权限规则。
+6. 泛型/跨包互斥统一见 [RFC 0031 第 2 节](0031-generic-protocol-impls.md#2-通用互斥与实现选择设计提案)。不再有 MayDeclare、采用声明合并或多采用工厂来源选择；原生 Go 约束及其未来方法变化仍参与普通条件 impl 证明。
 
-## 转译示例
+## 显式适配示例
 
-### D01：两个使用方合并相同采用声明
-
-以下 goxide 是三个包的机制片段，省略包布局。ReadValue 使用 self &Self，目标是 native::Buffer；代入后验证精确 *native.Buffer 方法集，wrapper 保存同一指针。
+protocols::Reader 为外包 Goxide trait，要求 `read(self &mut Self, p []byte) (int,error)`。业务包拥有自己的 BufferReader，保存同一个原生对象：
 
 ```goxide
-// 包 protocols
-pub trait ReadValue { func read(self &Self) int }
-
-// 包 client_a
+use bytes;
 use protocols;
-use native;
-declare impl protocols::ReadValue for native::Buffer;
 
-// 包 client_b，独立声明相同关系
-use protocols;
-use native;
-declare impl protocols::ReadValue for native::Buffer;
-```
-
-原生 Go 包已有业务实现；这是可独立编译的原生包。
-
-```go
-package native
-
-type Buffer struct { N int }
-func (b *Buffer) Read() int { return b.N }
-```
-
-trait 包的 Go 输出（完整包）：
-
-```go
-package protocols
-type ReadValue interface {
-    Read() int
-    GoxideTraitReadValue()
+pub struct BufferReader { raw *bytes::Buffer }
+impl protocols::Reader for BufferReader {
+    func read(self &mut Self, p []byte) (int, error) {
+        return self.raw.Read(p)
+    }
+}
+pub func wrap(b *bytes::Buffer) BufferReader {
+    return BufferReader{raw: b}
 }
 ```
 
-client_a 生成以下完整 Go 包，依赖上述 native / protocols；名称仅为机制示意。
-
-```go
-package client_a
-
-import (
-    "example.org/native"
-    "example.org/protocols"
-)
-
-type bufferReadValue struct { target *native.Buffer }
-func (v bufferReadValue) Read() int { return v.target.Read() }
-func (v bufferReadValue) GoxideTraitReadValue() {}
-func AsReadValueForBuffer(b *native.Buffer) protocols.ReadValue {
-    return bufferReadValue{target: b}
-}
-type bufferFacade struct { target *native.Buffer }
-func ForBuffer(b *native.Buffer) bufferFacade { return bufferFacade{target: b} }
-func (v bufferFacade) AsReadValue() protocols.ReadValue {
-    return AsReadValueForBuffer(v.target)
-}
-```
-
-client_b 可发布其固定工厂与 wrapper；相容声明只合并逻辑 impl 关系，不全局重定位已发布 Go 类型。
-若要求跨包使用同一动态类型，应引用共同适配包的固定工厂。C → A、B 不新增 A/B → C 的反向依赖。
-
-### D02：调用方适配原对象
-
-goxide 片段依赖 D01、具有合法接收权限的 `b`，及接受 ReadValue 的 `consume`。
+这是真实用户类型和普通业务体；宏也可生成相同声明，不需要采用权限或新的 hook。若只需要原生 Go 接口，直接写普通函数即可：
 
 ```goxide
-consume(b)
+use io;
+
+pub func read(r io::Reader, p []byte) (int, error) {
+    return r.Read(p)
+}
 ```
 
-对应 Go 机制片段依赖前述 client_a 和生成的 `consume`；该适配点已确定使用 client_a 的工厂。
+Go 消费者调用生成的 Read，Goxide 消费者调用原生 Read；两者都不依赖 `declare impl`。需要 Goxide trait 的调用使用已明确实现的 BufferReader；仅有原生同名方法不再提供该资格。包装的额外调用层是源码明确写出的业务层，编译器按普通方法体和方法值规则处理，不能冒充直接原生方法绑定。
 
-```go
-consume(client_a.AsReadValueForBuffer(b))
-// 普通 Go 也可写 client_a.ForBuffer(b).AsReadValue()，其内部转发同一工厂。
-```
+## 实施与验收
 
-接口动态类型为 client_a 的 wrapper，其中 target 与 b 是同一个指针。
-不向 native.Buffer 增加 marker 或 As；facade 不匿名嵌入原对象，不另外选择 impl。
-若接收者是工厂表达式，仍只求值一次；普通 Go 的反射和接口相等性可观察 wrapper 类型。
+- 删除 parser/AST 中 declare 包装 ImplDecl 的专用分支、resolve/check 的原生采用与合并、lower 的采用转发和来源选择；保留其他 DeclareDecl 形式。不留旧入口的兼容回退或替代采用属性。
+- 删除采用专属夹具；源文件及声明宏、WASI function-like/attribute/derive 输出中的 `declare impl` 均按普通语法拒绝。`declare func/type` 按现有解析/语义支持范围做对照，不借删除工作扩展其实现范围。
+- 以普通有体 impl 验收跨包 trait 视图、marker、工厂、权限与名称冲突；重复有体 impl 不因文本或目标原生方法相同而合并。
+- 本地包装类型、trait owner 对外部类型的普通实现及非法第三方实现均有正反例；原始 Go 类型的方法集不被修改，alias 不绕过 owner。
+- 真实 `.gox → .go` 后，以独立 Go 消费模块 build/run/test：直接函数/方法/interface 调用、原指针状态、nil/typed-nil、可见性、方法值与调用帧；同输入两次生成字节一致。
+- 通用互斥仍覆盖非 ground 条件、未来有体实现和 Go 原生约束。删除采用不能变成只接受具体类型或忽略外包新增方法的理由。
 
-## 拒绝与边界
-
-- D03：缺少 `Read()` 或返回类型不是 int，拒绝；declare 不隐式转换返回值。
-- D04：trait 成员为 self Self 时，仅 *Buffer 有 Read，却对 Buffer 声明采用，拒绝；不偷偷取地址。self &Self 则验证代入后的精确 *Buffer 方法集。
-- D05：同一实现键的关联类型或调用契约冲突，拒绝，并列出声明来源。
-- D06：已有同名生成入口签名不兼容，拒绝；不能覆盖原有方法或随机改名。
-- D07：同一实现键有两个有体 impl，拒绝；混合 declare / 有体模式见第 8 条。
-- D08：给外部 native.Buffer 生成原类型 As 方法，拒绝该后端输出；应使用声明包的 facade。其他源级接收者形式的支持范围仍须单独规定。
-- D09：Go 代码手写 marker 不自动创建 goxide impl；必须有显式元数据。
-
-marker 必须导出，使 C 的 wrapper 可以实现 A 的接口；它不改变 B 中原类型的方法集。
-生成名称与 C 的现有声明冲突仍须检查；新增依赖不能改变既有工厂选择的业务实现。
-
-## 双向互操作
-
-- goxide → Go：相容声明通过后，采用原生方法；声明作者承担其外部行为契约。
-  marker 不证明原生代码不会留存参数，详见 [RFC 0006](0006-foreign-api.md)。
-- Go → goxide：直接调用声明包的工厂或 facade；普通 Go 调用方按公开 Go API 使用。
-  Go 原始指针不能直接赋给含 marker 的 trait 接口，须先适配。
-- 整个 dist 交付普通 Go wrapper、工厂、便利入口和声明元数据，正常依赖 A/B；
-  [RFC 0001](0001-package-loading.md) 的发布不需要 trait 专用 overlay 或增强标准库。
-- 多包声明按来源聚合，保留公开工厂归属；不能把逻辑合并解释为任意 Go wrapper 动态类型相等。
-
-## 验收与未定项
-
-未来验收覆盖 D01–D09：相容声明不报重复实现，同包生成去重，
-交换导入顺序不改变既有工厂行为与类型，冲突诊断列出所有相关来源。
-工厂与 facade 返回相同 wrapper 类型，其 target 保留原指针；原生业务方法按实际调用次数执行。
-新建纯 Go 主模块正常导入 dist；原依赖和标准库不需要添加方法或额外构建视图。
-
-以上为编译器验收约束，Go 机制示例本身不构成端到端实现。
-P4 只合并相同原生绑定、完整关联类型及调用契约，不通过宽松合并改变权限。外部类型不注入 marker、As 或 carrier 类型锚；公开工厂和 facade 提供运行时适配，外部原生类型不会因此自动满足 carrier 泛型入口。nil 采用原生方法及现有 enum 契约，不添加统一非空检查。跨包 Goxide 加载与声明信息恢复在 P5 接续。
+删除边界由 `declaration_boundary_test.go` 覆盖源码、声明宏及真实 WASI 三类宏；`go_interop_test.go` 覆盖四个独立模块的普通互调用、有体适配和 Go 消费者。通用互斥与 From/Into 继续按 RFC 0031/0032 推进。

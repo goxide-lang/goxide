@@ -1,16 +1,17 @@
 package model
 
+use std;
 use serde::json as serdejson;
 
 func decode(data []byte) Result[Config,error] {
-    config, err := serdejson::Unmarshal(data, DeserializeConfig)
+    config, err := serdejson::Unmarshal(data, Config::decode)
     if err != nil { return Result[Config,error]::Err(err) }
     return Result[Config,error]::Ok(config)
 }
 
 func load(data []byte) Result[Config,ConfigError] {
-    config := decode(data)?
-    valid := validate(config)?
+    config := match decode(data) { Result[Config,error]::Ok(value) => value, Result[Config,error]::Err(cause) => { return Result[Config,ConfigError]::Err(ConfigError::from::<std::From[error]>(cause)) }, }
+    valid := match validate(config) { Result[Config,error]::Ok(value) => value, Result[Config,error]::Err(cause) => { return Result[Config,ConfigError]::Err(ConfigError::from::<std::From[error]>(cause)) }, }
     return Result[Config,ConfigError]::Ok(valid)
 }
 
@@ -19,5 +20,4 @@ func Load(data []byte) (Config, error) {
         Result[Config,ConfigError]::Ok(config) => { return config, nil },
         Result[Config,ConfigError]::Err(err) => { return Config{}, err },
     }
-    panic("unreachable")
 }

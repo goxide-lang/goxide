@@ -1,8 +1,8 @@
 package parser
 
 import (
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 func (p *parser) context(s string) bool {
@@ -101,7 +101,7 @@ func (p *parser) operand() ast.Expr {
 		return &ast.ParenExpr{Base: p.base(start), X: x}
 	case token.FUNC:
 		p.next()
-		params, results, paren := p.signature()
+		params, results, paren := p.signature(false, false)
 		if p.at(token.LBRACE) {
 			body := p.block()
 			return &ast.FuncLit{Base: p.base(start), Form: ast.GoFunc, Params: params, Results: results, ResultParen: paren, Body: body}
@@ -214,9 +214,24 @@ func (p *parser) postfix(x ast.Expr) ast.Expr {
 			}
 		case token.DCOLON:
 			if p.peek(1).Kind == token.LSS {
-				s, ok := x.(*ast.SelectorExpr)
-				if !ok {
-					p.error("::<Trait> requires a value selector")
+				var receiver ast.Expr
+				var member *ast.Ident
+				static := false
+				switch selected := x.(type) {
+				case *ast.SelectorExpr:
+					receiver, member, static = selected.X, selected.Sel, selected.Static
+				case *ast.PathExpr:
+					segments := selected.Path.Segments
+					if len(segments) > 1 && segments[len(segments)-1].Args == nil {
+						prefix := *selected.Path
+						prefix.Segments = append([]*ast.PathSegment(nil), segments[:len(segments)-1]...)
+						prefix.Base = ast.Base{Loc: ast.Span{Start: selected.Span().Start, End: segments[len(segments)-2].Span().End}}
+						receiver = &ast.TypeExpr{Base: prefix.Base, Type: &ast.PathType{Base: prefix.Base, Path: &prefix}}
+						member, static = segments[len(segments)-1].Name, true
+					}
+				}
+				if member == nil {
+					p.error("::<Trait> requires a member selector")
 					return x
 				}
 				p.next()
@@ -228,7 +243,7 @@ func (p *parser) postfix(x ast.Expr) ast.Expr {
 				default:
 					p.error("qualified selector requires one trait path")
 				}
-				x = &ast.QualifiedSelectorExpr{Base: p.base(start), X: s.X, Sel: s.Sel, Trait: trait}
+				x = &ast.QualifiedSelectorExpr{Base: p.base(start), X: receiver, Sel: member, Trait: trait, Static: static}
 			} else {
 				path := p.exprPath(x)
 				if path == nil {
@@ -281,11 +296,15 @@ func (p *parser) postfix(x ast.Expr) ast.Expr {
 	}
 }
 func (p *parser) macroAdjacent() bool {
-	if !p.at(token.NOT) || p.pos == 0 {
+	if !p.at(token.NOT) || p.pos == 0 || p.tokens[p.pos-1].End != p.tok().Start {
 		return false
 	}
 	next := p.peek(1)
-	return p.tokens[p.pos-1].End == p.tok().Start && p.tok().End == next.Start && (next.Kind == token.LPAREN || next.Kind == token.LBRACK || next.Kind == token.LBRACE)
+	switch next.Kind {
+	case token.EOF, token.SEMICOLON, token.COMMA, token.RBRACE, token.RPAREN, token.RBRACK, token.FATARROW:
+		return true // Keep an incomplete invocation's path at its missing arguments.
+	}
+	return p.tok().End == next.Start && (next.Kind == token.LPAREN || next.Kind == token.LBRACK || next.Kind == token.LBRACE)
 }
 func (p *parser) composite(t ast.Type, start uint32) ast.Expr {
 	p.expect(token.LBRACE)
@@ -322,11 +341,11 @@ func (p *parser) exprPath(x ast.Expr) *ast.Path {
 	switch n := x.(type) {
 	case *ast.Ident:
 
-		return &ast.Path{Base: p.base(n.Span().Start), Segments: []*ast.PathSegment{{Base: p.base(n.Span().Start), Name: n}}}
+		return &ast.Path{Base: ast.Base{Loc: n.Span()}, Segments: []*ast.PathSegment{{Base: ast.Base{Loc: n.Span()}, Name: n}}}
 	case *ast.TypeExpr:
 		if _, ok := n.Type.(*ast.SelfType); ok {
-			id := &ast.Ident{Base: p.base(n.Span().Start), Name: "Self"}
-			return &ast.Path{Base: p.base(n.Span().Start), Segments: []*ast.PathSegment{{Base: p.base(n.Span().Start), Name: id}}}
+			id := &ast.Ident{Base: ast.Base{Loc: n.Span()}, Name: "Self"}
+			return &ast.Path{Base: ast.Base{Loc: n.Span()}, Segments: []*ast.PathSegment{{Base: ast.Base{Loc: n.Span()}, Name: id}}}
 		}
 	case *ast.PathExpr:
 		return n.Path
@@ -335,71 +354,69 @@ func (p *parser) exprPath(x ast.Expr) *ast.Path {
 		if path == nil {
 			return nil
 		}
-		args := &ast.GenericArgs{Base: p.base(n.Span().Start)}
+		args := &ast.GenericArgs{Base: ast.Base{Loc: n.Span()}}
 		for _, x := range n.Indices {
-			t := p.exprType(x)
-			if t == nil {
-				p.error("expected type argument in static path")
-				t = &ast.BadType{Base: p.base(x.Span().Start)}
-			}
-			args.Args = append(args.Args, &ast.GenericArg{Base: p.base(x.Span().Start), Type: t})
+			args.Args = append(args.Args, p.genericArgExpr(x))
 		}
 		path.Segments[len(path.Segments)-1].Args = args
-		path.Base = p.base(n.Span().Start)
+		path.Base = ast.Base{Loc: n.Span()}
 		return path
 	}
 	return nil
+}
+func (p *parser) genericArgExpr(x ast.Expr) *ast.GenericArg {
+	arg := &ast.GenericArg{Base: ast.Base{Loc: x.Span()}, Type: p.exprType(x)}
+	if arg.Type == nil {
+		arg.Value = x
+	}
+	return arg
 }
 func (p *parser) exprType(x ast.Expr) ast.Type {
 	switch n := x.(type) {
 	case *ast.IndexExpr:
 		if projection, ok := p.exprType(n.X).(*ast.ProjectionType); ok {
-			projection.Args = &ast.GenericArgs{Base: p.base(n.Span().Start)}
+			projection.Args = &ast.GenericArgs{Base: ast.Base{Loc: n.Span()}}
 			for _, x := range n.Indices {
-				t := p.exprType(x)
-				if t == nil {
-					return nil
-				}
-				projection.Args.Args = append(projection.Args.Args, &ast.GenericArg{Base: p.base(x.Span().Start), Type: t})
+				projection.Args.Args = append(projection.Args.Args, p.genericArgExpr(x))
 			}
-			projection.Base = p.base(n.Span().Start)
+			projection.Base = ast.Base{Loc: n.Span()}
 			return projection
 		}
 		path := p.exprPath(x)
 		if path == nil {
 			return nil
 		}
-		return &ast.PathType{Base: p.base(x.Span().Start), Path: path}
+		return &ast.PathType{Base: ast.Base{Loc: x.Span()}, Path: path}
 	case *ast.Ident, *ast.PathExpr:
 		path := p.exprPath(x)
 		if path == nil {
 			return nil
 		}
-		return &ast.PathType{Base: p.base(x.Span().Start), Path: path}
+		return &ast.PathType{Base: ast.Base{Loc: x.Span()}, Path: path}
 	case *ast.TypeExpr:
 		return n.Type
 	case *ast.StarExpr:
 		t := p.exprType(n.X)
 		if t != nil {
-			return &ast.PointerType{Base: p.base(x.Span().Start), Elem: t}
+			return &ast.PointerType{Base: ast.Base{Loc: x.Span()}, Elem: t}
 		}
 	case *ast.RefExpr:
 		t := p.exprType(n.X)
 		if t != nil {
-			return &ast.RefType{Base: p.base(x.Span().Start), Elem: t, Mut: n.Mut}
+			return &ast.RefType{Base: ast.Base{Loc: x.Span()}, Elem: t, Mut: n.Mut}
 		}
 	case *ast.ParenExpr:
 		t := p.exprType(n.X)
 		if t != nil {
-			return &ast.ParenType{Base: p.base(x.Span().Start), Type: t}
+			return &ast.ParenType{Base: ast.Base{Loc: x.Span()}, Type: t}
 		}
 	case *ast.SelectorExpr:
 		t := p.exprType(n.X)
 		if t != nil {
-			return &ast.ProjectionType{Base: p.base(x.Span().Start), X: t, Item: n.Sel, Dot: true}
+			return &ast.ProjectionType{Base: ast.Base{Loc: x.Span()}, X: t, Item: n.Sel, Dot: true}
 		}
 	case *ast.MacroExpr:
-		return &ast.MacroType{Base: p.base(x.Span().Start), Path: n.Path, Args: n.Args}
+		return &ast.MacroType{Base: ast.Base{Loc: x.Span()}, Path: n.Path, Args: n.Args}
 	}
 	return nil
 }

@@ -26,7 +26,7 @@
 
 | 阶段 | 交付 | 验收 | 关键风险 |
 | --- | --- | --- | --- |
-| P2（已完成） | 宏在表达式/语句/类型/item 位置接入；`derive(Default, Clone, Debug, PartialEq, Eq)`；serde 派生登记 | [原始示例生成与运行](../internal/lower/p2_examples_test.go)；[派生行为与冲突](../internal/lower/derive_test.go)；[宏卫生](../internal/lower/macro_e2e_test.go)；重复生成字节一致 | 把派生做成通用泛型 trait；为 serde 顺手改 `serde` 仓库 |
+| P2（已完成） | 宏在表达式/语句/类型/item 位置接入；`derive(Default, Clone, Debug, PartialEq, Eq)`；serde 派生登记 | [默认值业务与重复生成](../tests/acceptance/manual_default_test.go)；[跨包宏业务与重复生成](../tests/acceptance/macro_packages_test.go)；[派生行为与冲突](../internal/lower/derive_test.go)；[宏卫生](../internal/lower/macro_e2e_test.go) | 把派生做成通用泛型 trait；为 serde 顺手改 `serde` 仓库 |
 | P3（已完成） | `&T` / `&mut T`、读写权限、`ref` / `ref mut`、原位 payload 投影、`match &e` / `match &mut e` | [引用生成与运行](../internal/lower/reference_e2e_test.go)；[权限与寻址反例](../internal/lower/reference_diagnostics_test.go)；[控制流资格](../internal/check/reference_flow_test.go)；原生 Go vet/race test；重复生成字节一致 | 用户 enum 复制共享变体对象，旧投影保留旧对象；Option/Result 保留 tagged struct 与内联槽，MVP-6 与 safe std 一起验证泛型表示和公开 API 变更 |
 | P4（已完成） | 非泛型 trait、本包具体 struct/enum 的 `impl`、三种 self 接收权限、`T::method`、单 trait 泛型约束、关联类型 witness、wrapper/marker、`declare impl` | 新管线静态协议示例；struct/enum 共用成员查询；原生 Go 调用空 carrier 泛型及 As/For；重复生成一致 | 接收者求值与身份、引用权限、enum owner 或精确 Self 被改变 |
 | P5（已完成） | 多包目录、`mod` / `use` / 公开重导出、导入合并、最小 `goxide.toml` 与 `goxide.lock` | 多包与本地依赖[真实 build/run/test](../internal/compile/project_e2e_test.go)；serde/std 依赖；原生 Go 消费；offline/locked 重放与字节一致 | 顺手复活 workspace / vendor / 迁入 |

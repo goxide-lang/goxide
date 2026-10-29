@@ -1,0 +1,16 @@
+package convert
+
+pub mod facade;
+
+pub trait From[S any] { func from(value S) Self }
+pub trait Into[T any] { func into(self Self) T }
+pub trait Elements { type Item; func elements(self Self) []Self::Item }
+
+impl[T any] From[T] for T { func from(value T) Self { return value } }
+impl[S any,T any] Into[T] for S where T:From[S] {
+    func into(self Self) T { return T::from::<From[S]>(self) }
+}
+
+pub func Convert[T any,S any](value S) T where T:From[S] {
+    return T::from::<From[S]>(value)
+}

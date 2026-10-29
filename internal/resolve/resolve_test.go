@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/resolve"
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/parser"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/parser"
 )
 
 func parseFiles(t *testing.T, sources map[string]string) map[string]*ast.File {
@@ -98,7 +98,7 @@ func TestDuplicatePackageDeclaration(t *testing.T) {
 }
 
 func TestPackageDeclarationConflictsWithPrelude(t *testing.T) {
-	for _, name := range []string{"Option", "int", "len"} {
+	for _, name := range []string{"int", "len"} {
 		t.Run(name, func(t *testing.T) {
 			source := "package p\nvar " + name + " = 1"
 			files := parseFiles(t, map[string]string{"p.gox": source})

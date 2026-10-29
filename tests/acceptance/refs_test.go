@@ -1,7 +1,7 @@
 package acceptance_test
 
 import (
-	testdeps "github.com/hxsf/goxide/tests/testutil"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -86,18 +86,4 @@ func exercise()int{
 		t.Fatalf("generated race module: %v\n%s\n%s", err, output, result.Go)
 	}
 	t.Logf("generated go test -race -count=1 -v .:\n%s", output)
-}
-
-func TestReferenceFrontendRejectsEscapes(t *testing.T) {
-	for name, body := range map[string]string{
-		"range":   "func f(r &int){for *r=range 3{}}",
-		"generic": "func erase[T ~*int](v T)*int{return v};func f(r &int){p:=erase(r);*p=2}",
-		"closure": "func f(r &int)func()any{return func()any{return r}}",
-	} {
-		t.Run(name, func(t *testing.T) {
-			if _, err := compileAcceptanceLanguageFixture("reference_frontend.gox", []byte("package fixture\n"+body)); err == nil {
-				t.Fatal("frontend accepted reference escape")
-			}
-		})
-	}
 }

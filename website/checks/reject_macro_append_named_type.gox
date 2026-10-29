@@ -1,3 +1,0 @@
-package p
-macro_rules! push {($s:expr,$v:expr)=>{append($s,$v)};}
-func run(){type append int;var n append;_=push!([]int{},int(n))}

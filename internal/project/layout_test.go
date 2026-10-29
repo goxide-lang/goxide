@@ -27,6 +27,11 @@ func TestLayoutOwnershipAndPublishing(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
+	spec := layoutSpec()
+	relative := filepath.Join(spec.Target, spec.Kind, spec.Name, spec.Config)
+	if u.Directory != filepath.Join(l.Root, "units", relative) || u.BinaryDirectory != filepath.Join(l.Root, "bin", relative) {
+		t.Fatalf("unit/bin paths must contain one target platform: %s, %s", u.Directory, u.BinaryDirectory)
+	}
 	src := filepath.Join(u.Intermediate, "program")
 	if e = os.WriteFile(src, []byte("one"), 0755); e != nil {
 		t.Fatal(e)
@@ -70,7 +75,7 @@ func TestLayoutOwnershipAndPublishing(t *testing.T) {
 	}
 }
 func TestLayoutUnknownAndSymlinkBoundaries(t *testing.T) {
-	root := t.TempDir()
+	root := sourceTempDir(t)
 	existing := filepath.Join(root, "target")
 	os.Mkdir(existing, 0755)
 	if _, e := OpenLayout(root, "example.org/app", ""); e == nil {
@@ -114,7 +119,7 @@ func TestLayoutUnknownUnitAndBinary(t *testing.T) {
 	}
 	defer l.Close()
 	s := layoutSpec()
-	dir := filepath.Join(l.Root, "units", s.Host, s.Target, s.Kind, s.Name, s.Config)
+	dir := filepath.Join(l.Root, "units", s.Target, s.Kind, s.Name, s.Config)
 	os.MkdirAll(dir, 0755)
 	os.WriteFile(filepath.Join(dir, "unknown"), []byte("keep"), 0644)
 	if _, e = l.Begin(s); e == nil {

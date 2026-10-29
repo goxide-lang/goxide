@@ -7,8 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/lower"
-	"github.com/hxsf/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/analysis"
+	"github.com/goxide-lang/goxide/internal/lower"
+	"github.com/goxide-lang/goxide/internal/paths"
 )
 
 func TestModuleExpandedBindingsPrecedeStandardRoots(t *testing.T) {
@@ -43,8 +44,8 @@ func main(){print(42);_=output::ToUpper("ok")}
 			if tc.native != "" {
 				writeDiagnosticModuleFile(t, directory, "native.go", []byte(tc.native))
 			}
-			module := lower.Module{Path: "fixture", Dir: directory, Roots: paths.Roots{}, Config: testConfig(t)}
-			if err := lower.CompileModules([]lower.Module{module}); err != nil {
+			module := analysis.Module{Path: "fixture", Dir: directory, Roots: paths.Roots{}, Config: testConfig(t)}
+			if err := lower.CompileModules([]analysis.Module{module}); err != nil {
 				t.Fatal(err)
 			}
 			runGo(t, directory, "run", ".")
@@ -66,7 +67,7 @@ func main() { fmt::Println(Value()) }
 	} {
 		writeDiagnosticModuleFile(t, directory, name, []byte(source))
 	}
-	if err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Roots: paths.Roots{}, Config: testConfig(t)}}); err != nil {
+	if err := lower.CompileModules([]analysis.Module{{Path: "fixture", Dir: directory, Roots: paths.Roots{}, Config: testConfig(t)}}); err != nil {
 		t.Fatal(err)
 	}
 	if got := runGo(t, directory, "run", "."); got != "42\n" {
@@ -107,15 +108,15 @@ func main() { fmt::Println(appcore::answer!(), appcore::native::Value(), crate::
 		for name, source := range sources {
 			writeDiagnosticModuleFile(t, directory, name, []byte(source))
 		}
-		module := lower.Module{Path: "fixture", Dir: directory, Roots: paths.Roots{}, Config: testConfig(t),
+		module := analysis.Module{Path: "fixture", Dir: directory, Roots: paths.Roots{}, Config: testConfig(t),
 			RootPackage: "fixture/src",
-			Crates: []lower.Crate{
+			Crates: []analysis.Crate{
 				{Name: "appcore", Root: "fixture/src", SourceDir: "fixture/src", Library: true},
 				{Name: "app", Root: "fixture/cmd/app", SourceDir: "fixture/cmd/app"},
 			},
-			Targets: []lower.TargetBoundary{{Path: "fixture/src"}, {Path: "fixture/cmd/app"}, {Path: "fixture/cmd/other"}},
+			Targets: []analysis.TargetBoundary{{Path: "fixture/src"}, {Path: "fixture/cmd/app"}, {Path: "fixture/cmd/other"}},
 		}
-		if err := lower.CompileModules([]lower.Module{module}); err != nil {
+		if err := lower.CompileModules([]analysis.Module{module}); err != nil {
 			t.Fatal(err)
 		}
 		data, err := os.ReadFile(filepath.Join(directory, "cmd/app/main.go"))
@@ -176,12 +177,12 @@ func TestCrateRejectsPrivateAndIndependentTrees(t *testing.T) {
 			for name, source := range sources {
 				writeDiagnosticModuleFile(t, directory, name, []byte(source))
 			}
-			err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: paths.Roots{}, RootPackage: "fixture/src",
-				Crates: []lower.Crate{
+			err := lower.CompileModules([]analysis.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: paths.Roots{}, RootPackage: "fixture/src",
+				Crates: []analysis.Crate{
 					{Name: "appcore", Root: "fixture/src", SourceDir: "fixture/src", Library: true},
 					{Name: "app", Root: "fixture/cmd/app", SourceDir: "fixture/cmd/app"},
 				},
-				Targets: []lower.TargetBoundary{{Path: "fixture/src"}, {Path: "fixture/src/nested"}, {Path: "fixture/cmd/app"}, {Path: "fixture/cmd/other"}},
+				Targets: []analysis.TargetBoundary{{Path: "fixture/src"}, {Path: "fixture/src/nested"}, {Path: "fixture/cmd/app"}, {Path: "fixture/cmd/other"}},
 			}})
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("want %q, got %v", test.want, err)
@@ -203,7 +204,7 @@ use fmt;
 func main(){ fmt::Println(crate::child::Value(), crate::child::value!()) }
 `))
 	writeDiagnosticModuleFile(t, directory, "child/value.gox", []byte("package child\npub func Value() int { return 42 }\npub macro_rules! value { () => { 42 }; }\n"))
-	if err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: paths.Roots{}, Crates: []lower.Crate{{Root: "fixture", SourceDir: "fixture"}}}}); err != nil {
+	if err := lower.CompileModules([]analysis.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: paths.Roots{}, Crates: []analysis.Crate{{Root: "fixture", SourceDir: "fixture"}}}}); err != nil {
 		t.Fatal(err)
 	}
 	if got := runGo(t, directory, "run", "."); got != "42 42\n" {
@@ -225,8 +226,8 @@ func main() { _ = hidden::Secret() }
 	} {
 		writeDiagnosticModuleFile(t, directory, name, []byte(source))
 	}
-	err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: paths.Roots{}, RootPackage: "fixture",
-		Crates: []lower.Crate{
+	err := lower.CompileModules([]analysis.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: paths.Roots{}, RootPackage: "fixture",
+		Crates: []analysis.Crate{
 			{Name: "library", Root: "fixture", SourceDir: "fixture/src", Library: true},
 			{Name: "app", Root: "fixture/goxide_targets/bin/app", SourceDir: "fixture/src"},
 		},
@@ -254,8 +255,8 @@ func main() { fmt::Println(child::answer!()) }
 	} {
 		writeDiagnosticModuleFile(t, directory, name, []byte(source))
 	}
-	if err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: paths.Roots{},
-		Crates: []lower.Crate{{Root: "fixture", SourceDir: "fixture"}},
+	if err := lower.CompileModules([]analysis.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: paths.Roots{},
+		Crates: []analysis.Crate{{Root: "fixture", SourceDir: "fixture"}},
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -274,8 +275,8 @@ func TestCratePublicItemReexport(t *testing.T) {
 	} {
 		writeDiagnosticModuleFile(t, directory, name, []byte(source))
 	}
-	if err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: paths.Roots{}, RootPackage: "fixture/src",
-		Crates: []lower.Crate{
+	if err := lower.CompileModules([]analysis.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: paths.Roots{}, RootPackage: "fixture/src",
+		Crates: []analysis.Crate{
 			{Name: "library", Root: "fixture/src", SourceDir: "fixture/src", Library: true},
 			{Name: "app", Root: "fixture/cmd/app", SourceDir: "fixture/cmd/app"},
 		},
@@ -296,7 +297,7 @@ use encoding::Marshal;
 use fmt;
 func main(){ data, err := Marshal(42); if err != nil { panic(err) }; fmt::Println(string(data)) }
 `))
-	if err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: paths.Roots{}}}); err != nil {
+	if err := lower.CompileModules([]analysis.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: paths.Roots{}}}); err != nil {
 		t.Fatal(err)
 	}
 	if got := runGo(t, directory, "run", "."); got != "42\n" {
@@ -308,7 +309,7 @@ func TestSourceTypeBindingPrecedesGoRoot(t *testing.T) {
 	directory := t.TempDir()
 	writeDiagnosticModuleFile(t, directory, "go.mod", []byte("module fixture\n\ngo 1.27\n"))
 	writeDiagnosticModuleFile(t, directory, "main.gox", []byte("package main\nenum fmt { Unit }\nuse fmt::Unit;\nfunc main(){ _ = Unit }\n"))
-	if err := lower.CompileModules([]lower.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: paths.Roots{}}}); err != nil {
+	if err := lower.CompileModules([]analysis.Module{{Path: "fixture", Dir: directory, Config: testConfig(t), Roots: paths.Roots{}}}); err != nil {
 		t.Fatal(err)
 	}
 	runGo(t, directory, "build", ".")

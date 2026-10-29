@@ -4,9 +4,9 @@ import (
 	"go/constant"
 	"go/types"
 
-	"github.com/hxsf/goxide/internal/resolve"
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 type permissionFlow struct {
@@ -245,12 +245,12 @@ func (p *permissionChecker) constantTrue(expr ast.Expr) bool {
 
 func (p *permissionChecker) rangeMayBeEmpty(n *ast.RangeStmt, source *permission) bool {
 	if source != nil && source.typ != nil {
-		typ := source.typ.Underlying()
-		if pointer, ok := typ.(*types.Pointer); ok {
-			typ = pointer.Elem().Underlying()
+		typ := source.typ
+		if pointer, ok := typ.Underlying().(*types.Pointer); ok {
+			typ = pointer.Elem()
 		}
-		if array, ok := typ.(*types.Array); ok {
-			return array.Len() == 0
+		if array, ok := p.c.out.ArrayOf(typ); ok {
+			return array.Length.Param != nil || array.Length.Value == 0
 		}
 	}
 	value := p.c.constant(n.X)

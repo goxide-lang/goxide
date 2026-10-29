@@ -6,8 +6,8 @@ import (
 	gotoken "go/token"
 	"go/types"
 
-	"github.com/hxsf/goxide/internal/check"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/check"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 func (e *emitter) enumDecl(n *syntax.EnumDecl) (decls []goast.Decl) {
@@ -23,10 +23,22 @@ func (e *emitter) enumDecl(n *syntax.EnumDecl) (decls []goast.Decl) {
 	}
 	marker := "is" + n.Name.Name
 	var args []goast.Expr
+	previousInference := e.inferenceTypes
+	e.inferenceTypes = make(map[types.Type]*goast.Ident, len(previousInference))
+	for actual, name := range previousInference {
+		e.inferenceTypes[actual] = name
+	}
+	defer func() { e.inferenceTypes = previousInference }()
 	if n.Generics != nil {
+		index := 0
 		for _, p := range n.Generics.Params {
 			for _, name := range p.Names {
-				args = append(args, e.ident(name))
+				parameter := e.ident(name)
+				args = append(args, parameter)
+				if index < info.Type.TypeParams().Len() {
+					e.inferenceTypes[info.Type.TypeParams().At(index)] = parameter
+				}
+				index++
 			}
 		}
 	}
@@ -39,10 +51,8 @@ func (e *emitter) enumDecl(n *syntax.EnumDecl) (decls []goast.Decl) {
 	}
 	method := &goast.Field{Names: []*goast.Ident{goast.NewIdent(marker)}, Type: &goast.FuncType{Params: markerParams()}}
 	methods := []*goast.Field{method}
-	if d := e.deriveFor(info.Type); d != nil && d.Requests["Error"] {
-		methods = append(methods, errorInterfaceMethods()...)
-	}
 	methods = append(methods, e.enumTraitMethods(info.Type)...)
+	methods = append(methods, e.enumInherentMethods(info.Type)...)
 	position := gotoken.NoPos
 	if e.lineDirectives || len(e.tree.Comments) > 0 {
 		position = e.pos(n)

@@ -20,22 +20,22 @@ printf 'Source checkout: %s\n' "$(git -C "$repo" rev-parse HEAD)"
 "$go_tool" version
 
 # Compile both Goxide modules from source; the exported Go modules stay separate.
-"$go_tool" -C "$repo" build -o "$work/goxide" ./cmd/goxide
+"$go_tool" -C "$repo" run ./scripts/build.go -o "$work/goxide"
 mkdir -p -- "$work/source"
 for module in model app; do
     cp -R -- "$repo/examples/enum_trial/$module" "$work/source/$module"
     rm -- "$work/source/$module/go.mod" "$work/source/$module/go.sum" "$work/source/$module/goxide.roots.toml"
 done
 
-write_pins() {
-    local source_module=$1 dependency pin
-    for dependency in github.com/goxide-lang/serde github.com/goxide-lang/std; do
-        pin=$("$go_tool" -C "$source_module" list -m -f '{{.Version}}' "$dependency")
-        printf '\n[[go.require]]\nmodule = "%s"\nversion = "%s"\n' "$dependency" "$pin"
+write_dependencies() {
+    local dependency pin alias
+    for dependency in github.com/goxide-lang/std github.com/goxide-lang/serde; do
+        alias=${dependency##*/}
+        pin=$("$go_tool" -C "$repo" list -m -f '{{.Version}}' "$dependency")
+        printf '\n[dependencies.%s]\ngo = "%s"\nversion = "%s"\n' "$alias" "$dependency" "$pin"
     done
 }
-serde_pin=$("$go_tool" -C "$repo/examples/enum_trial/model" list -m -f '{{.Version}}' github.com/goxide-lang/serde)
-cat > "$work/source/model/goxide.toml" <<EOF
+cat > "$work/source/model/goxide.toml" <<'EOF'
 [go_mod]
 module = "trial.example/model"
 go = "1.27"
@@ -44,11 +44,8 @@ go = "1.27"
 name = "config"
 path = "config"
 
-[dependencies.serde]
-go = "github.com/goxide-lang/serde"
-version = "$serde_pin"
 EOF
-write_pins "$repo/examples/enum_trial/model" >> "$work/source/model/goxide.toml"
+write_dependencies >> "$work/source/model/goxide.toml"
 cat > "$work/source/app/goxide.toml" <<'EOF'
 [go_mod]
 module = "trial.example/app"
@@ -74,7 +71,7 @@ go = "os"
 [dependencies.strconv]
 go = "strconv"
 EOF
-write_pins "$repo/examples/enum_trial/app" >> "$work/source/app/goxide.toml"
+write_dependencies >> "$work/source/app/goxide.toml"
 app_module=$("$work/goxide" transpile --offline -o "$work/generated" "$work/source/app")
 model_module=$("$go_tool" -C "$app_module" list -m -f '{{.Dir}}' trial.example/model)
 for module in "$model_module" "$app_module"; do

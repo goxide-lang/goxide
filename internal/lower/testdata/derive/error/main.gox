@@ -1,0 +1,35 @@
+package main
+use std;
+use std::PartialEq;
+use errors;
+var cause = errors::New("cause")
+#[derive(std::derive::Error)]
+enum Failure {
+    #[error("input failed")]
+    #[from]
+    Input(error),
+    #[error("bad count {Value}")]
+    Count(int),
+    #[error("missing")]
+    Missing,
+}
+type (
+    #[derive(std::derive::Error)]
+    #[error("cannot open {Name}")]
+    Request struct {
+        Name string
+        #[source]
+        Cause error
+    }
+)
+func load() Result[int,Failure] {
+    n := Result[int,Failure]::Err(Failure::from::<std::From[error]>(cause))?
+    return Result[int,Failure]::Ok(n)
+}
+
+func main() {
+    failure := match load() { Result[int,Failure]::Err(err) => err, _ => Failure::Missing }
+    counted := Failure::Count(3)
+    request := Request{Name:"data",Cause:cause}
+    std::println!("{} {} {} {} {}", failure.Error(), errors::Is(failure,cause), counted.Error(), request.Error(), errors::Is(request,cause))
+}

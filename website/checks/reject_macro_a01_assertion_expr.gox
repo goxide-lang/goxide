@@ -1,4 +1,0 @@
-package main
-// 类型槽：捕获类别必须在模板使用点拒绝。
-macro_rules! slot { ($T:expr) => { any(4).($T) }; }
-func main() { _ = slot!(int) }

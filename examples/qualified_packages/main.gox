@@ -1,4 +1,5 @@
 package main
+use std;
 use fmt;
 use slog;
 use os;
@@ -9,16 +10,22 @@ use serde::json as serdejson;
 macro_rules! take_inner { ($value:expr) => { $value? }; }
 macro_rules! take { ($value:expr) => { take_inner!($value) }; }
 
-#[derive(Error)]
+#[derive(std::derive::Error)]
 pub enum AppError {
     #[error("fetch failed")]
     #[from]
     Fetch(error),
 }
+func fetchResult(kind string) Result[int,AppError] {
+    return match p::Fetch(kind) {
+        Result[int,error]::Ok(value) => Result[int,AppError]::Ok(value),
+        Result[int,error]::Err(cause) => Result[int,AppError]::Err(AppError::from::<std::From[error]>(cause)),
+    }
+}
 func wrapped(kind string) Result[int,AppError] {
     FromAppError := func(error) AppError { panic("captured local helper") }
     _ = FromAppError
-    value := take!(p::Fetch(kind))
+    value := take!(fetchResult(kind))
     return Result[int,AppError]::Ok(value + 1)
 }
 func unpack(value Result[int,AppError]) (int,error) {
@@ -26,7 +33,6 @@ func unpack(value Result[int,AppError]) (int,error) {
         Result[int,AppError]::Ok(n) => { return n,nil },
         Result[int,AppError]::Err(e) => { return 0,e },
     }
-    panic("unreachable")
 }
 func describe(value p::Mode) string {
     return match value { p::Mode::Idle => "idle", p::Mode::Ready(n) => strconv::Itoa(n), }
@@ -34,31 +40,31 @@ func describe(value p::Mode) string {
 func otherDescription(value alternate::Mode) string {
     return match value { alternate::Mode::Idle => "other-idle", alternate::Mode::Ready(text) => text, }
 }
-func importedTarget(kind string) p::Result[int,error] {
+func importedTarget(kind string) Result[int,error] {
     value := p::Fetch(kind)?
     return p::Success(value + 2)
 }
 func shadow(kind string) Result[int,AppError] {
-    input := p::Fetch(kind)
+    input := fetchResult(kind)
     p := 99
     _ = p
     value := input?
     return Result[int,AppError]::Ok(value)
 }
-func optional(present bool) p::Option[int] {
+func optional(present bool) Option[int] {
     input := p::Missing()
     if present { input = p::Present(4) }
     value := input?
     return p::Present(value+1)
 }
 func main() {
-    mode,err := serdejson::Unmarshal([]byte(`{"Ready":4}`), p::DeserializeMode)
+    mode,err := serdejson::Unmarshal([]byte(`{"Ready":4}`), p::Mode::decode)
     if err != nil { panic(err) }
-    mode = p::CloneMode(&mode)
+    mode = p::Mode::copy(&mode)
     n,err := unpack(wrapped("ok"))
     logger := slog::New(slog::NewJSONHandler(os::Stdout,nil))
     logger.Info("qualified flow", "mode",describe(mode),"value",n,"error",err)
-    fmt::Println(otherDescription(alternate::NewModeReady("other")))
+    fmt::Println(otherDescription(alternate::Mode::Ready("other")))
 }
 var continuation int
 func nestedInvalid() Result[int,error] {
@@ -67,7 +73,7 @@ func nestedInvalid() Result[int,error] {
     continuation++
     return Result[int,error]::Ok(1)
 }
-func importedInput(input p::Result[int,error]) Result[int,error] {
+func importedInput(input Result[int,error]) Result[int,error] {
     n := input?
     continuation++
     return Result[int,error]::Ok(n)

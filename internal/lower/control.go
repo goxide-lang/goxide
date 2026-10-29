@@ -6,17 +6,14 @@ import (
 	"go/types"
 	"strconv"
 
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 func (e *emitter) statement(n syntax.Stmt) (output []goast.Stmt) {
 	defer func() { e.anchorStatements(output, n) }()
 	if n == nil {
 		return nil
-	}
-	if out, ok := e.printStatement(n); ok {
-		return out
 	}
 	old := e.pending
 	e.pending = nil
@@ -57,7 +54,7 @@ func (e *emitter) withBreak(n syntax.Stmt, label *syntax.Ident) goast.Stmt {
 	var out goast.Stmt
 	switch n := n.(type) {
 	case *syntax.ForStmt:
-		if hasFlow(n.Init) || hasFlow(n.Cond) || hasFlow(n.Post) {
+		if hasFlow(n.Init) || hasFlow(n.Cond) || hasFlow(n.Post) || e.stableArrayStatement(n.Init) || e.stableArrayStatement(n.Post) {
 			out = e.flowFor(n)
 		} else {
 			out = e.stmt(n)
@@ -65,6 +62,10 @@ func (e *emitter) withBreak(n syntax.Stmt, label *syntax.Ident) goast.Stmt {
 	case *syntax.RangeStmt:
 		if framed, ok := e.framedRange(n); ok {
 			out = framed
+			break
+		}
+		if statement := e.stableArrayRange(n); statement != nil {
+			out = statement
 			break
 		}
 		out = e.stmt(n)
@@ -81,7 +82,7 @@ func (e *emitter) withBreak(n syntax.Stmt, label *syntax.Ident) goast.Stmt {
 			out = framed
 			break
 		}
-		flow := hasFlow(n.Init) || hasFlow(n.Tag)
+		flow := hasFlow(n.Init) || hasFlow(n.Tag) || e.stableArrayStatement(n.Init)
 		for _, c := range n.Cases {
 			for _, x := range c.List {
 				flow = flow || hasFlow(x)
@@ -197,7 +198,7 @@ func (e *emitter) flowStmt(n syntax.Stmt) goast.Stmt {
 			return nil
 		}
 	case *syntax.IfStmt:
-		if hasFlow(n.Init) || hasFlow(n.Cond) {
+		if hasFlow(n.Init) || hasFlow(n.Cond) || e.stableArrayStatement(n.Init) {
 			init := e.statement(n.Init)
 			before, cond := e.exprScoped(n.Cond)
 			init = append(init, before...)
@@ -233,8 +234,27 @@ func (e *emitter) flowStmt(n syntax.Stmt) goast.Stmt {
 }
 
 func (e *emitter) assignment(n *syntax.AssignStmt) goast.Stmt {
+	if len(n.Lhs) == 1 && len(n.Rhs) == 1 && n.Tok == token.ASSIGN {
+		if target, ok := n.Lhs[0].(*syntax.Ident); ok && target.Name == "_" {
+			value := n.Rhs[0]
+			for {
+				paren, ok := value.(*syntax.ParenExpr)
+				if !ok {
+					break
+				}
+				value = paren.X
+			}
+			if question, ok := value.(*syntax.TryExpr); ok {
+				e.tryExpr(question, true)
+				return nil
+			}
+		}
+	}
 	if framed, ok := e.framedAssignment(n); ok {
 		return framed
+	}
+	if assignment := e.stableArrayAssignment(n); assignment != nil {
+		return assignment
 	}
 	flow := false
 	for _, x := range n.Lhs {
@@ -267,7 +287,13 @@ func (e *emitter) assignment(n *syntax.AssignStmt) goast.Stmt {
 			for i, l := range n.Lhs {
 				id, ok := l.(*syntax.Ident)
 				if ok && e.file.Definitions[id.ID()] != nil && id.Name != "_" {
-					e.pending = append(e.pending, varStmt(e.ident(id), e.goType(e.info.Types[n.Rhs[i]]), rhs[i]))
+					if typ := e.info.Types[n.Rhs[i]]; e.nameableType(typ) {
+						e.pending = append(e.pending, varStmt(e.ident(id), e.goType(typ), rhs[i]))
+					} else {
+						// A returned enum may carry a foreign private type argument.
+						// Its Go value already has the enum interface type.
+						e.pending = append(e.pending, &goast.AssignStmt{Lhs: []goast.Expr{e.ident(id)}, Tok: gotoken.DEFINE, Rhs: []goast.Expr{rhs[i]}})
+					}
 				} else {
 					e.pending = append(e.pending, assign(lhs[i], rhs[i]))
 				}
@@ -287,7 +313,8 @@ func (e *emitter) lvalue(n syntax.Expr) goast.Expr {
 	case *syntax.IndexExpr:
 		var x goast.Expr
 		if t := e.info.Types[n.X]; t != nil {
-			if _, array := t.Underlying().(*types.Array); array {
+			_, array := t.Underlying().(*types.Array)
+			if array || e.stableArray(t) != nil {
 				// An array is storage, not an operand value. Its final bounds and
 				// pointer checks belong to the assignment's write phase.
 				x = e.lvalue(n.X)
@@ -299,6 +326,12 @@ func (e *emitter) lvalue(n syntax.Expr) goast.Expr {
 		indices := e.ordered(n.Indices)
 		for i, id := range n.Indices {
 			indices[i] = e.spill(id, indices[i])
+		}
+		if array, pointer := e.stableArrayOperand(n.X); array != nil {
+			if !pointer {
+				x = &goast.UnaryExpr{Op: gotoken.AND, X: x}
+			}
+			x = e.stableArraySlice(array, x)
 		}
 		if len(indices) == 1 {
 			return &goast.IndexExpr{X: x, Index: indices[0]}
@@ -344,7 +377,7 @@ func (e *emitter) selectorPlace(n *syntax.SelectorExpr) goast.Expr {
 			typ = pointer.Elem()
 		}
 		field := typ.Underlying().(*types.Struct).Field(index)
-		base = &goast.SelectorExpr{X: base, Sel: goast.NewIdent(field.Name())}
+		base = &goast.SelectorExpr{X: base, Sel: goast.NewIdent(e.typeState.GoMemberName(e.info, field))}
 		typ = field.Type()
 		if _, pointer := typ.Underlying().(*types.Pointer); pointer {
 			// Snapshot promoted pointer fields before the RHS can replace them.
@@ -377,7 +410,7 @@ func (e *emitter) flowFor(n *syntax.ForStmt) goast.Stmt {
 		}
 	}
 	var post goast.Stmt
-	if hasFlow(n.Post) {
+	if hasFlow(n.Post) || e.stableArrayStatement(n.Post) {
 		first := e.fresh("First")
 		init = append(init, varStmt(first, goast.NewIdent("bool"), goast.NewIdent("true")))
 		postBody := &goast.IfStmt{Cond: first, Body: &goast.BlockStmt{List: []goast.Stmt{assign(first, goast.NewIdent("false"))}}, Else: &goast.BlockStmt{List: e.statement(n.Post)}}

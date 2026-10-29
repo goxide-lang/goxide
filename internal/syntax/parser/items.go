@@ -1,8 +1,8 @@
 package parser
 
 import (
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 	"strings"
 )
 
@@ -20,17 +20,29 @@ func (p *parser) parseItem(member, declare bool) ast.Item {
 	ib := ast.ItemBase{Attrs: p.attrs()}
 	ib.Vis = p.visibility()
 	mods := ast.FuncMods{Unsafe: p.accept(token.UNSAFE)}
+	if declare && !p.at(token.FUNC) && !p.at(token.TYPE) && !p.at(token.STRUCT) {
+		p.error("declare requires func or type")
+		p.sync()
+		ib.Base = p.base(start)
+		return &ast.BadItem{ItemBase: ib, Text: "invalid declaration"}
+	}
 	var n ast.Item
 	switch p.tok().Kind {
 	case token.FUNC:
-		n = p.function(ib, mods, declare, false)
+		n = p.function(ib, mods, declare, member)
 	case token.TYPE, token.STRUCT:
 		n = p.typeDecl(ib, member || declare)
 	case token.CONST, token.VAR:
 		n = p.values(ib)
 	case token.USE:
 		p.next()
-		n = &ast.UseDecl{ItemBase: ib, Tree: p.useTree()}
+		tree := p.useTree()
+		ast.UseLeaves(tree, func(path []*ast.PathSegment, leaf *ast.UseTree) {
+			if len(path) == 0 && leaf.Glob {
+				p.diagnostics = append(p.diagnostics, Diagnostic{Severity: Error, Span: leaf.Span(), Message: "glob use requires a path"})
+			}
+		})
+		n = &ast.UseDecl{ItemBase: ib, Tree: tree}
 	case token.MOD:
 		p.next()
 		d := &ast.ModDecl{ItemBase: ib, Name: p.ident()}
@@ -46,22 +58,12 @@ func (p *parser) parseItem(member, declare bool) ast.Item {
 	case token.TRAIT:
 		n = p.trait(ib)
 	case token.IMPL:
-		n = p.impl(ib, declare)
+		n = p.impl(ib)
 	case token.DECLARE:
 		p.next()
 		decl := p.parseItem(false, true)
-		switch d := decl.(type) {
-		case *ast.FuncDecl:
-			if d.Body != nil {
-				p.error("declare function must not have a body")
-			}
-		case *ast.ImplDecl:
-			if d.Items != nil {
-				p.error("declare impl must not have a body")
-			}
-		case *ast.TypeDecl:
-		default:
-			p.error("declare requires func, impl, or type")
+		if d, ok := decl.(*ast.FuncDecl); ok && d.Body != nil {
+			p.error("declare function must not have a body")
 		}
 		n = &ast.DeclareDecl{ItemBase: ib, Decl: decl}
 	case token.IMPORT:
@@ -131,20 +133,14 @@ func itemBase(n ast.Item) *ast.ItemBase {
 	panic("unknown item")
 }
 
-func (p *parser) function(ib ast.ItemBase, mods ast.FuncMods, declare, defaultMember bool) ast.Item {
+func (p *parser) function(ib ast.ItemBase, mods ast.FuncMods, declare, member bool) ast.Item {
 	p.expect(token.FUNC)
 	f := &ast.FuncDecl{ItemBase: ib, Mods: mods}
 	if p.at(token.LPAREN) {
-		f.Recv = p.params()
+		f.Recv = p.params(false)
 	}
 	validName := p.at(token.IDENT)
-	if defaultMember && len(f.Recv) == 0 && p.at(token.DEFAULT) {
-		t := p.next()
-		f.Name = &ast.Ident{Base: p.base(t.Start), Name: t.Text}
-		validName = true
-	} else {
-		f.Name = p.ident()
-	}
+	f.Name = p.ident()
 	if declare && p.at(token.DCOLON) {
 		s := f.Name.Span().Start
 		path := &ast.Path{Segments: []*ast.PathSegment{{Base: p.base(s), Name: f.Name}}}
@@ -157,7 +153,7 @@ func (p *parser) function(ib ast.ItemBase, mods ast.FuncMods, declare, defaultMe
 		f.Name = path.Segments[len(path.Segments)-1].Name
 	}
 	f.Generics = p.genericParams()
-	f.Params, f.Results, f.ResultParen = p.signature(f.Generics != nil)
+	f.Params, f.Results, f.ResultParen = p.signature(f.Generics != nil, member && len(f.Recv) == 0)
 	if f.Generics != nil {
 		f.Where = p.whereClause()
 	}
@@ -295,8 +291,9 @@ func (p *parser) values(ib ast.ItemBase) ast.Item {
 func (p *parser) useTree() *ast.UseTree {
 	s := p.tok().Start
 	path := &ast.Path{}
-	glob := false
-	for {
+	group := p.at(token.LBRACE)
+	glob := p.at(token.MUL)
+	for !group && !glob {
 		n := p.ident()
 		path.Segments = append(path.Segments, &ast.PathSegment{Base: p.base(n.Span().Start), Name: n})
 		if !p.accept(token.DCOLON) {
@@ -305,18 +302,30 @@ func (p *parser) useTree() *ast.UseTree {
 		if len(path.Segments) == 1 && n.Name == "super" && !n.Raw {
 			p.error("super:: paths are not yet supported")
 		}
-		if p.at(token.MUL) || p.at(token.LBRACE) {
-			glob = p.accept(token.MUL)
-			break
-		}
+		group = p.at(token.LBRACE)
+		glob = p.at(token.MUL)
 	}
 	path.Base = p.base(s)
 	u := &ast.UseTree{Path: path, Glob: glob}
-	if p.at(token.LBRACE) {
-		p.error("grouped use trees are not yet supported")
-		p.tokenTree()
+	if glob {
+		p.next()
+	}
+	if group {
+		p.expect(token.LBRACE)
+		u.Children = []*ast.UseTree{}
+		for !p.at(token.RBRACE) && !p.at(token.EOF) {
+			before := p.pos
+			u.Children = append(u.Children, p.useTree())
+			if !p.accept(token.COMMA) || p.pos == before {
+				break
+			}
+		}
+		p.expect(token.RBRACE)
 	}
 	if p.context("as") {
+		if u.Glob || u.Children != nil {
+			p.error("use aliases require a single path")
+		}
 		p.next()
 		u.Alias = p.ident()
 	}
@@ -401,9 +410,7 @@ func (p *parser) trait(ib ast.ItemBase) ast.Item {
 	p.next()
 	d := &ast.TraitDecl{ItemBase: ib, Name: p.ident()}
 	d.Generics = p.genericParams()
-	if d.Generics != nil {
-		d.Where = p.whereClause()
-	}
+	d.Where = p.whereClause()
 	p.expect(token.LBRACE)
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
 		p.semis()
@@ -411,7 +418,7 @@ func (p *parser) trait(ib ast.ItemBase) ast.Item {
 			break
 		}
 		before := p.pos
-		x := p.member(true, true, false)
+		x := p.member(true, true)
 		if ti, ok := x.(ast.TraitItem); ok {
 			d.Items = append(d.Items, ti)
 		}
@@ -421,7 +428,7 @@ func (p *parser) trait(ib ast.ItemBase) ast.Item {
 	p.expect(token.RBRACE)
 	return d
 }
-func (p *parser) impl(ib ast.ItemBase, declare bool) ast.Item {
+func (p *parser) impl(ib ast.ItemBase) ast.Item {
 	p.next()
 	d := &ast.ImplDecl{ItemBase: ib}
 	d.Generics = p.genericParams()
@@ -432,17 +439,8 @@ func (p *parser) impl(ib ast.ItemBase, declare bool) ast.Item {
 	} else {
 		d.Type = first
 	}
-	if d.Generics != nil {
-		d.Where = p.whereClause()
-	}
-	if declare && !p.at(token.LBRACE) {
-		return d
-	}
+	d.Where = p.whereClause()
 	d.Items = []ast.Item{}
-	defaultImpl := false
-	if trait, ok := d.Trait.(*ast.PathType); ok && trait.Path != nil && len(trait.Path.Segments) == 1 {
-		defaultImpl = trait.Path.Segments[0].Name.Name == "Default"
-	}
 	p.expect(token.LBRACE)
 	for !p.at(token.RBRACE) && !p.at(token.EOF) {
 		p.semis()
@@ -450,14 +448,14 @@ func (p *parser) impl(ib ast.ItemBase, declare bool) ast.Item {
 			break
 		}
 		before := p.pos
-		d.Items = append(d.Items, p.member(d.Trait != nil, false, defaultImpl))
+		d.Items = append(d.Items, p.member(d.Trait != nil, false))
 		p.endStmt()
 		p.progress(before)
 	}
 	p.expect(token.RBRACE)
 	return d
 }
-func (p *parser) member(inherited, inTrait, defaultMember bool) ast.Item {
+func (p *parser) member(inherited, inTrait bool) ast.Item {
 	errors := p.errorCount()
 	s := p.tok().Start
 	attrs := p.attrs()
@@ -470,16 +468,24 @@ func (p *parser) member(inherited, inTrait, defaultMember bool) ast.Item {
 	var n ast.Item
 	switch p.tok().Kind {
 	case token.FUNC:
-		n = p.function(ib, mods, false, defaultMember)
+		n = p.function(ib, mods, false, true)
 	case token.TYPE:
 		n = p.typeDecl(ib, true)
 		if d, ok := n.(*ast.TypeDecl); ok && !inTrait && (d.Type == nil || !d.Alias) {
 			p.error("impl associated type requires a type binding with =")
 		}
 	default:
-		p.error("trait/impl methods must start with func")
-		p.sync()
-		n = &ast.BadItem{ItemBase: ib, Text: "invalid member"}
+		if p.at(token.IDENT) {
+			x := p.expr()
+			if macro, ok := x.(*ast.MacroExpr); ok {
+				n = &ast.MacroItem{ItemBase: ib, Path: macro.Path, Args: macro.Args}
+			}
+		}
+		if n == nil {
+			p.error("trait/impl methods must start with func or a macro invocation")
+			p.sync()
+			n = &ast.BadItem{ItemBase: ib, Text: "invalid member"}
+		}
 	}
 	itemBase(n).Base = p.base(s)
 	if mods.Unsafe {

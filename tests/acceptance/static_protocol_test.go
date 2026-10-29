@@ -2,7 +2,7 @@ package acceptance_test
 
 import (
 	"fmt"
-	testdeps "github.com/hxsf/goxide/tests/testutil"
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 	goast "go/ast"
 	"go/parser"
 	"go/token"
@@ -15,8 +15,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/paths"
-	"github.com/hxsf/goxide/internal/rootconfig"
+	"github.com/goxide-lang/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/rootconfig"
 )
 
 // These fixtures use the CLI and independently build its output. In particular,
@@ -232,11 +232,24 @@ func Value() User { return User::Abc() }
 	}
 
 	t.Run("wrong_typeinfo_shape", func(t *testing.T) {
-		wrong := t.TempDir()
+		wrong := formalDependencyDir(t)
 		selected := strings.TrimSpace(packagesCommand(t, h.root, h.goTool, true, "list", "-m", "-f", "{{.Dir}}", "github.com/goxide-lang/std"))
 		// Keep every other package from the actual selected std module. A
 		// missing sum/runtime package must not make this negative pass.
 		if err := os.CopyFS(wrong, os.DirFS(selected)); err != nil {
+			t.Fatal(err)
+		}
+		// This replacement tests native Go support packages, not std's
+		// separately published Goxide source project and conversion traits.
+		if err := filepath.WalkDir(wrong, func(name string, entry os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if !entry.IsDir() && (entry.Name() == "goxide.toml" || filepath.Ext(name) == ".gox") {
+				return os.Remove(name)
+			}
+			return nil
+		}); err != nil {
 			t.Fatal(err)
 		}
 		packagesWrite(t, wrong, "typeinfo/typeinfo.go", `package typeinfo
@@ -423,8 +436,7 @@ type staticProtocolHarness struct {
 func newStaticProtocolHarness(t *testing.T) staticProtocolHarness {
 	t.Helper()
 	_, here, _, _ := runtime.Caller(0)
-	h := staticProtocolHarness{originals: map[string]string{}, dependencies: map[string]map[string]string{}, root: filepath.Clean(filepath.Join(filepath.Dir(here), "../..")), goTool: filepath.Join(runtime.GOROOT(), "bin/go"), cli: filepath.Join(t.TempDir(), "goxide")}
-	packagesCommand(t, h.root, h.goTool, true, "build", "-o", h.cli, "./cmd/goxide")
+	h := staticProtocolHarness{originals: map[string]string{}, dependencies: map[string]map[string]string{}, root: filepath.Clean(filepath.Join(filepath.Dir(here), "../..")), goTool: filepath.Join(runtime.GOROOT(), "bin/go"), cli: acceptanceCLI(t)}
 	return h
 }
 

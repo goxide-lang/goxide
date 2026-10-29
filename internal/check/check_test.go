@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/check"
-	"github.com/hxsf/goxide/internal/resolve"
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/parser"
+	"github.com/goxide-lang/goxide/internal/check"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/parser"
 )
 
 func parse(t *testing.T, source string) (map[string]*ast.File, *resolve.Result) {
@@ -27,6 +27,12 @@ func parse(t *testing.T, source string) (map[string]*ast.File, *resolve.Result) 
 
 func TestDiagnostics(t *testing.T) {
 	cases := []struct{ name, code, good, bad, span string }{
+		{"non-enum-wildcard", check.VariantMismatch,
+			`enum E{A};func f(value E)int{return match value{_=>1}}`,
+			`func f(value int)int{return match (value){_=>1}}`, `(value)`},
+		{"non-enum-binding", check.VariantMismatch,
+			`enum E{A};func f(value E)int{return match value{whole=>1}}`,
+			`func f(value any)int{return match (value){whole=>1}}`, `(value)`},
 		{"exhaustiveness", check.NonExhaustive,
 			`enum E { A, B };func f(e E)int{return match e {E::A=>1,E::B=>2}}`,
 			`enum E { A, B };func f(e E)int{return match e {E::A=>1}}`, `match e {E::A=>1}`},
@@ -97,8 +103,8 @@ func TestDiagnostics(t *testing.T) {
 			`enum E{A};func pick[T any](a T,rest ...T)T{return a};func f(){_=pick(E::A,E::A,E::A)}`,
 			`enum E{A};func pick[T any](a T,rest ...T)T{return a};func f(){_=pick(E::A,E::A,nil)}`, `nil`},
 		{"enum-nil-inferred-match", check.EnumNilLiteral,
-			`enum E{A};func f(b bool){_=match b{true=>E::A,_=>E::A}}`,
-			`enum E{A};func f(b bool){_=match b{true=>nil,_=>E::A}}`, `nil`},
+			`enum E{A,B};func f(b E){_=match b{E::A=>E::A,_=>E::A}}`,
+			`enum E{A,B};func f(b E){_=match b{E::A=>nil,_=>E::A}}`, `nil`},
 		{"enum-nil-append", check.EnumNilLiteral,
 			`enum E{A};func f(es []E){_=append(es,E::A)}`,
 			`enum E{A};func f(es []E){_=append(es,nil)}`, `nil`},
@@ -215,45 +221,14 @@ func g(r Option[int])Option[int] { f:=func()int {return r?}; return Option[int]:
 	}
 }
 
-func TestExplicitOneStepConversion(t *testing.T) {
-	source := `package p
-type A struct{}
-type B struct{}
-type C struct{}
-func convert(a A)B{return B{}}
-func onward(b B)C{return C{}}
-func f(r Result[int,A])Result[int,B]{return Result[int,B]::Ok(r?)}
-`
-	files, res := parse(t, source)
-	var helpers []resolve.Ref
-	for _, item := range files["main.gox"].Items {
-		if f, ok := item.(*ast.FuncDecl); ok && f.Name.Name == "convert" {
-			helpers = append(helpers, resolve.Ref{File: "main.gox", ID: f.ID()})
-		}
-	}
-	if _, ds := check.Check(files, res); len(ds) != 1 || ds[0].Code != check.TryReturnType {
-		t.Fatalf("unregistered conversion accepted: %v", ds)
-	}
-	info, ds := check.CheckWithConversions(files, res, helpers)
-	if len(ds) != 0 {
-		t.Fatal(ds)
-	}
-	for _, tr := range info.Tries {
-		if tr.Conversion == nil || tr.Conversion.Name.Name != "convert" {
-			t.Fatalf("conversion: %#v", tr)
-		}
-	}
-	if _, ds := check.CheckWithConversions(files, res, append(helpers, helpers...)); len(ds) != 1 || ds[0].Code != check.TryReturnType {
-		t.Fatalf("ambiguous conversion: %v", ds)
-	}
-	files, res = parse(t, strings.ReplaceAll(source, "Result[int,B]", "Result[int,C]"))
-	helpers = nil
-	for _, item := range files["main.gox"].Items {
-		if f, ok := item.(*ast.FuncDecl); ok && (f.Name.Name == "convert" || f.Name.Name == "onward") {
-			helpers = append(helpers, resolve.Ref{File: "main.gox", ID: f.ID()})
-		}
-	}
-	if _, ds := check.CheckWithConversions(files, res, helpers); len(ds) != 1 || ds[0].Code != check.TryReturnType {
-		t.Fatalf("conversion chain accepted: %v", ds)
+func TestTryDoesNotRegisterHelperFunctions(t *testing.T) {
+	files, resolved := parse(t, `package p
+ type A struct{}
+ type B struct{}
+ func convert(a A)B{return B{}}
+ func f(r Result[int,A])Result[int,B]{return Result[int,B]::Ok(r?)}`)
+	_, diagnostics := check.Check(files, resolved)
+	if len(diagnostics) != 1 || diagnostics[0].Code != check.TryReturnType || !strings.Contains(diagnostics[0].Message, "canonical github.com/goxide-lang/std/convert::From is unavailable") {
+		t.Fatalf("helper became propagation evidence: %v", diagnostics)
 	}
 }

@@ -2,6 +2,7 @@ package project
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -21,13 +22,41 @@ type bundleFile struct {
 // overwriting user changes. Generation happens in a temporary sibling tree so
 // failed lowering cannot leave old helpers mixed into a new source view.
 func (u *Unit) PublishBundle(staged string) error {
+	return u.publishBundle(context.Background(), staged, u.Bundle, filepath.Join(u.Directory, ".goxide-files.json"))
+}
+
+// PublishMacroWork records successfully compiled macro work in a fixed slot.
+// Editor overlays and CLI disk inputs have separate destinations. Readers must
+// retain their private source view and WASM bytes rather than use this mutable
+// shared slot. Existing files retain the ordinary bundle ownership protection.
+func (u *Unit) PublishMacroWork(ctx context.Context, staged string, editor bool) error {
+	if u.Spec.Kind != "proc-macro" {
+		return fmt.Errorf("macro work requires a proc-macro unit")
+	}
+	lane := "cli"
+	if editor {
+		if !u.layout.active {
+			return fmt.Errorf("target layout lease is closed")
+		}
+		return publishEditorMacroWork(ctx, u.Directory, staged)
+	}
+	return u.publishBundle(ctx, staged, filepath.Join(u.Intermediate, "macro", lane), filepath.Join(u.Directory, ".goxide-macro-"+lane+"-files.json"))
+}
+
+func (u *Unit) publishBundle(ctx context.Context, staged, bundle, record string) error {
 	if !u.layout.active {
 		return fmt.Errorf("target layout lease is closed")
 	}
-	if e := NoSymlinks(u.Bundle); e != nil {
+	return publishBundle(ctx, staged, bundle, record)
+}
+
+func publishBundle(ctx context.Context, staged, bundle, record string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if e := NoSymlinks(bundle); e != nil {
 		return e
 	}
-	record := filepath.Join(u.Directory, ".goxide-files.json")
 	old := map[string]bundleFile{}
 	if e := readJSON(record, &old); e != nil && !os.IsNotExist(e) {
 		return e
@@ -38,8 +67,11 @@ func (u *Unit) PublishBundle(staged string) error {
 		}
 	}
 	// Validate all old files before any mutation, including stale files.
-	e := filepath.WalkDir(u.Bundle, func(path string, entry fs.DirEntry, err error) error {
-		if os.IsNotExist(err) && path == u.Bundle {
+	e := filepath.WalkDir(bundle, func(path string, entry fs.DirEntry, err error) error {
+		if canceled := ctx.Err(); canceled != nil {
+			return canceled
+		}
+		if os.IsNotExist(err) && path == bundle {
 			return nil
 		}
 		if err != nil {
@@ -51,7 +83,7 @@ func (u *Unit) PublishBundle(staged string) error {
 		if entry.IsDir() {
 			return nil
 		}
-		rel, _ := filepath.Rel(u.Bundle, path)
+		rel, _ := filepath.Rel(bundle, path)
 		want, ok := old[rel]
 		hash, mode, err := fileDigest(path)
 		if err != nil {
@@ -68,6 +100,9 @@ func (u *Unit) PublishBundle(staged string) error {
 	files := map[string][]byte{}
 	next := map[string]bundleFile{}
 	e = filepath.WalkDir(staged, func(path string, entry fs.DirEntry, err error) error {
+		if canceled := ctx.Err(); canceled != nil {
+			return canceled
+		}
 		if err != nil {
 			return err
 		}
@@ -85,8 +120,8 @@ func (u *Unit) PublishBundle(staged string) error {
 		if entry.Name() == "go.mod" || entry.Name() == "go.work" {
 			// Go quotes filesystem paths containing spaces or special characters.
 			quote := func(s string) string { q := strconv.Quote(s); return q[1 : len(q)-1] }
-			data = bytes.ReplaceAll(data, []byte(quote(staged)), []byte(quote(u.Bundle)))
-			data = bytes.ReplaceAll(data, []byte(staged), []byte(u.Bundle))
+			data = bytes.ReplaceAll(data, []byte(quote(staged)), []byte(quote(bundle)))
+			data = bytes.ReplaceAll(data, []byte(staged), []byte(bundle))
 		}
 		info, err := entry.Info()
 		if err != nil || !info.Mode().IsRegular() {
@@ -99,22 +134,27 @@ func (u *Unit) PublishBundle(staged string) error {
 	if e != nil {
 		return e
 	}
+	// Cancellation is observed before the commit point. Publication itself is
+	// short and serialized by the caller's layout lease or editor lane lease.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	for _, name := range keys(old) {
 		if _, exists := next[name]; exists {
 			continue
 		}
-		path := filepath.Join(u.Bundle, name)
+		path := filepath.Join(bundle, name)
 		if e = os.Remove(path); e != nil && !os.IsNotExist(e) {
 			return e
 		}
-		for dir := filepath.Dir(path); dir != u.Bundle; dir = filepath.Dir(dir) {
+		for dir := filepath.Dir(path); dir != bundle; dir = filepath.Dir(dir) {
 			if e = os.Remove(dir); e != nil {
 				break // Preserve a directory that still has files.
 			}
 		}
 	}
 	for _, name := range keys(next) {
-		path := filepath.Join(u.Bundle, name)
+		path := filepath.Join(bundle, name)
 		if next[name] == old[name] {
 			if _, e := os.Stat(path); e == nil {
 				continue

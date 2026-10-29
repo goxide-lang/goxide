@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/hxsf/goxide/internal/naming"
+	"github.com/goxide-lang/goxide/internal/naming"
 	"io"
 	"os"
 	"path/filepath"
@@ -31,6 +31,11 @@ type Unit struct {
 	Spec                                             UnitSpec
 	Directory, Bundle, Intermediate, BinaryDirectory string
 	layout                                           *Layout
+}
+
+type unitOwner struct {
+	Owner layoutOwner
+	Unit  UnitSpec
 }
 
 func contained(root, path string) bool {
@@ -223,10 +228,7 @@ func (l *Layout) ownedDirectory(path string, spec UnitSpec) error {
 	if e := NoSymlinks(path); e != nil {
 		return e
 	}
-	want := struct {
-		Owner layoutOwner
-		Unit  UnitSpec
-	}{l.owner, spec}
+	want := unitOwner{l.owner, spec}
 	if _, e := os.Lstat(path); os.IsNotExist(e) {
 		if e = os.MkdirAll(filepath.Dir(path), 0755); e != nil {
 			return e
@@ -238,10 +240,7 @@ func (l *Layout) ownedDirectory(path string, spec UnitSpec) error {
 	} else if e != nil {
 		return e
 	}
-	var got struct {
-		Owner layoutOwner
-		Unit  UnitSpec
-	}
+	var got unitOwner
 	if e := readJSON(filepath.Join(path, ".goxide-unit.json"), &got); e != nil {
 		return fmt.Errorf("refusing unmanaged unit directory: %w", e)
 	}
@@ -251,22 +250,10 @@ func (l *Layout) ownedDirectory(path string, spec UnitSpec) error {
 	return nil
 }
 func (l *Layout) Begin(spec UnitSpec) (*Unit, error) {
-	for _, s := range []string{spec.Host, spec.Target, spec.Kind, spec.Config} {
-		if !ident.MatchString(s) {
-			return nil, fmt.Errorf("invalid target layout component %q", s)
-		}
+	if err := validateUnitSpec(spec); err != nil {
+		return nil, err
 	}
-	if spec.Kind != "bin" && spec.Kind != "example" && spec.Kind != "lib" {
-		return nil, fmt.Errorf("invalid target kind")
-	}
-	validName := ident.MatchString(spec.Name)
-	if spec.Kind == "lib" {
-		validName = validName || dependencyIdentifier(spec.Name)
-	}
-	if !validName {
-		return nil, fmt.Errorf("invalid target layout component %q", spec.Name)
-	}
-	rel := filepath.Join(spec.Host, spec.Target, spec.Kind, spec.Name, spec.Config)
+	rel := filepath.Join(spec.Target, spec.Kind, spec.Name, spec.Config)
 	dir := filepath.Join(l.Root, "units", rel)
 	if e := l.ownedDirectory(dir, spec); e != nil {
 		return nil, e
@@ -279,6 +266,25 @@ func (l *Layout) Begin(spec UnitSpec) (*Unit, error) {
 		return nil, e
 	}
 	return u, nil
+}
+
+func validateUnitSpec(spec UnitSpec) error {
+	for _, s := range []string{spec.Host, spec.Target, spec.Kind, spec.Config} {
+		if !ident.MatchString(s) {
+			return fmt.Errorf("invalid target layout component %q", s)
+		}
+	}
+	if spec.Kind != "bin" && spec.Kind != "example" && spec.Kind != "lib" && spec.Kind != "proc-macro" {
+		return fmt.Errorf("invalid target kind")
+	}
+	validName := ident.MatchString(spec.Name)
+	if spec.Kind == "lib" || spec.Kind == "proc-macro" {
+		validName = validName || dependencyIdentifier(spec.Name)
+	}
+	if !validName {
+		return fmt.Errorf("invalid target layout component %q", spec.Name)
+	}
+	return nil
 }
 
 type binaryRecord struct {

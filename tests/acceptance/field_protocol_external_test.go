@@ -2,6 +2,7 @@ package acceptance_test
 
 import (
 	"fmt"
+
 	"os"
 	"path/filepath"
 	"runtime"
@@ -13,33 +14,40 @@ func TestExternalCloneDebugModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
-	mod := func(name, lib string) string {
-		s := fmt.Sprintf("module %s\ngo 1.27\n", name)
-		if lib != "" {
-			s += fmt.Sprintf("require fields.example/lib v0.0.0\nreplace fields.example/lib => %s\n", filepath.ToSlash(lib))
-		}
-		return s
-	}
-	src := t.TempDir()
-	packagesWrite(t, src, "go.mod", mod("fields.example/lib", ""))
-	writeAcceptanceSerdeRoots(t, src, "")
-	packagesWrite(t, src, "lib.gox", "package library\npub mod model;\npub mod other;\npub mod relay;\npub mod fake;\n")
-	packagesWrite(t, src, "model/item.gox", `package model
-#[derive(Clone,Debug)]
+	cli := acceptanceCLI(t)
+	src := formalDependencyDir(t)
+	writeStdFormalManifest(t, src, "fields.example/lib", "library", nil)
+
+	packagesWrite(t, src, "lib.gox", "package library; use std; use std::PartialEq;\npub mod model;\npub mod other;\npub mod relay;\npub mod fake;\n")
+	packagesWrite(t, src, "model/item.gox", `package model; use std; use std::PartialEq;
+#[derive(std::derive::Clone,std::derive::Debug)]
 type Item struct{Name string;secret string;Values []int;Index map[string][]int}
 func Make(name string)Item{return Item{Name:name,secret:"token\n",Values:[]int{1},Index:map[string][]int{"z":[]int{2}}}}
+
+impl Item {
+ pub func copy(value &Self) Self { return std::Clone::clone(value) }
+ pub func describe(value &Self) string { return std::Debug::debug(value) }
+}
 `)
-	packagesWrite(t, src, "model/event.gox", `package model
-#[derive(Clone,Debug)]
+	packagesWrite(t, src, "model/event.gox", `package model; use std; use std::PartialEq;
+#[derive(std::derive::Clone,std::derive::Debug)]
 pub enum E{Empty,Entry(Item),}
 func Event(v Item)E{return E::Entry(v)}
 func Data(v E)Item{return match v{E::Entry(n)=>n,E::Empty=>Item{},}}
+
+impl E {
+ pub func copy(value &Self) Self { return std::Clone::clone(value) }
+ pub func describe(value &Self) string { return std::Debug::debug(value) }
+}
 `)
-	packagesWrite(t, src, "other/item.gox", `package different
-#[derive(Clone,Debug)]
+	packagesWrite(t, src, "other/item.gox", `package different; use std; use std::PartialEq;
+#[derive(std::derive::Clone,std::derive::Debug)]
 type Item struct{N int}
+
+impl Item {
+ pub func copy(value &Self) Self { return std::Clone::clone(value) }
+ pub func describe(value &Self) string { return std::Debug::debug(value) }
+}
 `)
 	packagesWrite(t, src, "relay/relay.go", `package relay
 import m "fields.example/lib/model"
@@ -53,25 +61,35 @@ func CloneItem(v *Item)Item{return *v}
 func DebugItem(v *Item)string{return "fake"}
 `)
 	lib := filepath.Join(t.TempDir(), "lib")
-	packagesCommand(t, root, cli, true, "transpile", "-o", lib, src)
+	lib = strings.TrimSpace(packagesCommand(t, root, cli, true, "transpile", "--lib", "-o", lib, src))
 	appsrc := t.TempDir()
-	packagesWrite(t, appsrc, "go.mod", mod("fields.example/app", lib))
-	writeAcceptanceSerdeRoots(t, appsrc, "fields.example/lib")
-	packagesWrite(t, appsrc, "app.gox", `package app
+	writeStdFormalManifest(t, appsrc, "fields.example/app", "app", map[string]string{"library": src})
+
+	packagesWrite(t, appsrc, "app.gox", `package app; use std; use std::PartialEq;
 use library::relay as src;
-#[derive(Clone,Debug)]
+#[derive(std::derive::Clone,std::derive::Debug)]
 type Wrap struct{V src::E;Items []src::Renamed;Index map[string]src::Renamed;Pair [2]src::Renamed;Nested [][]src::Renamed}
 func Assign(v Wrap)Wrap{return v}
+
+impl Wrap {
+ pub func copy(value &Self) Self { return std::Clone::clone(value) }
+ pub func describe(value &Self) string { return std::Debug::debug(value) }
+}
 `)
-	packagesWrite(t, appsrc, "other.gox", `package app
+	packagesWrite(t, appsrc, "other.gox", `package app; use std; use std::PartialEq;
 use library::other as src;
-#[derive(Clone,Debug)]
+#[derive(std::derive::Clone,std::derive::Debug)]
 type Other struct{Items []src::Item}
+
+impl Other {
+ pub func copy(value &Self) Self { return std::Clone::clone(value) }
+ pub func describe(value &Self) string { return std::Debug::debug(value) }
+}
 `)
 	out := filepath.Join(t.TempDir(), "app")
-	compileAcceptanceGraph(t, true, appsrc, out, src)
+	compileStdFormalGraph(t, true, appsrc, out)
 	repeat := filepath.Join(t.TempDir(), "repeat")
-	compileAcceptanceGraph(t, true, appsrc, repeat, src)
+	compileStdFormalGraph(t, true, appsrc, repeat)
 	if err := filepath.WalkDir(out, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -100,34 +118,34 @@ import("testing";"strings";"strconv";m "fields.example/lib/model";r "fields.exam
 func TestCloneContainersAndOrdinaryAssignment(t *testing.T){
  item:=m.Make("a\"b");v:=Wrap{V:m.Event(item),Items:[]r.Renamed{item},Index:map[string]r.Renamed{"z\"":item},Pair:[2]r.Renamed{item,item},Nested:[][]r.Renamed{[]r.Renamed{item}}}
  ordinary:=Assign(v);ordinary.Items[0].Values[0]=3;if v.Items[0].Values[0]!=3{t.Fatal("ordinary Go assignment changed")};v.Items[0].Values[0]=1
- c:=CloneWrap(&v);m.Data(c.V).Values[0]=9;c.Items[0].Values[0]=8;c.Index["z\""].Index["z"][0]=7;c.Pair[0].Values[0]=6;c.Nested[0][0].Values[0]=5
+ c:=(WrapOps{}).Copy(&v);m.Data(c.V).Values[0]=9;c.Items[0].Values[0]=8;c.Index["z\""].Index["z"][0]=7;c.Pair[0].Values[0]=6;c.Nested[0][0].Values[0]=5
  if m.Data(v.V).Values[0]!=1||v.Items[0].Values[0]!=1||v.Index["z\""].Index["z"][0]!=2||v.Pair[0].Values[0]!=1||v.Nested[0][0].Values[0]!=1{t.Fatal("producer/container Clone not applied")}
  if c.Pair[1].Values[0]!=1{t.Fatal("Clone unexpectedly preserved alias topology")}
- text:=DebugWrap(&v)
+ text:=(WrapOps{}).Describe(&v)
  for _,part:=range []string{"V: E::Entry(Item {","Name: "+strconv.Quote("a\"b"),"secret: "+strconv.Quote("token\n"),strconv.Quote("z\"")+": Item {"}{if !strings.Contains(text,part){t.Fatalf("missing %q in %s",part,text)}}
- z:=CloneWrap(&Wrap{V:m.Event(m.Item{})});if z.Items!=nil||z.Index!=nil||z.Nested!=nil{t.Fatal("nil containers changed")}
- e:=CloneWrap(&Wrap{V:m.Event(m.Item{}),Items:[]r.Renamed{},Index:map[string]r.Renamed{}});if e.Items==nil||e.Index==nil{t.Fatal("empty collapsed to nil")}
- o:=Other{Items:[]other.Item{{N:9}}};oc:=CloneOther(&o);oc.Items[0].N=7;if o.Items[0].N!=9||DebugOther(&o)!="Other { Items: [Item { N: 9 }] }"{t.Fatal("cross-file package identity")}
+ z:=(WrapOps{}).Copy(&Wrap{V:m.Event(m.Item{})});if z.Items!=nil||z.Index!=nil||z.Nested!=nil{t.Fatal("nil containers changed")}
+ e:=(WrapOps{}).Copy(&Wrap{V:m.Event(m.Item{}),Items:[]r.Renamed{},Index:map[string]r.Renamed{}});if e.Items==nil||e.Index==nil{t.Fatal("empty collapsed to nil")}
+ o:=Other{Items:[]other.Item{{N:9}}};oc:=(OtherOps{}).Copy(&o);oc.Items[0].N=7;if o.Items[0].N!=9||(OtherOps{}).Describe(&o)!="Other { Items: [Item { N: 9 }] }"{t.Fatal("cross-file package identity")}
 }
-func TestInvalidEnumStillRejected(t *testing.T){for _,f:=range []func(){func(){_=CloneWrap(&Wrap{})},func(){_=DebugWrap(&Wrap{})}}{func(){defer func(){if recover()==nil{t.Fatal("invalid enum accepted")}}();f()}()}}
+func TestInvalidEnumStillRejected(t *testing.T){for _,f:=range []func(){func(){_=(WrapOps{}).Copy(&Wrap{})},func(){_=(WrapOps{}).Describe(&Wrap{})}}{func(){defer func(){if recover()==nil{t.Fatal("invalid enum accepted")}}();f()}()}}
 `)
 	plain := t.TempDir()
-	packagesWrite(t, plain, "go.mod", mod("fields.example/plain", lib)+fmt.Sprintf("require fields.example/app v0.0.0\nreplace fields.example/app => %s\n", filepath.ToSlash(out)))
+	writeStdNativeConsumerManifest(t, plain, "fields.example/plain", out)
 	packagesWrite(t, plain, "consumer_test.go", `package plain
 import("testing";"strings";a "fields.example/app";m "fields.example/lib/model")
-func TestGoHelpers(t *testing.T){v:=a.Wrap{V:m.Event(m.Make("go"))};c:=a.CloneWrap(&v);m.Data(c.V).Values[0]=8;if m.Data(v.V).Values[0]!=1||!strings.Contains(a.DebugWrap(&v),"Name: \"go\""){t.Fatal("Go helper consumption")}}
+func TestGoHelpers(t *testing.T){v:=a.Wrap{V:m.Event(m.Make("go"))};c:=(a.WrapOps{}).Copy(&v);m.Data(c.V).Values[0]=8;if m.Data(v.V).Values[0]!=1||!strings.Contains((a.WrapOps{}).Describe(&v),"Name: \"go\""){t.Fatal("Go helper consumption")}}
 `)
 	for _, dir := range []string{lib, out, plain} {
-		packagesCommand(t, dir, tool, true, "test", "-race", "-count=1", "-v", "./...")
+		packagesCommand(t, dir, tool, true, "test", "-mod=mod", "-race", "-count=1", "-v", "./...")
 		packagesCommand(t, dir, tool, true, "vet", "./...")
 	}
 	for _, kind := range []string{"Clone", "Debug"} {
 		for _, tc := range []struct{ pkg, typ string }{{"fake", "Item"}, {"relay", "New"}} {
 			bad := t.TempDir()
-			packagesWrite(t, bad, "go.mod", mod("fields.example/bad", lib))
-			writeAcceptanceSerdeRoots(t, bad, "fields.example/lib")
-			packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad\nuse library::%s as m;\n#[derive(%s)]\ntype Wrap struct{V m::%s}\n", tc.pkg, kind, tc.typ))
-			log := compileAcceptanceGraph(t, false, bad, filepath.Join(t.TempDir(), "bad"), src)
+			writeStdFormalManifest(t, bad, "fields.example/bad", "bad", map[string]string{"library": src})
+
+			packagesWrite(t, bad, "bad.gox", fmt.Sprintf("package bad; use std; use std::PartialEq;\nuse library::%s as m;\n#[derive(std::derive::%s)]\ntype Wrap struct{V m::%s}\n", tc.pkg, kind, tc.typ))
+			log := compileStdFormalGraph(t, false, bad, filepath.Join(t.TempDir(), "bad"))
 			if !strings.Contains(log, kind) || !strings.Contains(log, "bad.gox:") {
 				t.Fatal(log)
 			}

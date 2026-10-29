@@ -1,8 +1,10 @@
 package main
+use std;
+use std::PartialEq;
 
 use fmt;
 
-#[derive(PartialEq, Eq)]
+#[derive(std::derive::PartialEq, std::derive::Eq)]
 type Value int
 
 var order []string

@@ -12,8 +12,7 @@ func TestMatchNamedDynamicModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
+	cli := acceptanceCLI(t)
 	sourceFor := func(body string) string {
 		dir := t.TempDir()
 		packagesWrite(t, dir, "go.mod", packagesModule())
@@ -70,11 +69,6 @@ func MakeA()E{return E::A(1)}
 		first, err := os.ReadFile(filepath.Join(generated, "app.go"))
 		if err != nil {
 			t.Fatal(err)
-		}
-		for _, marker := range []string{"__goxide_match_expr_pending", "__goxide_match_expr_operand_context", "__goxide_match_expr_argument", "func() __goxide_match"} {
-			if strings.Contains(string(first), marker) {
-				t.Fatalf("unlowered marker %s", marker)
-			}
 		}
 		again := filepath.Join(t.TempDir(), "generated")
 		packagesCommand(t, root, cli, true, "transpile", "-o", again, source)

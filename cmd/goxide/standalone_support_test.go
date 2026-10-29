@@ -8,10 +8,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
-	"github.com/hxsf/goxide/internal/paths"
-	"github.com/hxsf/goxide/internal/typecheck"
-	testdeps "github.com/hxsf/goxide/tests/testutil"
 )
 
 func TestStandaloneSupportModule(t *testing.T) {
@@ -25,7 +21,7 @@ func TestStandaloneSupportModule(t *testing.T) {
 		// Any module may select matching public support dependencies. The
 		// compiler's source/module identity is not a requirement.
 		if name == "go.mod" {
-			data = bytes.Replace(data, []byte("module github.com/hxsf/goxide"), []byte("module support.example/selection"), 1)
+			data = bytes.Replace(data, []byte("module github.com/goxide-lang/goxide"), []byte("module support.example/selection"), 1)
 		}
 		if err := os.WriteFile(filepath.Join(provider, name), data, 0600); err != nil {
 			t.Fatal(err)
@@ -44,13 +40,14 @@ func TestStandaloneSupportModule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, forbidden := range []string{"github.com/hxsf/goxide", "github.com/spf13", "github.com/pelletier", "replace", provider} {
+	for _, forbidden := range []string{"github.com/hxsf/goxide", "github.com/goxide-lang/goxide", "github.com/spf13", "github.com/pelletier", "replace", provider} {
 		if bytes.Contains(mod, []byte(forbidden)) {
 			t.Fatalf("non-support dependency leaked into generated module: %s", mod)
 		}
 	}
 	filename := filepath.Join(generated, "main.gox")
-	compiled, err := compileSourceFile(filename, []byte(`package main
+	source := `package main
+use std;
 use runtime as rt;
 func fail()(result int){
  guard:=rt::Assignment[int]{}
@@ -58,17 +55,29 @@ func fail()(result int){
  guard.Fail(42)
  return 0
 }
-func main(){println!("value={}",fail())}
-`), "goxide/generated", typecheck.NewImporter(filename, typecheck.ImporterOptions{Config: testdeps.Configuration()}), paths.Roots{"runtime": {PackagePath: "github.com/goxide-lang/std/runtime", ModulePath: "github.com/goxide-lang/std", Source: "module"}}, testdeps.Configuration())
+func main(){std::println!("value={}",fail())}
+`
+	if err := os.WriteFile(filename, []byte(source), 0600); err != nil {
+		t.Fatal(err)
+	}
+	fixtureRootsFile(t, generated, "[roots.std]\nmodule='github.com/goxide-lang/std'\n[roots.runtime]\nmodule='github.com/goxide-lang/std'\npackage='github.com/goxide-lang/std/runtime'\n")
+	cli := formalTestCLI(t)
+	prepared := filepath.Join(t.TempDir(), "module")
+	command := exec.Command(cli, "transpile", "--go", tool, "-o", prepared, generated)
+	command.Env = localEnv()
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("transpile with selected support: %v\n%s", err, output)
+	}
+	generated = prepared
+	compiled, err := os.ReadFile(filepath.Join(generated, "main.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Contains(compiled.Go, []byte("github.com/goxide-lang/std/formatting")) {
-		t.Fatalf("generated printing did not import std/formatting: %s", compiled.Go)
+
+	if !bytes.Contains(compiled, []byte("github.com/goxide-lang/std/formatting")) {
+		t.Fatalf("generated printing did not import std/formatting: %s", compiled)
 	}
-	if err := os.WriteFile(filepath.Join(generated, "main.go"), compiled.Go, 0600); err != nil {
-		t.Fatal(err)
-	}
+
 	for _, args := range [][]string{{"list", "-mod=readonly", "-m", "all"}, {"list", "-buildvcs=false", "-mod=readonly", "-deps", "./..."}, {"run", "-buildvcs=false", "-mod=readonly", "."}} {
 		cmd := exec.Command(tool, args...)
 		cmd.Dir, cmd.Env = generated, localEnv()
@@ -76,7 +85,7 @@ func main(){println!("value={}",fail())}
 		if err != nil {
 			t.Fatalf("go %v: %v\n%s", args, err, output)
 		}
-		if strings.Contains(string(output), "github.com/hxsf/goxide") {
+		if strings.Contains(string(output), "github.com/hxsf/goxide") || strings.Contains(string(output), "github.com/goxide-lang/goxide") {
 			t.Fatalf("generated module depends on compiler: %s", output)
 		}
 		if args[0] == "run" && string(output) != "value=42\n" {
@@ -91,7 +100,7 @@ func TestStandaloneSupportManifestSelection(t *testing.T) {
 		name, manifest, want string
 	}{
 		{"missing-serde", "module selector.example\ngo 1.27\nrequire github.com/goxide-lang/std v0.0.0\n", "must explicitly require pinned"},
-		{"wrong-owner", "module github.com/hxsf/goxide\ngo 1.27\n", "must explicitly require pinned"},
+		{"wrong-owner", "module github.com/goxide-lang/goxide\ngo 1.27\n", "must explicitly require pinned"},
 		{"relative-replace", "module selector.example\ngo 1.27\nrequire (\ngithub.com/goxide-lang/std v0.0.0\ngithub.com/goxide-lang/serde v0.0.0\n)\nreplace github.com/goxide-lang/std => ./std\nreplace github.com/goxide-lang/serde => ./serde\nreplace unrelated.example/cli => ./not-present\n", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -185,9 +194,9 @@ exclude unrelated.example/cli v0.9.0
 	}
 	// A real support -> compiler edge is a cycle in the intended ownership
 	// graph, not an unrelated provider requirement that can simply be dropped.
-	files["std/go.mod"] += "require github.com/hxsf/goxide v0.0.0\n"
-	files["go.mod"] += "replace github.com/hxsf/goxide => ./compiler\n"
-	files["compiler/go.mod"] = "module github.com/hxsf/goxide\ngo 1.27\n"
+	files["std/go.mod"] += "require github.com/goxide-lang/goxide v0.0.0\n"
+	files["go.mod"] += "replace github.com/goxide-lang/goxide => ./compiler\n"
+	files["compiler/go.mod"] = "module github.com/goxide-lang/goxide\ngo 1.27\n"
 	for _, name := range []string{"go.mod", "std/go.mod", "compiler/go.mod"} {
 		path := filepath.Join(provider, name)
 		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
@@ -208,7 +217,7 @@ func TestStandaloneSupportSelectedGraphErrors(t *testing.T) {
 		name, selectedRequirements, want string
 	}{
 		{"discard-old-compiler-edge", "", ""},
-		{"selected-compiler-edge", "require github.com/hxsf/goxide v0.0.0\n", "must not depend on the compiler"},
+		{"selected-compiler-edge", "require github.com/goxide-lang/goxide v0.0.0\n", "must not depend on the compiler"},
 		{"selected-unavailable-dependency", "require missing.example/support v1.0.0\n", "missing.example/support"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -228,7 +237,7 @@ replace example.org/supportwriter v1.1.0 => ./writer-new
 `,
 				"std/go.mod":        "module github.com/goxide-lang/std\ngo 1.27\nrequire example.org/supportwriter v1.0.0\n",
 				"serde/go.mod":      "module github.com/goxide-lang/serde\ngo 1.27\n",
-				"writer-old/go.mod": "module example.org/supportwriter\ngo 1.27\nrequire github.com/hxsf/goxide v0.0.0\n",
+				"writer-old/go.mod": "module example.org/supportwriter\ngo 1.27\nrequire github.com/goxide-lang/goxide v0.0.0\n",
 				"writer-new/go.mod": "module example.org/supportwriter\ngo 1.27\n" + tc.selectedRequirements,
 			}
 			for name, source := range files {
@@ -251,7 +260,7 @@ replace example.org/supportwriter v1.1.0 => ./writer-new
 				t.Fatal(err)
 			}
 			mod, err := os.ReadFile(filepath.Join(generated, "go.mod"))
-			if err != nil || bytes.Contains(mod, []byte("github.com/hxsf/goxide")) {
+			if err != nil || bytes.Contains(mod, []byte("github.com/goxide-lang/goxide")) {
 				t.Fatalf("discarded compiler edge leaked: %v: %s", err, mod)
 			}
 		})

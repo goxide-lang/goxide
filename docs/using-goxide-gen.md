@@ -4,7 +4,7 @@
 
 ## 五分钟上手
 
-按[安装说明](website-guide.md#安装)下载 CLI `v0.0.1` 或从标签源码安装，并准备完全匹配的 Go 1.27.2。将 `goxide` 与 Go 加入 `PATH`，用 `goxide --version` 确认输出 `goxide v0.0.1 (go1.27.2)`。这是实验性预发布，后续 patch/minor 更新仍可能包含不兼容变更。以下用一个空目录演示；已有项目直接在目标包添加两个文件中的相应内容。
+按[安装说明](website-guide.md#安装)从当前编译器源码构建 CLI。将 `goxide` 与 Go 加入 `PATH`，核对 `goxide --version` 显示的构建工具链与 `go version` 完全一致，包括补丁号；安装页给出对应版本与完整构建命令。以下用一个空目录演示；已有项目直接在目标包添加两个文件中的相应内容。
 
 ```sh
 mkdir trygen
@@ -59,13 +59,15 @@ go generate ./...        # 输入不变时，order_gox.go 字节不变
 `.gox` 用 `#[cfg(...)]` 选择完整顶层声明，用 `#[cfg_attr(...)]` 选择属性：
 
 ```gox
+use std;
+
 #[cfg(feature("json"))]
 func Encoding() string { return "json" }
 
 #[cfg(not(feature("json")))]
 func Encoding() string { return "plain" }
 
-#[cfg_attr(feature("trace"), derive(Debug))]
+#[cfg_attr(feature("trace"), derive(std::derive::Debug))]
 type Message struct { Text string }
 
 const HasJSON = cfg!(feature("json"))
@@ -95,7 +97,7 @@ TOML 项目的 gen/transpile，以及所有输入的 expand/build/run/test，使
 
 完整包检查需要可用的导入依赖。若导入包也要生成，先运行它自己的生成命令；可在当前包的 `goxide gen .` 指令前放置 `//go:generate go generate ./child`。各包仍由自己的命令选择 feature。
 
-用户 enum 与 match 本身可生成不依赖支持库的 Go；Option/Result、格式化等能力按需导入 `github.com/goxide-lang/std`，serde 派生另需 `github.com/goxide-lang/serde`。缺失时按诊断中的 `go get` 命令补齐；`gen` 不修改 `go.mod`。版本跟随所用编译器 `go.mod` 的 require pin；当前分别是 `std@v0.0.0-20261009104839-c02a09d8c417` 与 `serde@v0.0.0-20261009021520-f342a31e20d0`，升级后重新生成。
+用户 enum 与 match 本身可生成不依赖支持库的 Go；Option/Result、格式化和标准派生等能力按需使用 `github.com/goxide-lang/std`，serde 派生另需 `github.com/goxide-lang/serde`。派生等库入口需要显式的 `use std;` 或 `use serde;`。缺失依赖时，诊断会给出按编译器 require pin 固定版本的 `go get` 命令；交互终端确认安装后，`gen` 会更新 `go.mod` / `go.sum` 并重试，非交互调用则退出并保留模块文件。依赖齐备后的常规生成保留 `go.mod` / `go.sum`；升级编译器及库版本后重新生成。
 
 生成文件包含行级 `//line`，Go 编译诊断可回到 `.gox` 的源行；宏映射到可用的定义点或调用点。`go vet` 仍会检查生成文件，按诊断回到源文件修复。第三方 linter 对生成标记和 `//line` 的处理各异，按工具自身配置处理生成文件。这里没有列级调试映射或 LSP。
 

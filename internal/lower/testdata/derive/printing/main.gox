@@ -1,0 +1,30 @@
+package main
+use std;
+use std::PartialEq;
+var trace string
+func next(value int) int { trace += string(rune('0'+value)); return value }
+macro_rules! note { ($value:expr) => { std::println!("seen {}", $value) }; }
+#[derive(std::derive::Debug)]
+type Record struct { Text string }
+func fail() Result[int,string] { return Result[int,string]::Err("stopped") }
+func recoverPrint() {
+    defer func() { std::println!("recovered {}", recover().(string)) }()
+    panic("caller frame")
+}
+func skipped() Result[int,string] {
+    std::println!("{} {}", fail()?, next(9))
+    return Result[int,string]::Ok(0)
+}
+func main() {
+    formatting := "local"
+    println := 7
+    std::print!("")
+    std::println!()
+    std::println!("{{{}}} {:?} {}", next(1), "quoted", next(2))
+    note!(next(3))
+    std::println!("{:?}", Record{Text:"secret"})
+    std::println!("{:?} {:?}", complex64(1+2i), complex128(3-4i))
+    recoverPrint()
+    _ = skipped()
+    std::println!("{} {} {}", trace, formatting, println)
+}

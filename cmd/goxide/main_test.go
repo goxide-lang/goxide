@@ -2,13 +2,34 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/goxide-lang/goxide/tests/testutil"
 )
+
+func TestMain(m *testing.M) {
+	code := m.Run()
+	if err := testutil.CleanupCLI(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		code = 1
+	}
+	os.Exit(code)
+}
+
+func canonicalTempDir(t *testing.T) string {
+	t.Helper()
+	path, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
 
 func TestOutputProtection(t *testing.T) {
 	d := t.TempDir()
@@ -45,20 +66,49 @@ func TestOutputProtection(t *testing.T) {
 		t.Fatal("wrote output before validation")
 	}
 }
+func formalTestCLI(t *testing.T) string {
+	t.Helper()
+	return testutil.CLI(t)
+}
+
 func TestTranspileArtifacts(t *testing.T) {
 	d := t.TempDir()
-	src := filepath.Join(d, "input.gox")
-	out := filepath.Join(d, "out.go")
-	os.WriteFile(src, []byte("package sample\n#[derive(Debug)]\ntype Item struct { Name string }\n"), 0600)
-	var log bytes.Buffer
-	if err := run([]string{"transpile", "-o", out, src}, &log, &log); err != nil {
+	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
+	if err := writeStandaloneSupportModule(tool, "../..", d); err != nil {
 		t.Fatal(err)
 	}
-	b, err := os.ReadFile(out)
-	if err != nil || !bytes.Contains(b, []byte("DebugItem")) {
-		t.Fatalf("missing helper: %s %v", b, err)
+	fixtureRootsFile(t, d, "[roots.std]\nmodule='github.com/goxide-lang/std'\n")
+	src := filepath.Join(d, "input.gox")
+	out := filepath.Join(t.TempDir(), "out.go")
+	source := `package sample
+use std;
+#[derive(std::derive::Debug)]
+type Item struct { Name string }
+impl Item { pub func inspect(self &Self) string { return std::Debug::debug(self) } }
+`
+	if err := os.WriteFile(src, []byte(source), 0600); err != nil {
+		t.Fatal(err)
 	}
-
+	cli := formalTestCLI(t)
+	command := exec.Command(cli, "transpile", "--go", tool, "-o", out, src)
+	command.Env = localEnv()
+	if log, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("transpile: %v\n%s", err, log)
+	}
+	first, err := os.ReadFile(out)
+	if err != nil || !bytes.Contains(first, []byte("Inspect(")) {
+		t.Fatalf("missing authored method: %s %v", first, err)
+	}
+	again := filepath.Join(t.TempDir(), "out.go")
+	command = exec.Command(cli, "transpile", "--go", tool, "-o", again, src)
+	command.Env = localEnv()
+	if log, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("repeat transpile: %v\n%s", err, log)
+	}
+	second, err := os.ReadFile(again)
+	if err != nil || !bytes.Equal(first, second) {
+		t.Fatalf("transpile artifact changed: %v", err)
+	}
 }
 
 func TestBuildAndRunGenerated(t *testing.T) {
@@ -91,10 +141,10 @@ func TestSingleFilePublicRuntimeBuildAndRun(t *testing.T) {
 use serde;
 use fmt;
 use serde::json as serdejson;
-#[derive(serde::Deserialize)]
+#[derive(serde::derive::Deserialize)]
 type Row struct{Value Option[int]}
 func main(){
- row,err:=serdejson::Unmarshal([]byte("{\"Value\":42}"),DeserializeRow)
+ row,err:=serdejson::Unmarshal([]byte("{\"Value\":42}"),serde::Read[Row])
  if err!=nil{panic(err)}
  match row.Value{Option::Some(n)=>{fmt::Println(n)},Option::None=>{panic("missing")}}
 }
@@ -102,19 +152,22 @@ func main(){
 	if err := os.WriteFile(src, []byte(source), 0600); err != nil {
 		t.Fatal(err)
 	}
-	root, err := filepath.Abs("../..")
+	runtimeRoot, err := filepath.Abs("../..")
 	if err != nil {
 		t.Fatal(err)
 	}
 	goTool := filepath.Join(runtime.GOROOT(), "bin/go")
-	var output bytes.Buffer
-	if err := run([]string{"run", "--runtime", root, "--go", goTool, src}, &output, &output); err != nil || output.String() != "42\n" {
-		t.Fatalf("run: %v: %s", err, &output)
+	cli := formalTestCLI(t)
+	command := exec.Command(cli, "run", "--runtime", runtimeRoot, "--go", goTool, src)
+	command.Env = localEnv()
+	if output, err := command.CombinedOutput(); err != nil || string(output) != "42\n" {
+		t.Fatalf("run: %v: %s", err, output)
 	}
-	output.Reset()
-	binary := filepath.Join(dir, "program")
-	if err := run([]string{"build", "--runtime", root, "--go", goTool, "-o", binary, src}, &output, &output); err != nil {
-		t.Fatalf("build: %v: %s", err, &output)
+	binary := filepath.Join(t.TempDir(), "program")
+	command = exec.Command(cli, "build", "--runtime", runtimeRoot, "--go", goTool, "-o", binary, src)
+	command.Env = localEnv()
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("build: %v: %s", err, output)
 	}
 	got, err := exec.Command(binary).CombinedOutput()
 	if err != nil || string(got) != "42\n" {

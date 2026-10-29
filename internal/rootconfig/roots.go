@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/paths"
 	"github.com/pelletier/go-toml/v2"
 )
 

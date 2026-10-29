@@ -5,7 +5,7 @@ package scripttrust
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/hxsf/goxide/internal/naming"
+	"github.com/goxide-lang/goxide/internal/naming"
 	"io"
 	"os"
 	"path/filepath"

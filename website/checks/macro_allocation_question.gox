@@ -1,8 +1,0 @@
-package main
-macro_rules! reserve {($n:expr,$c:expr)=>{make([]int,$n?,$c)};}
-var trace string
-func length(ok bool)Option[int]{trace+="L";if ok{return Option[int]::Some(2)};return Option[int]::None}
-func capacity()int{trace+="C";return 4}
-func run(ok bool)Option[int]{values:=reserve!(length(ok),capacity());return Option[int]::Some(len(values)+cap(values))}
-func count(v Option[int])int{return match v{Option[int]::Some(n)=>n,Option[int]::None=>-1,}}
-func main(){trace="";if count(run(false))!=-1||trace!="L"{panic("question suffix")};trace="";if count(run(true))!=6||trace!="LC"{panic("question success")}}

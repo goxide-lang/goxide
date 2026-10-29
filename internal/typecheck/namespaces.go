@@ -6,10 +6,9 @@ import (
 	"path"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/derives"
-	"github.com/hxsf/goxide/internal/paths"
-	"github.com/hxsf/goxide/internal/resolve"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
 
 // NamespaceImporter binds declared roots and toolchain namespaces to Go exports.
@@ -104,6 +103,9 @@ func (i *NamespaceImporter) Lookup(parts []string, name resolve.Key) []resolve.E
 	}
 	pkg, err := i.goImports.Import(strings.Join(canonical, "/"))
 	if err != nil {
+		if namespace, rest, mapped := i.namespace(parts); mapped && len(rest) == 0 && namespace.PackagePath != "" && i.err == nil {
+			i.err = err
+		}
 		return nil
 	}
 	object := pkg.Scope().Lookup(name.Name)
@@ -126,18 +128,6 @@ func (i *NamespaceImporter) Lookup(parts []string, name resolve.Key) []resolve.E
 		return nil
 	}
 	return []resolve.External{{Name: name, Kind: kind, GoName: object.Name(), Visibility: resolve.Public, Target: append(canonical, object.Name())}}
-}
-
-func (i *NamespaceImporter) CanonicalPath(parts []string) ([]string, bool) {
-	if len(parts) < 2 {
-		return nil, false
-	}
-	canonical, ok := i.canonical(parts)
-	if !ok {
-		return nil, false
-	}
-	_, err := i.goImports.Import(strings.Join(canonical[:len(canonical)-1], "/"))
-	return canonical, err == nil
 }
 
 func (i *NamespaceImporter) CheckUses(file *resolve.File) error {
@@ -203,14 +193,6 @@ func (i *NamespaceImporter) CheckUses(file *resolve.File) error {
 				return i.err
 			}
 			if !mapped || len(rest) != 0 {
-				// A registered derive has no runtime Go declaration.
-				if !use.Blank && !use.Glob {
-					if canonical, ok := i.CanonicalPath(use.Target); ok {
-						if _, registered := derives.Lookup(strings.Join(canonical[:len(canonical)-1], "/"), canonical[len(canonical)-1]); registered {
-							continue
-						}
-					}
-				}
 				segments := declaration.Tree.Path.Segments
 				return resolve.Diagnostic{File: file.Name, Span: declaration.Span(), Message: fmt.Sprintf("use target %q is not a public item or namespace", segments[len(segments)-1].Name.Name)}
 			}
@@ -245,5 +227,5 @@ func NewNamespaceImporter(importer types.Importer, roots paths.Roots) *Namespace
 	return &NamespaceImporter{goImports: importer, roots: roots, goNames: paths.NewGoNamespaces(importer)}
 }
 
-// Err reports namespace ownership failures observed while resolving members.
+// Err reports namespace ownership and package import failures observed during lookup.
 func (i *NamespaceImporter) Err() error { return i.err }

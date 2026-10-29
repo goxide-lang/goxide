@@ -3,7 +3,7 @@ package project
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/hxsf/goxide/internal/naming"
+	"github.com/goxide-lang/goxide/internal/naming"
 	"os"
 	"path/filepath"
 	"strings"

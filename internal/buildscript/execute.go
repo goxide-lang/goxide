@@ -15,9 +15,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hxsf/goxide/internal/config"
-	"github.com/hxsf/goxide/internal/lower"
-	"github.com/hxsf/goxide/internal/naming"
+	"github.com/goxide-lang/goxide/internal/analysis"
+	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/lower"
+	"github.com/goxide-lang/goxide/internal/naming"
 )
 
 const owner = "goxide-build-script-cache-v1\n"
@@ -220,6 +221,10 @@ func (p *Plan) Execute(ctx context.Context, authorize func() error, log io.Write
 		return fail, e
 	}
 	defer os.RemoveAll(scratch)
+	scratch, e = filepath.EvalSymlinks(scratch)
+	if e != nil {
+		return fail, e
+	}
 	timeout := p.options.Config.TimeoutSeconds
 	if timeout <= 0 {
 		timeout = 120
@@ -307,7 +312,7 @@ func (p *Plan) Execute(ctx context.Context, authorize func() error, log io.Write
 				continue
 			}
 			if hasGoxide(p.helpers[m]) {
-				if e = lower.CompileModules([]lower.Module{{Path: m, Dir: paths[m], Roots: p.options.ToolchainRoots, Context: ctx, Config: configuration}}); e != nil {
+				if e = lower.CompileModules([]analysis.Module{{Path: m, Dir: paths[m], Roots: p.options.ToolchainRoots, Context: ctx, Config: configuration}}); e != nil {
 					return fail, fmt.Errorf("host helper %s: %w", m, e)
 				}
 			}
@@ -322,7 +327,7 @@ func (p *Plan) Execute(ctx context.Context, authorize func() error, log io.Write
 		return fail, e
 	}
 	if hasGoxide(p.script) {
-		if e = lower.CompileModules([]lower.Module{{Path: "goxide.buildscript.local/host", Dir: host, Roots: p.options.ToolchainRoots, Context: ctx, Config: configuration}}); e != nil {
+		if e = lower.CompileModules([]analysis.Module{{Path: "goxide.buildscript.local/host", Dir: host, Roots: p.options.ToolchainRoots, Context: ctx, Config: configuration}}); e != nil {
 			return fail, fmt.Errorf("host script lowering (only explicit toolchain roots are available): %w", e)
 		}
 	}

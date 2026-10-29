@@ -1,0 +1,20 @@
+package main
+
+use fmt;
+use macros;
+use macros::identity as same;
+
+#[macros::keep]
+#[derive(macros::Answer)]
+#[note("shared derive input")]
+pub struct Record {
+    #[note("field helper")]
+    pub Value int
+}
+
+func main() {
+    calls := 0
+    next := func() int { calls += 1; return 42 }
+    value := same!(next())
+    fmt::Println(value, calls, Answer())
+}

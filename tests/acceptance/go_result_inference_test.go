@@ -1,23 +1,24 @@
 package acceptance_test
 
 import (
-	"github.com/hxsf/goxide/internal/rootconfig"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/goxide-lang/goxide/internal/rootconfig"
 )
 
 func TestGoResultInference(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
+	cli := acceptanceCLI(t)
 	source := t.TempDir()
-	packagesWrite(t, source, "go.mod", packagesModule())
+	packagesWrite(t, source, "go.mod", packagesModule()+stdFixtureGoRequirements(t))
 	writeMacroFixtureRoots(t, source, map[string]rootconfig.Mapping{
+		"std":   {Module: "github.com/goxide-lang/std"},
 		"ops":   {Module: "packages.example/app", Package: "packages.example/app/ops"},
 		"model": {Module: "packages.example/app", Package: "packages.example/app/model"},
 	})
@@ -129,24 +130,25 @@ func TestNestedValidation(t *testing.T){seen:=0;values:=__borrow_std.ValueOk(Bin
 		"arity":           {`func f()(int,int,error){return 1,2,nil};func Bad(){_=go_result!(f())}`, "wrap multiple values"},
 		"zero":            {`func f(){};func Bad(){_=go_result!(f())}`, "expected E"},
 		"not-call":        {`func Bad(e error){_=go_result!(e)}`, "operand must be a call"},
-		"partial-discard": {`func f()(int,error){return 1,nil};func Bad()Result[int,error]{n:=go_result_keep!(f())?;return Result[int,error]::Ok(n)}`, "no explicit one-step conversion"},
+		"partial-discard": {`func f()(int,error){return 1,nil};func Bad()Result[int,error]{n:=go_result_keep!(f())?;return Result[int,error]::Ok(n)}`, "requires GoxideTraitFrom_"},
 		"from-chain": {`type E struct{};func(*E)Error()string{return "e"};func f()(int,*E){return 1,&E{}}
-#[derive(Error)]
+#[derive(std::derive::Error)]
 #[error("failure")]
 type Failure struct{
 #[from]
 Cause error
 }
-func Bad()Result[int,Failure]{n:=go_result!(f())?;return Result[int,Failure]::Ok(n)}`, "no explicit one-step conversion"},
+func Bad()Result[int,Failure]{n:=go_result!(f())?;return Result[int,Failure]::Ok(n)}`, "requires GoxideTraitFrom_"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
-			packagesWrite(t, dir, "go.mod", packagesModule())
+			packagesWrite(t, dir, "go.mod", packagesModule()+stdFixtureGoRequirements(t))
 			writeMacroFixtureRoots(t, dir, map[string]rootconfig.Mapping{
+				"std":   {Module: "github.com/goxide-lang/std"},
 				"ops":   {Module: "packages.example/app", Package: "packages.example/app/ops"},
 				"model": {Module: "packages.example/app", Package: "packages.example/app/model"},
 			})
-			packagesWrite(t, dir, "bad.gox", "package bad\n"+tc.body)
+			packagesWrite(t, dir, "bad.gox", "package bad; use std;\n"+tc.body)
 			out := packagesCommand(t, root, cli, false, "transpile", "-o", filepath.Join(t.TempDir(), "out"), dir)
 			if !strings.Contains(out, tc.want) {
 				t.Fatal(out)
@@ -159,11 +161,11 @@ func TestGoResultInferenceModules(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin/go")
-	cli := filepath.Join(t.TempDir(), "goxide")
-	packagesCommand(t, root, tool, true, "build", "-o", cli, "./cmd/goxide")
+	cli := acceptanceCLI(t)
 	producer := t.TempDir()
-	packagesWrite(t, producer, "go.mod", strings.Replace(packagesModule(), "packages.example/app", "inferred.example/producer", 1))
+	packagesWrite(t, producer, "go.mod", strings.Replace(packagesModule(), "packages.example/app", "inferred.example/producer", 1)+stdFixtureGoRequirements(t))
 	writeMacroFixtureRoots(t, producer, map[string]rootconfig.Mapping{
+		"std":      {Module: "github.com/goxide-lang/std"},
 		"producer": {Module: "inferred.example/producer", Package: "inferred.example/producer"},
 		"other":    {Module: "inferred.example/producer", Package: "inferred.example/producer/other"},
 	})
@@ -191,14 +193,15 @@ func TestGoResultInferenceModules(t *testing.T) {
  pub enum Event{Other,Failed,}
  func Events()([]Event,error){return []Event{Event::Other},nil}
  `)
-	prodOut := filepath.Join(t.TempDir(), "producer")
+	prodOut := filepath.Join(formalDependencyDir(t), "producer")
 	packagesCommand(t, root, cli, true, "transpile", "-o", prodOut, producer)
 	consumer := t.TempDir()
 	writeMacroFixtureRoots(t, consumer, map[string]rootconfig.Mapping{
+		"std":      {Module: "github.com/goxide-lang/std"},
 		"producer": {Module: "inferred.example/producer", Package: "inferred.example/producer"},
 		"other":    {Module: "inferred.example/producer", Package: "inferred.example/producer/other"},
 	})
-	mod := strings.Replace(packagesModule(), "packages.example/app", "inferred.example/consumer", 1) + "\nrequire inferred.example/producer v0.0.0\nreplace inferred.example/producer => " + filepath.ToSlash(prodOut) + "\n"
+	mod := strings.Replace(packagesModule(), "packages.example/app", "inferred.example/consumer", 1) + stdFixtureGoRequirements(t) + "\nrequire inferred.example/producer v0.0.0\nreplace inferred.example/producer => " + filepath.ToSlash(prodOut) + "\n"
 	packagesWrite(t, consumer, "go.mod", mod)
 	packagesWrite(t, consumer, "a.gox", `package consumer
  use producer as p;

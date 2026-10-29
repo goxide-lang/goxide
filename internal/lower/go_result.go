@@ -5,15 +5,29 @@ import (
 	"fmt"
 	goast "go/ast"
 	gotoken "go/token"
+	"go/types"
 
-	"github.com/hxsf/goxide/internal/check"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/check"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
 )
+
+type resultAdapter struct {
+	types  *check.GoResult
+	helper *goast.Ident
+}
 
 func (e *emitter) goResult(call *syntax.CallExpr, adapter *check.GoResult) goast.Expr {
 	// The native call stays at its original call site. In particular, recover()
 	// and question propagation must not move into the adapter's function body.
 	native := e.expr(adapter.Call)
+	for _, existing := range e.resultAdapterTypes {
+		previous := existing.types
+		if previous.Unit == adapter.Unit && previous.Keep == adapter.Keep &&
+			types.Identical(previous.Value, adapter.Value) && types.Identical(previous.Error, adapter.Error) &&
+			types.Identical(previous.Payload, adapter.Payload) && types.Identical(previous.Result, adapter.Result) {
+			return &goast.CallExpr{Fun: existing.helper, Args: []goast.Expr{native}}
+		}
+	}
 	hash := sha256.Sum256([]byte(e.name))
 	helper := e.fresh(fmt.Sprintf("Result%x_", hash[:4]))
 	value, failure := goast.NewIdent("value"), goast.NewIdent("failure")
@@ -45,5 +59,6 @@ func (e *emitter) goResult(call *syntax.CallExpr, adapter *check.GoResult) goast
 			construct("NewOk", success),
 		}},
 	})
+	e.resultAdapterTypes = append(e.resultAdapterTypes, resultAdapter{adapter, helper})
 	return &goast.CallExpr{Fun: helper, Args: []goast.Expr{native}}
 }

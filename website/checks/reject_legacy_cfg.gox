@@ -1,3 +1,0 @@
-//hgo:cfg feature("off")
-package main
-func main(){}

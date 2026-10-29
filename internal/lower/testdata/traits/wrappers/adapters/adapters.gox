@@ -1,0 +1,24 @@
+package adapters
+
+use bytes;
+
+pub trait Reader { func read(self &mut Self, destination []byte) (int, error) }
+pub trait PtrReader { func read(self Self, destination []byte) (int, error) }
+
+type Buffer struct { raw *bytes::Buffer }
+type PointerBuffer struct { raw *bytes::Buffer }
+
+func Wrap(raw *bytes::Buffer) Buffer { return Buffer{raw:raw} }
+func WrapPointer(raw *bytes::Buffer) PointerBuffer { return PointerBuffer{raw:raw} }
+
+impl Reader for Buffer {
+    func read(self &mut Self, destination []byte) (int, error) { return self.raw.Read(destination) }
+}
+impl PtrReader for PointerBuffer {
+    func read(self Self, destination []byte) (int, error) { return self.raw.Read(destination) }
+}
+
+func CopyRead(source &mut Buffer, destination []byte) (int, error) {
+    var view Reader = source
+    return view.read(destination)
+}

@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	testdeps "github.com/goxide-lang/goxide/tests/testutil"
 )
 
 type nativeGoRejection struct {
@@ -39,13 +41,12 @@ func TestOptionSerdeInstalledBusinessRace(t *testing.T) {
 	_, here, _, _ := runtime.Caller(0)
 	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
-	bin := t.TempDir()
-	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/goxide")
-	cli := filepath.Join(bin, "goxide")
-	source := filepath.Join(root, "examples/option_serde")
+	cli := acceptanceCLI(t)
+	source := t.TempDir()
+	singleExternalCopyTree(t, filepath.Join(root, "examples/option_serde"), source, "target")
 	outside := t.TempDir()
 	generated := filepath.Join(t.TempDir(), "module")
-	deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, source)
+	generated = strings.TrimSpace(deliveryCommand(t, outside, cli, true, nil, "transpile", "-o", generated, source))
 	packagesWrite(t, generated, "business_test.go", optionSerdeAssertions)
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", "./...")
 	assertNativeGoRejected(t, generated, tool, map[string]nativeGoRejection{
@@ -59,23 +60,23 @@ func TestOptionSerdeInstalledBusinessRace(t *testing.T) {
 
 func TestOptionSerdeExplicitBoundaries(t *testing.T) {
 	for name, source := range map[string]string{
-		"serialize-only-payload-cannot-decode":   "#[derive(serde::Serialize)]\ntype Payload struct { Port int }\n#[derive(serde::Deserialize)]\ntype Request struct { Value Option[Payload] }",
-		"deserialize-only-payload-cannot-encode": "#[derive(serde::Deserialize)]\ntype Payload struct { Port int }\n#[derive(serde::Serialize)]\ntype Request struct { Value Option[Payload] }",
-		"channel-payload":                        "#[derive(serde::Serialize,serde::Deserialize)]\ntype Request struct { Value Option[chan int] }",
-		"missing-payload-serde":                  "type Settings struct { Port int }\n#[derive(serde::Serialize,serde::Deserialize)]\ntype Request struct { Value Option[Settings] }",
-		"default-cannot-mask-unsupported":        "#[derive(serde::Deserialize)]\ntype Request struct {\n#[serde(default)]\nValue Option[chan int]\n}",
+		"serialize-only-payload-cannot-decode":   "#[derive(serde::derive::Serialize)]\ntype Payload struct { Port int }\n#[derive(serde::derive::Deserialize)]\ntype Request struct { Value Option[Payload] }",
+		"deserialize-only-payload-cannot-encode": "#[derive(serde::derive::Deserialize)]\ntype Payload struct { Port int }\n#[derive(serde::derive::Serialize)]\ntype Request struct { Value Option[Payload] }",
+		"channel-payload":                        "#[derive(serde::derive::Serialize,serde::derive::Deserialize)]\ntype Request struct { Value Option[chan int] }",
+		"missing-payload-serde":                  "type Settings struct { Port int }\n#[derive(serde::derive::Serialize,serde::derive::Deserialize)]\ntype Request struct { Value Option[Settings] }",
+		"default-cannot-mask-unsupported":        "#[derive(serde::derive::Deserialize)]\ntype Request struct {\n#[serde(default)]\nValue Option[chan int]\n}",
 	} {
 		t.Run(name, func(t *testing.T) {
 			filename := filepath.Join(t.TempDir(), name+".gox")
-			_, err := compileAcceptanceSerdeFixture(filename, []byte("package rejected; use serde;\n"+source+"\n"))
+			_, err := testdeps.FormalSource(t, filename, []byte("package rejected; use serde;\n"+source+"\n"))
 			if err == nil || !strings.Contains(err.Error(), filepath.Base(filename)+":") {
 				t.Fatalf("want located rejection, got %v", err)
 			}
-			want := "has no registered serde codec"
+			want := "does not explicitly implement"
 			if strings.Contains(name, "-only-payload-cannot-") {
-				want = "lacks registered Serialize"
+				want = "does not explicitly implement Serialize"
 				if strings.Contains(name, "cannot-decode") {
-					want = "lacks registered Deserialize"
+					want = "does not explicitly implement Deserialize"
 				}
 			}
 
@@ -95,19 +96,15 @@ func TestOptionSerdeExplicitBoundaries(t *testing.T) {
 // These container payloads used to be rejected before serde lowering. Exercise
 // actual codecs and enum checks at each dispatch through the installed CLI.
 func TestOptionSerdeNestedContainersRace(t *testing.T) {
-	_, here, _, _ := runtime.Caller(0)
-	root := filepath.Clean(filepath.Join(filepath.Dir(here), "../.."))
 	tool := filepath.Join(runtime.GOROOT(), "bin", "go")
-	bin, outside, source := t.TempDir(), t.TempDir(), t.TempDir()
-	deliveryCommand(t, root, tool, true, []string{"GOBIN=" + bin}, "install", "./cmd/goxide")
-	packagesWrite(t, source, "go.mod", "module nestedoption.example/app\ngo 1.27\n")
-	writeAcceptanceSerdeRoots(t, source, "")
+	outside, source := t.TempDir(), t.TempDir()
+	packagesWrite(t, source, "goxide.toml", testdeps.FormalManifest(t, "nestedoption.example/app", "nested"))
 	packagesWrite(t, source, "nested.gox", `package nested; use serde;
 use serde::json as serdejson;
-#[derive(serde::Serialize,serde::Deserialize)]
+#[derive(serde::derive::Serialize,serde::derive::Deserialize)]
 type Request struct { List Option[[]Option[int]]; Lookup Option[map[string]Option[int]] }
-func Decode(data []byte)(Request,error){return serdejson::Unmarshal(data,DeserializeRequest)}
-func Encode(v Request)([]byte,error){return serdejson::Encode(func(s serde::Serializer)error{return SerializeRequest(s,&v)})}
+func Decode(data []byte)(Request,error){return serdejson::Unmarshal(data,serde::Read[Request])}
+func Encode(v Request)([]byte,error){return serdejson::Encode(func(s serde::Serializer)error{return serde::Write(s,&v)})}
 var Entered int
 func ListLength(v Option[[]Option[int]])int{
  match v {Option[[]Option[int]]::Some(rows)=>{Entered++;return len(rows)},Option[[]Option[int]]::None=>{return -1}}
@@ -115,12 +112,12 @@ func ListLength(v Option[[]Option[int]])int{
 func MapLength(v Option[map[string]Option[int]])int{
  match v {Option[map[string]Option[int]]::Some(rows)=>{Entered++;return len(rows)},Option[map[string]Option[int]]::None=>{return -1}}
 }
-#[derive(serde::Serialize,serde::Deserialize)]
+#[derive(serde::derive::Serialize,serde::derive::Deserialize)]
 pub enum State{Good,}
-#[derive(serde::Serialize,serde::Deserialize)]
+#[derive(serde::derive::Serialize,serde::derive::Deserialize)]
 type StateRequest struct{List Option[[]State];Lookup Option[map[string]State]}
 func GoodState()State{return State::Good}
-func EncodeState(v StateRequest)([]byte,error){return serdejson::Encode(func(s serde::Serializer)error{return SerializeStateRequest(s,&v)})}
+func EncodeState(v StateRequest)([]byte,error){return serdejson::Encode(func(s serde::Serializer)error{return serde::Write(s,&v)})}
 func StateListLength(v Option[[]State])int{
  match v{Option[[]State]::Some(rows)=>{Entered++;return len(rows)},Option[[]State]::None=>{return -1}}
 }
@@ -130,7 +127,7 @@ func StateMapLength(v Option[map[string]State])int{
 func StateDispatch(value State,seen *int){match value{State::Good=>{*seen+=1},}}
 `)
 	generated := filepath.Join(t.TempDir(), "generated")
-	deliveryCommand(t, outside, filepath.Join(bin, "goxide"), true, nil, "transpile", "-o", generated, source)
+	generated = strings.TrimSpace(deliveryCommand(t, outside, acceptanceCLI(t), true, nil, "transpile", "--lib", "-o", generated, source))
 	packagesWrite(t, generated, "nested_test.go", optionSerdeNestedAssertions)
 	deliveryCommand(t, generated, tool, true, nil, "test", "-race", "-count=1", "-v", "./...")
 	deliveryCommand(t, generated, tool, true, nil, "vet", "./...")
@@ -179,13 +176,13 @@ func TestInvalidInnerValueBeforeArm(t *testing.T){
 `
 
 func TestOptionProtocolDoesNotGrantPayloadDefault(t *testing.T) {
-	_, err := compileAcceptanceSerdeFixture("no-payload-default.gox", []byte(`package fixture; use serde;
-#[derive(serde::Deserialize)]
+	_, err := testdeps.FormalSource(t, "no-payload-default.gox", []byte(`package fixture; use serde; use std;
+#[derive(serde::derive::Deserialize)]
 type InputPayload struct { Port int }
-#[derive(Default)]
+#[derive(std::derive::Default)]
 type RequiresDefault struct { Payload InputPayload }
 `))
-	if err == nil || !strings.Contains(err.Error(), "no explicit Default implementation") {
+	if err == nil || !strings.Contains(err.Error(), "missing trait implementation") || !strings.Contains(err.Error(), "Default") || !strings.Contains(err.Error(), "InputPayload") || !strings.Contains(err.Error(), "no-payload-default.gox:4:1") {
 		t.Fatalf("payload unexpectedly gained Default: %v", err)
 	}
 }
@@ -193,8 +190,8 @@ type RequiresDefault struct { Payload InputPayload }
 const optionSerdeAssertions = `package main
 import __borrow_std "github.com/goxide-lang/std/sum"
 import("errors";"reflect";"strings";"testing";"github.com/goxide-lang/serde";"github.com/goxide-lang/serde/json")
-func readRequest(input string)(Request,error){return serdejson.Unmarshal([]byte(input),DeserializeRequest)}
-func writeRequest(v Request)([]byte,error){return serdejson.Encode(func(s serde.Serializer)error{return SerializeRequest(s,&v)})}
+func readRequest(input string)(Request,error){return serdejson.Unmarshal([]byte(input),(RequestOps{}).Decode)}
+func writeRequest(v Request)([]byte,error){return serdejson.Encode(func(s serde.Serializer)error{return (RequestOps{}).Encode(s,&v)})}
 const required = "\"Items\":[],\"Lookup\":{},\"Fixed\":[null,null]"
 func TestMissingAndNullAreNoneWithoutPayloadDefault(t *testing.T){
  for _,extra:=range []string{"",",\"Count\":null,\"Config\":null,\"State\":null,\"Nested\":null,\"Pointer\":null,\"Fallback\":null"}{
@@ -257,40 +254,40 @@ func TestInvalidNativeValuesReturnTypeWithoutPanic(t *testing.T){
  }
 }
 func TestOneDirectionDerives(t *testing.T){
- v,err:=serdejson.Unmarshal([]byte("{\"Value\":{\"Port\":18}}"),DeserializeInputOnly);if err!=nil{t.Fatal(err)}
+ v,err:=serdejson.Unmarshal([]byte("{\"Value\":{\"Port\":18}}"),(InputOnlyOps{}).Decode);if err!=nil{t.Fatal(err)}
  if __borrow_std.TagOption(v.Value)!=1{t.Fatalf("decode-only payload: %#v",v)};payload:=__borrow_std.ValueSome(v.Value);if payload.Port!=18{t.Fatal(payload)}
- out:=OutputOnly{Value:__borrow_std.NewSome(OutputPayload{Port:payload.Port})};wire,err:=serdejson.Encode(func(s serde.Serializer)error{return SerializeOutputOnly(s,&out)})
+ out:=OutputOnly{Value:__borrow_std.NewSome(OutputPayload{Port:payload.Port})};wire,err:=serdejson.Encode(func(s serde.Serializer)error{return (OutputOnlyOps{}).Encode(s,&out)})
  if err!=nil||string(wire)!="{\"Value\":{\"Port\":18}}"{t.Fatalf("one direction: %s %v",wire,err)}
 }
 func TestSomePayloadDefaultsAreSeparateFromOptionDefault(t *testing.T){
  for _,input:=range []string{"{}","{\"Value\":null}"}{
-  defaultCalls=0;v,err:=serdejson.Unmarshal([]byte(input),DeserializeDefaultEnvelope)
+  defaultCalls=0;v,err:=serdejson.Unmarshal([]byte(input),(DefaultEnvelopeOps{}).Decode)
   if err!=nil||__borrow_std.TagOption(v.Value)!=0||defaultCalls!=0{t.Fatalf("Option default constructed payload: %s %#v %v calls=%d",input,v,err,defaultCalls)}
  }
  for _,tc:=range []struct{input string;port,calls int}{
   {"{\"Value\":{}}",8080,1},
   {"{\"Value\":{\"Config\":{\"Port\":5}}}",5,0},
  }{
-  defaultCalls=0;v,err:=serdejson.Unmarshal([]byte(tc.input),DeserializeDefaultEnvelope)
+  defaultCalls=0;v,err:=serdejson.Unmarshal([]byte(tc.input),(DefaultEnvelopeOps{}).Decode)
   if err!=nil{t.Fatal(err)};if __borrow_std.TagOption(v.Value)!=1{t.Fatal("expected Some")};payload:=__borrow_std.ValueSome(v.Value)
   if payload.Config.Port!=tc.port||defaultCalls!=tc.calls{t.Fatalf("Some payload default: %#v calls=%d",v,defaultCalls)}
  }
- defaultCalls=0;_,err:=serdejson.Unmarshal([]byte("{\"Value\":{\"Config\":{\"Port\":false}}}"),DeserializeDefaultEnvelope);var detail *serde.Error
+ defaultCalls=0;_,err:=serdejson.Unmarshal([]byte("{\"Value\":{\"Config\":{\"Port\":false}}}"),(DefaultEnvelopeOps{}).Decode);var detail *serde.Error
  if !errors.As(err,&detail)||detail.Kind!=serde.Type||defaultCalls!=0||!reflect.DeepEqual(detail.Path,[]serde.PathSegment{{Kind:"Field",Name:"Value"},{Kind:"Field",Name:"Config"},{Kind:"Field",Name:"Port"}}){t.Fatalf("invalid Some fell back: %#v %v calls=%d",detail,err,defaultCalls)}
 }
 
 
 func TestOptionProtocolWithoutPayloadDefault(t *testing.T){
  for _,input:=range []string{"{}","{\"Plain\":null,\"SideEffects\":null,\"Explicit\":null,\"Ignored\":{\"anything\":[1,true]}}"}{
-  defaultCalls=0;v,err:=serdejson.Unmarshal([]byte(input),DeserializeProtocolEnvelope)
+  defaultCalls=0;v,err:=serdejson.Unmarshal([]byte(input),(ProtocolEnvelopeOps{}).Decode)
   if err!=nil||__borrow_std.TagOption(v.Plain)!=0||__borrow_std.TagOption(v.SideEffects)!=0||__borrow_std.TagOption(v.Explicit)!=0||__borrow_std.TagOption(v.Ignored)!=0||defaultCalls!=0{t.Fatalf("protocol None: %s %#v err=%v defaults=%d",input,v,err,defaultCalls)}
  }
- defaultCalls=0;v,err:=serdejson.Unmarshal([]byte("{\"Plain\":{\"Port\":7},\"Explicit\":{\"Port\":8}}"),DeserializeProtocolEnvelope)
+ defaultCalls=0;v,err:=serdejson.Unmarshal([]byte("{\"Plain\":{\"Port\":7},\"Explicit\":{\"Port\":8}}"),(ProtocolEnvelopeOps{}).Decode)
  if err!=nil{t.Fatal(err)}
  if __borrow_std.TagOption(v.Plain)!=1||__borrow_std.TagOption(v.Explicit)!=1{t.Fatal("expected Some")};plain:=__borrow_std.ValueSome(v.Plain);explicit:=__borrow_std.ValueSome(v.Explicit)
  if plain.Port!=7||explicit.Port!=8||defaultCalls!=0{t.Fatalf("Some without Default: %#v defaults=%d",v,defaultCalls)}
  for _,input:=range []string{"{\"Plain\":false}","{\"Explicit\":false}","{\"Ignored\":[1,]}"}{
-  if _,err:=serdejson.Unmarshal([]byte(input),DeserializeProtocolEnvelope);err==nil||defaultCalls!=0{t.Fatalf("bad input defaulted: %s %v defaults=%d",input,err,defaultCalls)}
+  if _,err:=serdejson.Unmarshal([]byte(input),(ProtocolEnvelopeOps{}).Decode);err==nil||defaultCalls!=0{t.Fatalf("bad input defaulted: %s %v defaults=%d",input,err,defaultCalls)}
  }
 }
 `

@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/hxsf/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/resolve"
 )
 
 func TestExplicitImportedItemsKeepTargetGoNames(t *testing.T) {

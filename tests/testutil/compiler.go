@@ -10,17 +10,18 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hxsf/goxide/internal/check"
-	"github.com/hxsf/goxide/internal/config"
-	"github.com/hxsf/goxide/internal/expand"
-	"github.com/hxsf/goxide/internal/lower"
-	"github.com/hxsf/goxide/internal/paths"
-	"github.com/hxsf/goxide/internal/resolve"
-	"github.com/hxsf/goxide/internal/rootconfig"
-	syntax "github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/parser"
-	"github.com/hxsf/goxide/internal/syntax/printer"
-	"github.com/hxsf/goxide/internal/typecheck"
+	"github.com/goxide-lang/goxide/internal/analysis"
+	"github.com/goxide-lang/goxide/internal/check"
+	"github.com/goxide-lang/goxide/internal/config"
+	"github.com/goxide-lang/goxide/internal/expand"
+	"github.com/goxide-lang/goxide/internal/lower"
+	"github.com/goxide-lang/goxide/internal/paths"
+	"github.com/goxide-lang/goxide/internal/resolve"
+	"github.com/goxide-lang/goxide/internal/rootconfig"
+	syntax "github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/parser"
+	"github.com/goxide-lang/goxide/internal/syntax/printer"
+	"github.com/goxide-lang/goxide/internal/typecheck"
 )
 
 type SourceResult struct {
@@ -102,7 +103,7 @@ func Module(source, destination string, roots paths.Roots) error {
 // ModuleGraph compiles fixture modules together from their source declarations.
 // Destinations are independent writable staging directories, just as in P5.
 func ModuleGraph(inputs ...ModuleInput) error {
-	modules := make([]lower.Module, 0, len(inputs))
+	modules := make([]analysis.Module, 0, len(inputs))
 	for _, input := range inputs {
 		if err := os.CopyFS(input.Destination, os.DirFS(input.Source)); err != nil {
 			return err
@@ -133,7 +134,7 @@ func ModuleGraph(inputs ...ModuleInput) error {
 			}
 		}
 
-		modules = append(modules, lower.Module{Path: module, Dir: input.Destination, Roots: roots, Config: Configuration()})
+		modules = append(modules, analysis.Module{Path: module, Dir: input.Destination, Roots: roots, Config: Configuration()})
 	}
 	if err := lower.CompileModules(modules); err != nil {
 		return err

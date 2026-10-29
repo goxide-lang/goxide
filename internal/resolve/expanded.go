@@ -3,9 +3,9 @@ package resolve
 import (
 	"reflect"
 
-	"github.com/hxsf/goxide/internal/expand"
-	"github.com/hxsf/goxide/internal/syntax/ast"
-	"github.com/hxsf/goxide/internal/syntax/token"
+	"github.com/goxide-lang/goxide/internal/expand"
+	"github.com/goxide-lang/goxide/internal/syntax/ast"
+	"github.com/goxide-lang/goxide/internal/syntax/token"
 )
 
 // ResolveExpanded 用 expanded.Files 替换 files 中对应的原始树后解析。
@@ -41,14 +41,20 @@ type contextView struct {
 	ctx     ast.SyntaxCtx
 }
 
+type genericOrigin struct {
+	origin expand.Origin
+	ctx    ast.SyntaxCtx
+}
+
 type hygiene struct {
-	expanded   *expand.Result
-	names      map[*ast.File]string
-	result     *Result
-	views      map[contextView]*Scope
-	boundaries map[*Scope]expand.Context
-	callSites  map[ast.ExpnID]*Scope
-	owners     map[*Scope]ast.Node
+	expanded      *expand.Result
+	names         map[*ast.File]string
+	result        *Result
+	views         map[contextView]*Scope
+	boundaries    map[*Scope]expand.Context
+	callSites     map[ast.ExpnID]*Scope
+	owners        map[*Scope]ast.Node
+	genericOwners map[genericOrigin]expand.Origin
 }
 
 func (h *hygiene) init(result *Result) {
@@ -56,8 +62,10 @@ func (h *hygiene) init(result *Result) {
 	if len(h.expanded.Expansions) != 0 {
 		result.Expansions = h.expanded.Expansions
 	}
-	result.Prints = h.expanded.Prints
 	result.GoResults = h.expanded.GoResults
+	if len(h.expanded.Captures) != 0 {
+		result.Captures = h.expanded.Captures
+	}
 	if len(h.expanded.Contexts) == 0 {
 		return
 	}
@@ -69,6 +77,11 @@ func (h *hygiene) init(result *Result) {
 	}
 	for ctx, c := range h.expanded.Contexts {
 		scope := result.Contexts[ctx]
+		if root, ok := h.expanded.RuntimeRoots[ctx]; ok {
+			key := Key{Name: root.Name, Ctx: ctx}
+			scope.Bindings[key] = &Symbol{Name: key, Kind: Module, Visibility: Public, Target: append([]string(nil), root.Target...)}
+			continue
+		}
 		scope.Parent = h.target(c.Definition)
 		scope.Caller = h.target(c.Caller)
 	}
@@ -210,16 +223,127 @@ func (h *hygiene) captureScope(scope, stop, anchor *Scope, origin expand.Origin,
 		return anchor
 	}
 	parent := h.captureScope(scope.Parent, stop, anchor, origin, expn)
+	// A macro can copy a generic group or rebuild one from captured parameters.
+	// References from those parameters belong to the generated declaration's
+	// bindings, even when the enclosing declaration or group is generated.
+	if bindings := h.capturedGenericBindings(scope, origin); len(bindings) != 0 {
+		return &Scope{Kind: scope.Kind, Parent: parent, Bindings: bindings}
+	}
 	owner, ok := h.expanded.Origins[h.owners[scope]]
 	if !ok || !containsOrigin(owner, origin) {
 		return parent
 	}
 	for _, id := range h.expanded.Expansions[expn].Stack {
-		if containsOrigin(h.expanded.Expansions[id].Call, owner) {
+		expansion := h.expanded.Expansions[id]
+		if containsOrigin(expansion.Call, owner) || (expansion.Input.File != nil && containsOrigin(expansion.Input, owner)) {
 			return &Scope{Kind: scope.Kind, Parent: parent, Bindings: scope.Bindings, Aliases: scope.Aliases, Labels: scope.Labels, Globs: scope.Globs}
 		}
 	}
 	return parent
+}
+
+func (h *hygiene) capturedGenericBindings(scope *Scope, origin expand.Origin) map[Key]*Symbol {
+	var params *ast.GenericParams
+	switch owner := h.owners[scope].(type) {
+	case *ast.FuncDecl:
+		params = owner.Generics
+	case *ast.TypeDecl:
+		params = owner.Generics
+	case *ast.TypeSpec:
+		params = owner.Generics
+	case *ast.EnumDecl:
+		params = owner.Generics
+	case *ast.TraitDecl:
+		params = owner.Generics
+	case *ast.ImplDecl:
+		params = owner.Generics
+	}
+	if params == nil {
+		return nil
+	}
+	captured := containsOrigin(h.expanded.Origins[params], origin)
+	for _, param := range params.Params {
+		captured = captured || containsOrigin(h.expanded.Origins[param], origin)
+		for _, name := range param.Names {
+			captured = captured || containsOrigin(h.expanded.Origins[name], origin) || containsOrigin(h.sourceGenericOwner(name), origin)
+		}
+	}
+	if !captured {
+		return nil
+	}
+	bindings := map[Key]*Symbol{}
+	for name, symbol := range scope.Bindings {
+		if symbol.Kind == TypeParam || symbol.Kind == ConstParam {
+			bindings[name] = symbol
+		}
+	}
+	return bindings
+}
+
+// A copied field type still refers to the generic parameters of its source
+// type or enum. Preserve that relationship when a derive emits a new impl.
+// Function and block origins are deliberately excluded: their locals must keep
+// the lexical scopes handled by captureScope.
+func (h *hygiene) sourceGenericOwner(name *ast.Ident) expand.Origin {
+	origin := h.expanded.Origins[name]
+	if origin.File == nil {
+		return expand.Origin{}
+	}
+	key := genericOrigin{origin: origin, ctx: name.Ctx}
+	if owner, ok := h.genericOwners[key]; ok {
+		return owner
+	}
+	var owner expand.Origin
+	scan := func(file *ast.File, expanded bool) {
+		ast.Walk(file, func(node ast.Node) bool {
+			if owner.File != nil {
+				return false
+			}
+			var params *ast.GenericParams
+			switch node := node.(type) {
+			case *ast.TypeDecl:
+				params = node.Generics
+			case *ast.TypeSpec:
+				params = node.Generics
+			case *ast.EnumDecl:
+				params = node.Generics
+			}
+			if params == nil {
+				return true
+			}
+			for _, group := range params.Params {
+				for _, parameter := range group.Names {
+					parameterOrigin := expand.Origin{File: file, Span: parameter.Span()}
+					declarationOrigin := expand.Origin{File: file, Span: node.Span()}
+					if expanded {
+						if parameter.Ctx != name.Ctx {
+							continue
+						}
+						parameterOrigin, declarationOrigin = h.expanded.Origins[parameter], h.expanded.Origins[node]
+					}
+					if containsOrigin(parameterOrigin, origin) && containsOrigin(declarationOrigin, parameterOrigin) {
+						owner = declarationOrigin
+						return false
+					}
+				}
+			}
+			return true
+		})
+	}
+	scan(origin.File, false)
+	// Declarative macros keep the source declaration in the expanded tree;
+	// its original file contains only the macro token tree.
+	if owner.File == nil {
+		for _, file := range h.expanded.Files {
+			scan(file, true)
+		}
+	}
+
+	if h.genericOwners == nil {
+		h.genericOwners = map[genericOrigin]expand.Origin{}
+	}
+	h.genericOwners[key] = owner
+	return owner
 }
 
 func containsOrigin(outer, inner expand.Origin) bool {
@@ -232,14 +356,16 @@ func (r *resolver) introduce(scope *Scope, name *ast.Ident, symbol *Symbol) {
 	}
 	h := r.hygiene
 	if scope.Kind == MemberScope && name.Ctx != symbol.Name.Ctx {
-		scope.Bindings[key(name)] = symbol
+		identity := key(name)
+		identity.Namespace = symbol.Name.Namespace
+		scope.Bindings[identity] = symbol
 	}
 	if scope.Kind != PackageScope {
 		return
 	}
 	if alias, ok := h.expanded.Introductions[name]; ok {
 		if context := r.result.Contexts[alias.Ctx]; context != nil {
-			context.Bindings[Key{Name: alias.Name, Ctx: alias.Ctx}] = symbol
+			context.Bindings[Key{Name: alias.Name, Ctx: alias.Ctx, Namespace: symbol.Name.Namespace}] = symbol
 		}
 	}
 }
@@ -280,6 +406,11 @@ func (h *hygiene) diagnostic(n ast.Node, d *Diagnostic) {
 		}
 		if id != 0 {
 			d.Definition = origin
+		}
+	}
+	if location, ok := h.expanded.Locations[n]; ok {
+		if name, ok := h.names[location.File]; ok {
+			d.File, d.Span = name, location.Span
 		}
 	}
 	d.Origin = Origin{File: d.File, Span: d.Span, Expn: id}

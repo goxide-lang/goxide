@@ -1,6 +1,6 @@
 # 宏 + 独立 enum：最小双模块试用
 
-本例从 [t0_joint](../t0_joint/) 的订单、配置和条件日志宏缩减而来：JSON 输入 → 闭合 enum/match → Result `?`/错误链 → 回执。移除了 Budget/读写引用部分，不使用 `&T`、`&mut` 等新指针语法；helper 调用中的 `&value` 是普通 Go 取址。
+本例从 [t0_joint](../t0_joint/) 的订单、配置和条件日志宏缩减而来：JSON 输入 → 闭合 enum/match → Result `?`/错误链 → 回执。移除了 Budget/读写引用部分，只读协议方法使用 `&Self`；业务调用中的 `&value` 取得原值的只读引用。
 
 脚本要求真实 Go 1.27.x，不自动下载工具链。它在独立输出目录中复制示例，按 TOML 项目和路径依赖联合编译，再分别构建、测试两个生成的 Go module；源码目录保持不变。
 
@@ -17,7 +17,7 @@ bash examples/enum_trial/try.sh "$work"
 
 [try.sh](try.sh) 执行完整构建流程：
 
-1. 用 `go build -o "$work/goxide" ./cmd/goxide` 构建 CLI。
+1. 用 `go run ./scripts/build.go -o "$work/goxide"` 构建带语法 SDK 身份的 CLI。
 2. 把 [model](model/) 和 [app](app/) 复制到临时输入目录，写入 TOML 清单；model 声明 `config` 库，app 声明到 model 的 path 依赖。
 3. 联合转译 app 与 model 源码，生成两个独立 Go module，通过受管相对 `replace` 关联。
 4. 在两个生成模块执行 `go test -race -count=1 -v ./...`、`go vet ./...`，构建并运行 `orders`。
@@ -35,7 +35,7 @@ equals none/some(nil)=false some(nil)/some(empty)=false
 clone source=[1] copy=[9] equals=false
 ```
 
-`Snapshot` 在消费者派生 Default/Clone/Debug/PartialEq/Eq，其字段协议来自单独生成的 model 模块。`clone source=[1] copy=[9]` 表示修改复制后的 slice 没有改变源值；普通 Go 赋值本身没有改成深复制。None、Some(nil)、Some(empty) 是不同状态，`.equals` 保留其区别。
+`Snapshot` 在消费者派生 Default/Clone/Debug/PartialEq/Eq，其字段协议来自单独生成的 model 模块。派生由正式 std/serde 过程宏生成普通 impl；原生 Go 通过作者声明的 `SnapshotOps{}.Initial()`、`Copy()` 和 `Inspect()` 调用。`clone source=[1] copy=[9]` 表示修改复制后的 slice 没有改变源值；普通 Go 赋值本身没有改成深复制。None、Some(nil)、Some(empty) 是不同状态，`.equals` 保留其区别。
 
 ## 输入正常与错误路径
 

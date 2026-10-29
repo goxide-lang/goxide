@@ -1,0 +1,698 @@
+[
+  {
+    "name": "BenchmarkUnitConstruct/Numeric8",
+    "samples": 7,
+    "ns/op": {
+      "median": 1.971,
+      "min": 1.967,
+      "max": 2.08
+    },
+    "B/slot": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "ns/value": {
+      "median": 1.971,
+      "min": 1.967,
+      "max": 2.08
+    },
+    "values/op": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  {
+    "name": "BenchmarkUnitConstruct/NumericInt",
+    "samples": 7,
+    "ns/op": {
+      "median": 1.999,
+      "min": 1.976,
+      "max": 2.014
+    },
+    "B/slot": {
+      "median": 8.0,
+      "min": 8.0,
+      "max": 8.0
+    },
+    "ns/value": {
+      "median": 1.999,
+      "min": 1.976,
+      "max": 2.014
+    },
+    "values/op": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  {
+    "name": "BenchmarkUnitConstruct/Sealed",
+    "samples": 7,
+    "ns/op": {
+      "median": 5.257,
+      "min": 4.755,
+      "max": 6.441
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 5.257,
+      "min": 4.755,
+      "max": 6.441
+    },
+    "values/op": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  {
+    "name": "BenchmarkUnitDispatch/Numeric8",
+    "samples": 7,
+    "ns/op": {
+      "median": 4.862,
+      "min": 3.981,
+      "max": 6.288
+    },
+    "B/slot": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "ns/value": {
+      "median": 4.862,
+      "min": 3.981,
+      "max": 6.288
+    },
+    "values/op": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  {
+    "name": "BenchmarkUnitDispatch/NumericInt",
+    "samples": 7,
+    "ns/op": {
+      "median": 5.318,
+      "min": 4.467,
+      "max": 6.51
+    },
+    "B/slot": {
+      "median": 8.0,
+      "min": 8.0,
+      "max": 8.0
+    },
+    "ns/value": {
+      "median": 5.318,
+      "min": 4.467,
+      "max": 6.51
+    },
+    "values/op": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  {
+    "name": "BenchmarkUnitDispatch/Sealed",
+    "samples": 7,
+    "ns/op": {
+      "median": 10.32,
+      "min": 9.859,
+      "max": 10.55
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 10.32,
+      "min": 9.859,
+      "max": 10.55
+    },
+    "values/op": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  {
+    "name": "BenchmarkUnitBatchBuild/Numeric8",
+    "samples": 7,
+    "ns/op": {
+      "median": 3691.0,
+      "min": 3654.0,
+      "max": 3711.0
+    },
+    "B/slot": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "ns/value": {
+      "median": 0.5149,
+      "min": 0.5098,
+      "max": 0.5177
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 8192.0,
+      "min": 8192.0,
+      "max": 8192.0
+    },
+    "allocs/op": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    }
+  },
+  {
+    "name": "BenchmarkUnitBatchBuild/NumericInt",
+    "samples": 7,
+    "ns/op": {
+      "median": 5650.0,
+      "min": 5502.0,
+      "max": 5883.0
+    },
+    "B/slot": {
+      "median": 8.0,
+      "min": 8.0,
+      "max": 8.0
+    },
+    "ns/value": {
+      "median": 0.7882,
+      "min": 0.7675,
+      "max": 0.8208
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 57344.0,
+      "min": 57344.0,
+      "max": 57344.0
+    },
+    "allocs/op": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    }
+  },
+  {
+    "name": "BenchmarkUnitBatchBuild/Sealed",
+    "samples": 7,
+    "ns/op": {
+      "median": 49436.0,
+      "min": 48882.0,
+      "max": 50504.0
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 6.897,
+      "min": 6.819,
+      "max": 7.046
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 114688.0,
+      "min": 114688.0,
+      "max": 114688.0
+    },
+    "allocs/op": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    }
+  },
+  {
+    "name": "BenchmarkUnitTraversal/Numeric8",
+    "samples": 7,
+    "ns/op": {
+      "median": 11663.0,
+      "min": 10242.0,
+      "max": 13903.0
+    },
+    "B/slot": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    },
+    "ns/value": {
+      "median": 1.627,
+      "min": 1.429,
+      "max": 1.94
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  {
+    "name": "BenchmarkUnitTraversal/NumericInt",
+    "samples": 7,
+    "ns/op": {
+      "median": 11175.0,
+      "min": 10191.0,
+      "max": 17362.0
+    },
+    "B/slot": {
+      "median": 8.0,
+      "min": 8.0,
+      "max": 8.0
+    },
+    "ns/value": {
+      "median": 1.559,
+      "min": 1.422,
+      "max": 2.422
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  {
+    "name": "BenchmarkUnitTraversal/Sealed",
+    "samples": 7,
+    "ns/op": {
+      "median": 58407.0,
+      "min": 56232.0,
+      "max": 59938.0
+    },
+    "B/slot": {
+      "median": 16.0,
+      "min": 16.0,
+      "max": 16.0
+    },
+    "ns/value": {
+      "median": 8.148,
+      "min": 7.845,
+      "max": 8.362
+    },
+    "values/op": {
+      "median": 7168.0,
+      "min": 7168.0,
+      "max": 7168.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  {
+    "name": "BenchmarkBuild/Program/Flat",
+    "samples": 7,
+    "ns/op": {
+      "median": 36981.0,
+      "min": 36385.0,
+      "max": 38528.0
+    },
+    "nodes/op": {
+      "median": 576.0,
+      "min": 576.0,
+      "max": 576.0
+    },
+    "B/op": {
+      "median": 130112.0,
+      "min": 130112.0,
+      "max": 130112.0
+    },
+    "allocs/op": {
+      "median": 89.0,
+      "min": 89.0,
+      "max": 89.0
+    }
+  },
+  {
+    "name": "BenchmarkBuild/Program/EnumPayload",
+    "samples": 7,
+    "ns/op": {
+      "median": 27095.0,
+      "min": 26697.0,
+      "max": 28649.0
+    },
+    "nodes/op": {
+      "median": 576.0,
+      "min": 576.0,
+      "max": 576.0
+    },
+    "B/op": {
+      "median": 58169.0,
+      "min": 58169.0,
+      "max": 58169.0
+    },
+    "allocs/op": {
+      "median": 665.0,
+      "min": 665.0,
+      "max": 665.0
+    }
+  },
+  {
+    "name": "BenchmarkBuild/ProgramX32/Flat",
+    "samples": 7,
+    "ns/op": {
+      "median": 1281311.0,
+      "min": 1272613.0,
+      "max": 1336307.0
+    },
+    "nodes/op": {
+      "median": 18432.0,
+      "min": 18432.0,
+      "max": 18432.0
+    },
+    "B/op": {
+      "median": 4155392.0,
+      "min": 4155392.0,
+      "max": 4155392.0
+    },
+    "allocs/op": {
+      "median": 2817.0,
+      "min": 2817.0,
+      "max": 2817.0
+    }
+  },
+  {
+    "name": "BenchmarkBuild/ProgramX32/EnumPayload",
+    "samples": 7,
+    "ns/op": {
+      "median": 1062651.0,
+      "min": 1047908.0,
+      "max": 1114045.0
+    },
+    "nodes/op": {
+      "median": 18432.0,
+      "min": 18432.0,
+      "max": 18432.0
+    },
+    "B/op": {
+      "median": 1853218.0,
+      "min": 1853218.0,
+      "max": 1853218.0
+    },
+    "allocs/op": {
+      "median": 21249.0,
+      "min": 21249.0,
+      "max": 21249.0
+    }
+  },
+  {
+    "name": "BenchmarkTraverse/Program/Flat",
+    "samples": 7,
+    "ns/op": {
+      "median": 2244.0,
+      "min": 2236.0,
+      "max": 2372.0
+    },
+    "nodes/op": {
+      "median": 576.0,
+      "min": 576.0,
+      "max": 576.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  {
+    "name": "BenchmarkTraverse/Program/EnumPayload",
+    "samples": 7,
+    "ns/op": {
+      "median": 1615.0,
+      "min": 1610.0,
+      "max": 1617.0
+    },
+    "nodes/op": {
+      "median": 576.0,
+      "min": 576.0,
+      "max": 576.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  {
+    "name": "BenchmarkTraverse/ProgramX32/Flat",
+    "samples": 7,
+    "ns/op": {
+      "median": 76011.0,
+      "min": 75546.0,
+      "max": 82600.0
+    },
+    "nodes/op": {
+      "median": 18432.0,
+      "min": 18432.0,
+      "max": 18432.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  {
+    "name": "BenchmarkTraverse/ProgramX32/EnumPayload",
+    "samples": 7,
+    "ns/op": {
+      "median": 54413.0,
+      "min": 54047.0,
+      "max": 60869.0
+    },
+    "nodes/op": {
+      "median": 18432.0,
+      "min": 18432.0,
+      "max": 18432.0
+    },
+    "B/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    },
+    "allocs/op": {
+      "median": 0.0,
+      "min": 0.0,
+      "max": 0.0
+    }
+  },
+  {
+    "name": "BenchmarkCopyShallow/Program/Flat",
+    "samples": 7,
+    "ns/op": {
+      "median": 1942.0,
+      "min": 1924.0,
+      "max": 2012.0
+    },
+    "roots/op": {
+      "median": 42.0,
+      "min": 42.0,
+      "max": 42.0
+    },
+    "B/op": {
+      "median": 9472.0,
+      "min": 9472.0,
+      "max": 9472.0
+    },
+    "allocs/op": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    }
+  },
+  {
+    "name": "BenchmarkCopyShallow/Program/EnumPayload",
+    "samples": 7,
+    "ns/op": {
+      "median": 681.2,
+      "min": 676.9,
+      "max": 700.4
+    },
+    "roots/op": {
+      "median": 42.0,
+      "min": 42.0,
+      "max": 42.0
+    },
+    "B/op": {
+      "median": 3072.0,
+      "min": 3072.0,
+      "max": 3072.0
+    },
+    "allocs/op": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    }
+  },
+  {
+    "name": "BenchmarkCopyShallow/ProgramX32/Flat",
+    "samples": 7,
+    "ns/op": {
+      "median": 65555.0,
+      "min": 64226.0,
+      "max": 72200.0
+    },
+    "roots/op": {
+      "median": 1344.0,
+      "min": 1344.0,
+      "max": 1344.0
+    },
+    "B/op": {
+      "median": 294912.0,
+      "min": 294912.0,
+      "max": 294912.0
+    },
+    "allocs/op": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    }
+  },
+  {
+    "name": "BenchmarkCopyShallow/ProgramX32/EnumPayload",
+    "samples": 7,
+    "ns/op": {
+      "median": 26444.0,
+      "min": 25957.0,
+      "max": 28466.0
+    },
+    "roots/op": {
+      "median": 1344.0,
+      "min": 1344.0,
+      "max": 1344.0
+    },
+    "B/op": {
+      "median": 90112.0,
+      "min": 90112.0,
+      "max": 90112.0
+    },
+    "allocs/op": {
+      "median": 1.0,
+      "min": 1.0,
+      "max": 1.0
+    }
+  }
+]

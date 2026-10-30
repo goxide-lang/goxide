@@ -282,7 +282,7 @@ module = "github.com/goxide-lang/std"
 		before := singleExternalSnapshot(t, dir)
 		output := filepath.Join(t.TempDir(), "bad")
 		msg := deliveryCommand(t, outside, cli, false, nil, "build", "--runtime", root, "--go", tool, "-o", output, filepath.Join(dir, "app.gox"))
-		singleExternalContains(t, msg, `native source module github.com/goxide-lang/std is not in the selected Go module graph`)
+		singleExternalContains(t, msg, `dependency root "std" has no packages in selected source "github.com/goxide-lang/std"`)
 		if _, err := os.Stat(output); !os.IsNotExist(err) {
 			t.Fatalf("failed dependency selection wrote output: %v", err)
 		}

@@ -231,7 +231,13 @@ func NativeSourceDependencies(ctx context.Context, root, modFile string, roots p
 			return nil, fmt.Errorf("native source module %s: %s", module, selection.Error.Err)
 		}
 		if selection.Path == "" || version == "" {
-			if automatic && plan.Required[module] == "" {
+			if plan.Required[module] == "" {
+				for alias, namespace := range plan.Roots {
+					if namespace.ModulePath == module {
+						namespace.Unavailable = fmt.Sprintf("dependency root %q has no packages in selected source %q", alias, module)
+						plan.Roots[alias] = namespace
+					}
+				}
 				continue // Unused explicit namespaces need not belong to this module's graph.
 			}
 			return nil, fmt.Errorf("native source module %s is not in the selected Go module graph", module)

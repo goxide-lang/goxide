@@ -50,7 +50,8 @@ exports = ROOT/'internal/typecheck/browserexports'
 exports.mkdir(exist_ok=True)
 for old in exports.glob('*.a.gz'): old.unlink()
 # Use native export archives as compiler metadata, never execute user Go.
-raw = run(GO, 'list', '-trimpath', '-export', '-deps', '-json', *patterns).decode()
+# go/types reads declarations; inline bodies only inflate the embedded metadata.
+raw = run(GO, 'list', '-trimpath', '-gcflags=all=-l', '-export', '-deps', '-json', *patterns).decode()
 decoder = json.JSONDecoder(); closure = []; export_records = []
 origins = {'unsafe': dict(module='', standard=True, exportSha256='')}
 while raw.strip():

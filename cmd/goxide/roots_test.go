@@ -99,6 +99,12 @@ func TestCLIExplicitRootContexts(t *testing.T) {
 			t.Fatalf("root context for %s: %v: %s", input, err, &output)
 		}
 	}
+	t.Run("unused-root-generation", func(t *testing.T) {
+		var output bytes.Buffer
+		if err := run([]string{"transpile", "-o", "-", filepath.Join(app, "main.gox")}, &output, &output); err != nil || !strings.Contains(output.String(), `"example.org/dependency/implementation"`) {
+			t.Fatalf("generation selected an unused root: %v: %s", err, &output)
+		}
+	})
 	for name, mapping := range map[string]string{
 		"wrong-module-owner": strings.ReplaceAll(rootContextMapping, `module = "example.org/dependency"`, `module = "example.org/imposter"`),
 		"toolchain-spoof":    strings.ReplaceAll(rootContextMapping, `module = "example.org/dependency"`, `source = "toolchain"`),

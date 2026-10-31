@@ -1,0 +1,31 @@
+package main
+use fmt;
+use serde;
+use serde::json as json;
+
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Config {
+    #[serde(rename="user_name")]
+    pub Name string
+    #[serde(default)]
+    pub Retries int
+    #[serde(skip)]
+    pub Secret string
+}
+
+func main() {
+    value, err := json::FromString[Config](`{"user_name":"Ada","Secret":{"ignored":true}}`)
+    if err != nil { panic(err) }
+    fmt::Println(value.Name, value.Retries, value.Secret == "")
+    text, err := json::ToString[Config](&value)
+    if err != nil { panic(err) }
+    fmt::Println(text)
+    back, err := json::FromString[Config](text)
+    if err != nil { panic(err) }
+    fmt::Println(back == value)
+    _, err = json::FromString[Config](`{"user_name":"Ada","Retries":null}`)
+    fmt::Println("null rejected:", err != nil)
+    _, err = json::FromString[Config](`{"user_name":"Ada","extra":1}`)
+    fmt::Println("unknown rejected:", err != nil)
+}

@@ -1,0 +1,6 @@
+package main
+use serde;
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
+#[serde(untagged)]
+enum Event { Number(int64), Text(string) }
+func main() {}

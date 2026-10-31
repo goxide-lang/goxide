@@ -1,0 +1,65 @@
+package main
+
+use fmt;
+use serde;
+use serde::json as json;
+
+// JSON 类型互不重叠时，可以手写协议分派，无需试解后回退。
+enum Scalar { Number(int64), Text(string) }
+
+impl serde::Serialize for Scalar {
+    func serialize(self &Self, serializer serde::Serializer) error {
+        if !enum_valid(*self) { return serde::NewError(serde::Type, "invalid Scalar") }
+        return match &*self {
+            Scalar::Number(value) => serializer.Int64(*value),
+            Scalar::Text(value) => serializer.String(*value),
+        }
+    }
+}
+
+impl serde::Deserialize for Scalar {
+    func deserialize(deserializer serde::Deserializer) (Self, error) {
+        var result Self
+        err := deserializer.Any(serde::VisitorFuncs{
+            OnInt64: func(value int64) error {
+                result = Scalar::Number(value)
+                return nil
+            },
+            // Any 将非负整数交给 OnUint64；转换前检查 int64 的范围。
+            OnUint64: func(value uint64) error {
+                if value > 9223372036854775807 { return serde::NewError(serde::Range, "expected int64") }
+                result = Scalar::Number(int64(value))
+                return nil
+            },
+            OnString: func(value string) error {
+                result = Scalar::Text(value)
+                return nil
+            },
+        })
+        return result, err
+    }
+    func missing() (Self, bool) { var zero Self; return zero, false }
+}
+
+func describe(value Scalar) string {
+    return match value {
+        Scalar::Number(number) => fmt::Sprintf("Number(%d)", number),
+        Scalar::Text(text) => fmt::Sprintf("Text(%q)", text),
+    }
+}
+
+func main() {
+    for _, input := range []string{`-7`, `42`, `"42"`} {
+        value, err := json::FromString[Scalar](input)
+        if err != nil { panic(err) }
+        encoded, err := json::ToString[Scalar](&value)
+        if err != nil { panic(err) }
+        if encoded != input { panic("round trip changed the value") }
+        fmt::Printf("%s -> %s -> %s\n", input, describe(value), encoded)
+    }
+    for _, input := range []string{`9223372036854775808`, `1.5`, `true`, `null`} {
+        _, err := json::FromString[Scalar](input)
+        if err == nil { panic("accepted an unsupported value") }
+        fmt::Println("rejected:", input)
+    }
+}

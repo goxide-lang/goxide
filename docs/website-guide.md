@@ -112,6 +112,7 @@ Goxide 保留 Go 的函数、结构体、控制流和包模型，并增加下列
 | Option、Result 与 `?` | 显式表示缺失或错误，提前返回错误结果 | [支持库与表示](design/enum-representation.md) |
 | 声明宏 | 在表达式、语句、类型和声明位置复用语法 | [宏](rfcs/0011-macros.md) |
 | 显式派生 | 为具体类型生成 Default、Clone、Debug、PartialEq、Eq、Error 或 serde 协议 | [派生](rfcs/0013-derive.md) |
+| serde 与 JSON | 为 struct、enum 和 Option 解析与编码 JSON，配置字段名和默认值 | [serde 与 JSON](serde-json.md) |
 | 引用与 payload 投影 | 普通变量通过 `&` / `&mut` 区分读写权限；enum payload 槽不可变，`match &value` 只读访问，按值取得的容器保留自身权限 | [引用](rfcs/0005-borrows.md) |
 | trait、impl 与关联类型 | 为具体类型声明静态协议，适配现有 Go API | [trait](rfcs/0002-traits.md)、[关联类型](rfcs/0004-associated-types.md) |
 | 条件编译 | 按 feature、目标或环境选择完整声明 | [条件编译](#条件编译) |

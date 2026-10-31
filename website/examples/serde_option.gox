@@ -12,8 +12,12 @@ func describe(value Option[int]) string {
 }
 func main() {
     for _, input := range []string{`{}`, `{"Limit":null}`, `{"Limit":7}`} {
-        value, err := serdejson::Unmarshal([]byte(input), serde::Read[Request])
+        value, err := serdejson::FromString[Request](input)
         if err != nil { panic(err) }
-        fmt::Println(input, describe(value.Limit))
+        text, err := serdejson::ToString[Request](&value)
+        if err != nil { panic(err) }
+        fmt::Println(input, describe(value.Limit), text)
     }
+    _, err := serdejson::FromString[Request](`{"Limit":"7"}`)
+    fmt::Println("invalid value rejected:", err != nil)
 }

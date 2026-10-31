@@ -1,0 +1,6 @@
+package main
+use serde;
+#[derive(serde::derive::Serialize, serde::derive::Deserialize)]
+#[serde(tag="kind", content="data")]
+enum Event { Idle, Count(int) }
+func main() {}
